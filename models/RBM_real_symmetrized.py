@@ -33,7 +33,7 @@ def create_NN(shape):
 
 #'''
 @jit
-def evaluate_NN(params,batch,cyclicities):
+def evaluate_NN(params,batch):
 
 	# Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
 	Re_Ws = jnp.einsum('ij,...lj->...li',params[0], batch)
@@ -50,15 +50,13 @@ def evaluate_NN(params,batch,cyclicities):
 	log_psi = jnp.sum(a_fc_real,axis=[1,2])
 	phase_psi = jnp.sum(a_fc_imag,axis=[1,2])
 
-	#return jnp.divide(log_psi,cyclicities), jnp.divide(phase_psi,cyclicities)
-	#return log_psi*cyclicities, phase_psi*cyclicities
 	return log_psi, phase_psi  #
 '''
 
 
 
 #@jit
-def evaluate_NN(params,batch,cyclicities):
+def evaluate_NN(params,batch):
 
 	# Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
 	Re_Ws = jnp.einsum('ij,...lj->...il',params[0], batch)
@@ -97,18 +95,17 @@ def evaluate_NN(params,batch,cyclicities):
 	# log_psi = jnp.sum(a_fc_real,axis=[1,2])
 	# phase_psi = jnp.sum(a_fc_imag,axis=[1,2])
 
-	#return jnp.divide(log_psi,cyclicities), jnp.divide(phase_psi,cyclicities)
 	return log_psi, phase_psi  #
 '''
 
 @jit
-def loss_log_psi(params,batch,cyclicities):
-	log_psi, phase_psi = evaluate_NN(params,batch,cyclicities,)	
+def loss_log_psi(params,batch,):
+	log_psi, phase_psi = evaluate_NN(params,batch,)	
 	return jnp.sum(log_psi)
 
 @jit
-def loss_phase_psi(params,batch,cyclicities):
-	log_psi, phase_psi = evaluate_NN(params,batch,cyclicities,)	
+def loss_phase_psi(params,batch,):
+	log_psi, phase_psi = evaluate_NN(params,batch,)	
 	return jnp.sum(phase_psi)
 
 
@@ -116,9 +113,9 @@ def loss_phase_psi(params,batch,cyclicities):
 
 
 @jit
-def compute_grad_log_psi(NN_params,batch,cyclicities,): 
-	dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch,cyclicities, )
-	dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch,cyclicities, )
+def compute_grad_log_psi(NN_params,batch,): 
+	dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
+	dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
 	
 	N_MC_points=dlog_psi_s[0].shape[0]
 
@@ -127,13 +124,13 @@ def compute_grad_log_psi(NN_params,batch,cyclicities,):
 
 
 @jit
-def loss_energy_exact(NN_params,batch,params_dict,cyclicities):
-	log_psi, phase_psi = evaluate_NN(NN_params,batch,cyclicities)
+def loss_energy_exact(NN_params,batch,params_dict):
+	log_psi, phase_psi = evaluate_NN(NN_params,batch,)
 	return 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag ))
 
 @jit
-def loss_energy_MC(NN_params,batch,params_dict,cyclicities):
-	log_psi, phase_psi = evaluate_NN(NN_params,batch,cyclicities)
+def loss_energy_MC(NN_params,batch,params_dict,):
+	log_psi, phase_psi = evaluate_NN(NN_params,batch,)
 	return 2.0*jnp.sum(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
 
 

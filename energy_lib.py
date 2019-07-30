@@ -204,7 +204,6 @@ class Energy_estimator():
 	def init_global_params(self,N_MC_points,world_size):
 
 		self._spinstates_bra_holder=np.zeros((N_MC_points,self.N_sites*self.N_symms),dtype=np.int8)
-		self._cyclicities_bra_holder=np.zeros((N_MC_points,),dtype=np.uint32)
 		self._ints_bra_holder=np.zeros((N_MC_points,),dtype=self.basis_type)
 		self._MEs_holder=np.zeros((N_MC_points,),dtype=np.float64)
 		self._ints_ket_ind_holder=np.zeros((N_MC_points,),dtype=np.uint32)
@@ -222,14 +221,12 @@ class Energy_estimator():
 			self._MEs=np.zeros(N_MC_points*self._n_offdiag_terms_SdotS,dtype=np.float64)
 			self._spinstates_bra=np.zeros((N_MC_points*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symms),dtype=np.int8)
 			self._ints_bra=np.zeros((N_MC_points*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
-			self._cyclicities_bra=np.zeros((N_MC_points*self._n_offdiag_terms_SdotS,),dtype=np.uint32)
 			self._ints_ket_ind=np.zeros(N_MC_points*self._n_offdiag_terms_SdotS,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms_SdotS,dtype=np.int32)
 		else:
 			self._MEs=np.zeros(N_MC_points*self._n_offdiag_terms,dtype=np.float64)
 			self._spinstates_bra=np.zeros((N_MC_points*self._n_offdiag_terms,self.N_sites*self.N_symms),dtype=np.int8)
 			self._ints_bra=np.zeros((N_MC_points*self._n_offdiag_terms,),dtype=self.basis_type)
-			self._cyclicities_bra=np.zeros((N_MC_points*self._n_offdiag_terms,),dtype=np.uint32)
 			self._ints_ket_ind=np.zeros(N_MC_points*self._n_offdiag_terms,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
 
@@ -257,11 +254,10 @@ class Energy_estimator():
 			
 			self._spinstates_bra_holder=np.zeros((N_MC_points,self.N_sites*self.N_symms),dtype=np.int8)
 			indx=np.asarray(indx,dtype=np.int32)
-			n = update_offdiag_ME(ints_ket,self._ints_bra_holder,self._cyclicities_bra_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
+			n = update_offdiag_ME(ints_ket,self._ints_bra_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
 			
 			self._MEs[nn:nn+n]=self._MEs_holder[:n]
 			self._ints_bra[nn:nn+n]=self._ints_bra_holder[:n]
-			self._cyclicities_bra[nn:nn+n]=self._cyclicities_bra_holder[:n]
 			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[:n]
 			self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
 
@@ -277,7 +273,7 @@ class Energy_estimator():
 		# evaluate network
 		if self.symmetrized:
 			#log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
-			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites),self._cyclicities_bra[:nn])
+			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
 			psi_bras = jnp.exp(log_psi_bras)
 
 			'''
@@ -303,7 +299,7 @@ class Energy_estimator():
 			# c_evaluate_NN(self._ints_bra[:nn],self._spinstates_bra.flatten()[:nn],psi_bras,phase_psi_bras, NN_params[0]._value, NN_params[1]._value, self.N_sites, 12, nn)
 			#'''
 		else:
-			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn],self._cyclicities_bra[:nn])
+			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn])
 			psi_bras = jnp.exp(log_psi_bras)
 
 		# compute real and imaginary part of local energy
@@ -347,17 +343,13 @@ class Energy_estimator():
 			Eloc=self.Eloc_real_tot+1j*self.Eloc_imag_tot
 
 		if mode=='MC':
-			Eloc_mean=np.mean(Eloc)
-			if SdotS:
-				Eloc_std=np.std(self.SdotS_real_tot)
-			else:	
-				Eloc_std=np.std(self.Eloc_real_tot)
-				#Eloc_std=np.sqrt( np.sum( np.abs(Eloc-Eloc_mean)**2)/self.Eloc_real_tot.shape[0])
+			Eloc_mean=np.mean(Eloc).real
+			Eloc_var=np.sum( np.abs(Eloc)**2)/self.Eloc_real_tot.shape[0] - Eloc_mean**2
 
 		elif mode=='exact':
 			abs_psi_2=params_dict['abs_psi_2']
-			Eloc_mean=np.sum(Eloc*abs_psi_2)
-			Eloc_std=np.sqrt( np.sum(abs_psi_2*np.abs(Eloc-Eloc_mean)**2) )
+			Eloc_mean=np.sum(Eloc*abs_psi_2).real
+			Eloc_var=np.sum(abs_psi_2*np.abs(Eloc)**2) - Eloc_mean**2
 			
 		if SdotS:
 			E_diff_real=self.SdotS_real_tot-Eloc_mean.real
@@ -367,7 +359,7 @@ class Energy_estimator():
 			E_diff_imag=self.Eloc_imag_tot-Eloc_mean.imag
 
 
-		return Eloc_mean, Eloc_std, E_diff_real, E_diff_imag
+		return Eloc_mean, Eloc_var, E_diff_real, E_diff_imag
 
 
 

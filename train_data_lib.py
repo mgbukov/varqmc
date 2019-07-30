@@ -41,7 +41,7 @@ class VMC(object):
 		self.optimizer='RK' #'NG' # 'adam' #  
 		
 		# training params
-		self.N_epochs=300 #500 
+		self.N_epochs=100 #500 
 
 		### MC sampler
 		self.N_MC_points=107 #1000 #
@@ -114,7 +114,7 @@ class VMC(object):
 			self.opt_state = self.opt_init(self.NN_params)
 
 		elif self.optimizer=='RK':
-			step_size=1E-3
+			step_size=1E-6
 			self.NG.init_RK_params(step_size)
 
 
@@ -156,7 +156,7 @@ class VMC(object):
 
 		if self.mode=='exact':
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_est.get_exact_kets()
-			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.MC_tool.cyclicities_ket, self.N_features)
+			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features)
 
 
 		for epoch in range(self.N_epochs): 
@@ -193,7 +193,7 @@ class VMC(object):
 			#####
 			if self.MC_tool.MC_sampler.world_rank==0:
 				print("epoch {0:d}:".format(epoch))
-				print("E={0:0.14f} and SS={1:0.14f}.".format(self.Eloc_mean.real, self.SdotSloc_mean.real ), self.E_MC_var,  	)
+				print("E={0:0.14f} and SS={1:0.14f}.".format(self.Eloc_mean.real, self.SdotSloc_mean.real ), self.E_MC_std,  	)
 
 
 			#### update model parameters
@@ -209,9 +209,9 @@ class VMC(object):
 			##### store data
 			if self.MC_tool.MC_sampler.world_rank==0:
 				self.data_structure.excess_energy[epoch,0]=(self.Eloc_mean - self.E_est.E_GS)/self.E_est.N_sites
-				self.data_structure.excess_energy[epoch,1]=self.E_MC_var/self.E_est.N_sites
+				self.data_structure.excess_energy[epoch,1]=self.E_MC_std/self.E_est.N_sites
 				self.data_structure.SdotS[epoch,0]=self.SdotSloc_mean/(0.5*self.E_est.N_sites*(0.5*self.E_est.N_sites+1.0))
-				self.data_structure.SdotS[epoch,1]=self.SdotS_MC_var/(0.5*self.E_est.N_sites*(0.5*self.E_est.N_sites+1.0))
+				self.data_structure.SdotS[epoch,1]=self.SdotS_MC_std/(0.5*self.E_est.N_sites*(0.5*self.E_est.N_sites+1.0))
 				self.data_structure.loss[epoch,:]=loss
 				self.data_structure.r2[epoch]=r2
 				self.data_structure.phase_psi[epoch,:]=self.MC_tool.phase_kets_tot
@@ -221,7 +221,7 @@ class VMC(object):
 
 		#close MPI 
 		self.MC_tool.MC_sampler.mpi_close()
-		exit()
+		#exit()
 
 		# print(NN_params[0])
 		# print(NN_params[1])
@@ -256,35 +256,38 @@ class VMC(object):
 		elif self.mode=='MC':
 			self.params_dict=dict(N_MC_points=self.N_MC_points)
 		
-		self.Eloc_mean, self.Eloc_std, E_diff_real, E_diff_imag = self.E_est.process_local_energies(mode=self.mode,params_dict=self.params_dict)
-		self.E_MC_var=self.Eloc_std.real/np.sqrt(self.N_MC_points)
+		self.Eloc_mean, self.Eloc_var, E_diff_real, E_diff_imag = self.E_est.process_local_energies(mode=self.mode,params_dict=self.params_dict)
+		self.Eloc_std=np.sqrt(self.Eloc_var)
+		self.E_MC_std=self.Eloc_std/np.sqrt(self.N_MC_points)
 		self.params_dict['E_diff']=E_diff_real+1j*E_diff_imag
+		self.params_dict['Eloc_mean']=self.Eloc_mean
+		self.params_dict['Eloc_var']=self.Eloc_var
 	
 		return self.params_dict
 
 	def get_Stot_data(self,NN_params): 
 		# check SU(2) conservation
 		self.E_est.compute_local_energy(self.N_batch,evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.MC_sampler,SdotS=True)
-		self.SdotSloc_mean, SdotS_std, SdotS_diff_real, SdotS_diff_imag = self.E_est.process_local_energies(mode=self.mode,params_dict=self.params_dict,SdotS=True)
-		self.SdotS_MC_var=SdotS_std.real/np.sqrt(self.N_MC_points)
+		self.SdotSloc_mean, SdotS_var, SdotS_diff_real, SdotS_diff_imag = self.E_est.process_local_energies(mode=self.mode,params_dict=self.params_dict,SdotS=True)
+		self.SdotS_MC_std=np.sqrt(SdotS_var/self.N_MC_points)
 
 
 	def update_NN_params(self,epoch,batch):
 
 		if self.optimizer=='RK':
 			# compute updated NN parameters
-			self.NN_params=self.NG.Runge_Kutta(self.NN_params,batch,self.MC_tool.cyclicities_ket,self.params_dict,self.mode,self.get_training_data)
+			self.NN_params=self.NG.Runge_Kutta(self.NN_params,batch,self.params_dict,self.mode,self.get_training_data)
 			loss=self.NG.max_grads
 
 		else:
 			##### compute gradients
 			if self.optimizer=='NG':
 				# compute enatural gradients
-				grads=self.NG.compute(self.NN_params,batch,self.MC_tool.cyclicities_ket,self.params_dict,mode=self.mode)
+				grads=self.NG.compute(self.NN_params,batchself.params_dict,mode=self.mode)
 				loss=self.NG.max_grads
 				
 			elif self.optimizer=='adam':
-				grads=self.compute_grad(self.NN_params,batch,self.params_dict,self.MC_tool.cyclicities_ket)
+				grads=self.compute_grad(self.NN_params,batch,self.params_dict)
 				loss=[np.max(np.real(grads)),0.0]
 
 			##### apply gradients
@@ -293,7 +296,7 @@ class VMC(object):
 			self.NN_params=self.get_params(self.opt_state)
 
 		##### compute loss
-		r2=self.NG.cost_function(mode=self.mode,params_dict=self.params_dict).real
+		r2=self.NG.r2_cost
 
 		return loss, r2
 

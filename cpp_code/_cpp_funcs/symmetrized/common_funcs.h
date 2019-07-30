@@ -457,7 +457,6 @@ int update_offdiag(const int n_op,
 						  const int Ns,
 						  const	I ket[], // col
 						  		I bra[],
-						  		npy_uint32 cyclicities[],
 						  		npy_int8 spin_bra[], // row
 						  		npy_uint32 ket_index[],
 						  		double M[]
@@ -485,7 +484,7 @@ int update_offdiag(const int n_op,
 
 				//std::cout << l << " , " << bra[l] << " , " << r  << " , " << j << std::endl;
 
-				cyclicities[l]=int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+				int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
 				
 				l++;
 

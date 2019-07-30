@@ -17,6 +17,7 @@ ctypedef np.uint16_t basis_type
 N_sites=L*L
 
 
+
 cdef extern from "sample_4x4.h":
     cdef cppclass Monte_Carlo[I]:
         Monte_Carlo() except +
@@ -61,7 +62,7 @@ cdef extern from "sample_4x4.h":
 
 
     
-    int update_offdiag[I](const int, const char[], const int[], const double, const int, const I[], I[], np.uint32_t [], np.int8_t [], np.uint32_t[], double[] ) nogil  
+    int update_offdiag[I](const int, const char[], const int[], const double, const int, const I[], I[], np.int8_t [], np.uint32_t[], double[] ) nogil  
     
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
@@ -138,14 +139,14 @@ def c_evaluate_phase(
 
 
 @cython.boundscheck(False)
-def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, np.uint32_t[::1] cyclicity, int N_features):
+def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features):
     cdef int i;
     cdef int Ns=states.shape[0]
     cdef int Nsites=N_sites
 
     with nogil:
         for i in range (Ns):
-            cyclicity[i]=int_to_spinstate(Nsites,states[i],&out[i*N_features])
+            int_to_spinstate(Nsites,states[i],&out[i*N_features])
 
 
 
@@ -161,7 +162,7 @@ def update_diag_ME(np.ndarray ket,double[::1] M,object opstr,int[::1] indx,doubl
 
 
 @cython.boundscheck(False)
-def update_offdiag_ME(np.ndarray ket,basis_type[:] bra,np.uint32_t[::1] cyclicities_bra_holder, np.int8_t[:,:] spin_bra,np.uint32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J):
+def update_offdiag_ME(np.ndarray ket,basis_type[:] bra, np.int8_t[:,:] spin_bra,np.uint32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J):
     cdef char[::1] c_opstr = bytearray(opstr,"utf-8")
     cdef int n_op = indx.shape[0]
     cdef int Ns = ket.shape[0]
@@ -171,7 +172,7 @@ def update_offdiag_ME(np.ndarray ket,basis_type[:] bra,np.uint32_t[::1] cyclicit
     #cdef void * spin_bra_ptr = np.PyArray_GETPTR1(spin_bra,[0,0])
 
     with nogil:
-        l=update_offdiag(n_op,&c_opstr[0],&indx[0],J,Ns,<basis_type*>ket_ptr,&bra[0],&cyclicities_bra_holder[0],&spin_bra[0,0],&ket_indx[0],&M[0])
+        l=update_offdiag(n_op,&c_opstr[0],&indx[0],J,Ns,<basis_type*>ket_ptr,&bra[0],&spin_bra[0,0],&ket_indx[0],&M[0])
 
     return l
 

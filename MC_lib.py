@@ -44,8 +44,7 @@ class MC_sampler():
 		self.auto_correlation_time=self.N_sites
 
 
-		self.cyclicities_ket=np.zeros(self.N_MC_points,dtype=np.uint32)
-
+	
 		self.ints_ket=np.zeros((N_MC_points,),dtype=self.basis_type)
 		self.ints_ket_reps=np.zeros_like(self.ints_ket)
 		self.mod_kets=np.zeros((N_MC_points,),dtype=np.float64)
@@ -105,9 +104,9 @@ class MC_sampler():
 		
 		if self.N_symms>1:
 			#log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))
-			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites),self.cyclicities_ket)
+			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))
 		else:
-			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_sites),self.cyclicities_ket)
+			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_sites))
 		self.mod_kets = np.exp(log_psi._value)
 		self.phase_kets= phase_kets._value
 
@@ -128,7 +127,7 @@ class MC_sampler():
 		self.MC_sampler.mpi_allgather(self.mod_kets,self.N_MC_points,mod_kets_tot,self.N_MC_points)
 
 		# evaluate network in python
-		log_psi, phase_psi = evaluate_NN(NN_params,self.spinstates_ket_tot,self.cyclicities_ket) 
+		log_psi, phase_psi = evaluate_NN(NN_params,self.spinstates_ket_tot) 
 
 
 		# print(phase_kets_tot)

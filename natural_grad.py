@@ -46,7 +46,7 @@ class natural_gradient():
 		self.tol=1E-6
 		self.delta=100.0
 		self.epoch=0
-		self.cost=0.0
+		self.r2_cost=0.0
 		self.max_grads=0.0
 	
 	
@@ -109,33 +109,14 @@ class natural_gradient():
 
 
 
-	def _cost(self):
-		return jnp.dot(self.nat_grad.conj(), jnp.dot(self.Fisher,self.nat_grad)) - 2.0*jnp.dot(self.grad.conj(),self.nat_grad).real   
+	def _compute_r2_cost(self,params_dict):
+		Eloc_var=params_dict['Eloc_var']
+		return (jnp.dot(self.nat_grad.conj(), jnp.dot(self.Fisher,self.nat_grad)) - 2.0*jnp.dot(self.grad.conj(),self.nat_grad).real + Eloc_var )/Eloc_var 
 
 
-
-	def cost_function(self,mode='MC',params_dict=None):
-		E_diff=params_dict['E_diff'].copy()
-		
-		if mode=='exact':
-			abs_psi_2=params_dict['abs_psi_2'].copy()
-			Eloc_var=np.sum(abs_psi_2*np.abs(E_diff)**2)
-
-		elif mode=='MC':
-			Eloc_var=np.mean(np.abs(E_diff)**2)
-
-		# # print('cost', self.cost/Eloc_var )
-		# print('cost2', self.cost, Eloc_var, (self.cost+Eloc_var)/Eloc_var )
-		# # print()
-
-		# if self.epoch==1: exit();
-		
-		return (self.cost+Eloc_var)/Eloc_var 
-
-
-	def compute(self,NN_params,batch,cyclicities_ket,params_dict,mode='MC',):
+	def compute(self,NN_params,batch,params_dict,mode='MC',):
 	
-		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,cyclicities_ket)
+		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
 
 		self.compute_fisher_metric(params_dict=params_dict,mode=mode)
 		self.compute_gradients(params_dict=params_dict,mode=mode)
@@ -153,7 +134,7 @@ class natural_gradient():
 
 		# normalize gradients
 		if not self.RK_on:
-			self.cost=self._cost()
+			self.r2_cost=self._compute_r2_cost(params_dict)
 			self.max_grads=[jnp.max(np.abs(self.grad.real)), jnp.max(np.abs(self.nat_grad.real))]
 			self.nat_grad /= jnp.sqrt(jnp.dot(self.grad.conj(),self.nat_grad).real)
 		
@@ -239,17 +220,17 @@ class natural_gradient():
 		self.RK_B27 = (1./40)
 
 
-	def Runge_Kutta(self,NN_params,batch,cyclicities,params_dict,mode,get_training_data):
+	def Runge_Kutta(self,NN_params,batch,params_dict,mode,get_training_data):
 
 		# flatten weights
 		params=self.reshape_from_gradient_format(NN_params,self.NN_dims,self.NN_shapes)
 		max_param=jnp.max(params)
 
 
-		initial_grad=self.compute(NN_params,batch,cyclicities,params_dict,mode=mode)
+		initial_grad=self.compute(NN_params,batch,params_dict,mode=mode)
 		# cost and loss
 		self.max_grads=[jnp.max(np.abs(self.grad.real)), jnp.max(np.abs(self.nat_grad.real))]	
-		self.cost=self._cost()
+		self.r2_cost=self._compute_r2_cost(params_dict)
 	
 		error_ratio=0.0
 		while error_ratio<1.0:
@@ -261,19 +242,19 @@ class natural_gradient():
 			self.y[:]=self.RK_A11*self.k1
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.y,self.NN_dims,self.NN_shapes)
 			params_dict=get_training_data(NN_params_shifted)
-			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,cyclicities,params_dict,mode=mode)
+			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			### RK step 3
 			self.y[:]=self.RK_A21*self.k1+self.RK_A22*self.k2
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.y,self.NN_dims,self.NN_shapes)
 			params_dict=get_training_data(NN_params_shifted)
-			self.k3[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,cyclicities,params_dict,mode=mode)
+			self.k3[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			### RK step 4
 			self.y[:]=self.RK_A31*self.k1+self.RK_A32*self.k2+self.RK_A33*self.k3
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.y,self.NN_dims,self.NN_shapes)
 			params_dict=get_training_data(NN_params_shifted)
-			self.k4[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,cyclicities,params_dict,mode=mode)
+			self.k4[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			
 			### RK step 5
 			self.y[:]=self.RK_A41*self.k1+self.RK_A42*self.k2+self.RK_A43*self.k3+self.RK_A44*self.k4
@@ -281,20 +262,20 @@ class natural_gradient():
 			params_dict=get_training_data(NN_params_shifted)
 			# print('there', params_dict['abs_psi_2'] )
 			# exit()
-			self.k5[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,cyclicities,params_dict,mode=mode)
+			self.k5[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			#print('here')
 			
 			### RK step 6
 			self.y[:]=self.RK_A51*self.k1+self.RK_A52*self.k2+self.RK_A53*self.k3+self.RK_A54*self.k4+self.RK_A55*self.k5
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.y,self.NN_dims,self.NN_shapes)
 			params_dict=get_training_data(NN_params_shifted)
-			self.k6[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,cyclicities,params_dict,mode=mode)
+			self.k6[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			### RK step 7
 			self.y[:]=self.RK_A61*self.k1+self.RK_A62*self.k2+self.RK_A63*self.k3+self.RK_A64*self.k4+self.RK_A65*self.k5+self.RK_A66*self.k6
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.y,self.NN_dims,self.NN_shapes)
 			params_dict=get_training_data(NN_params_shifted)
-			self.k7[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,cyclicities,params_dict,mode=mode)
+			self.k7[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			self.y_star[:]=self.RK_B21*self.k1 \
 						  +self.RK_B22*self.k2 \
