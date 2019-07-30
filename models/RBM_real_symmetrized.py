@@ -113,29 +113,17 @@ def loss_phase_psi(params,batch,cyclicities):
 
 
 
-@jit
-def compute_grad_log_psi(NN_params,batch,cyclicities,): #np.zeros((2,16),dtype=np.float64)
 
-	dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch,cyclicities, )
-	dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch,cyclicities, )
-
-	N_MC_points=dlog_psi_s[0].shape[0]
-
-
-	return (dlog_psi_s[0] + 1j*dphase_psi_s[0]).reshape(N_MC_points,-1)
-	
 
 @jit
-def compute_grad_log_psi_real(NN_params,batch,cyclicities,): 
+def compute_grad_log_psi(NN_params,batch,cyclicities,): 
 	dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch,cyclicities, )
 	dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch,cyclicities, )
 	
 	N_MC_points=dlog_psi_s[0].shape[0]
-
 
 	return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
 	
-	#return jnp.array(dlog_psi_s).transpose([1,0,2,3]).reshape(N_MC_points,-1) + 1j*jnp.array(dphase_psi_s).transpose([1,0,2,3]).reshape(N_MC_points,-1)
 
 
 @jit
@@ -150,24 +138,19 @@ def loss_energy_MC(NN_params,batch,params_dict,cyclicities):
 
 
 
-def reshape_to_gradient_format(gradient,NN_dims,NN_shapes,real=False):
-	if real:
-		NN_params=[]
-		Ndims=np.insert(np.cumsum(NN_dims), 0, 0)
-		# loop over network architecture
-		for j in range(NN_dims.shape[0]): 
-			NN_params.append( gradient[Ndims[j]:Ndims[j+1]].reshape(NN_shapes[j]) )
-			
-		return NN_params
-	else:
-		return [gradient.reshape(NN_shapes[0]).real,  gradient.reshape(NN_shapes[1]).imag ]
+def reshape_to_gradient_format(gradient,NN_dims,NN_shapes):
+	NN_params=[]
+	Ndims=np.insert(np.cumsum(NN_dims), 0, 0)
+	# loop over network architecture
+	for j in range(NN_dims.shape[0]): 
+		NN_params.append( gradient[Ndims[j]:Ndims[j+1]].reshape(NN_shapes[j]) )
+		
+	return NN_params
+	
 
 
+def reshape_from_gradient_format(NN_params,NN_dims,NN_shapes):
+	return jnp.concatenate([params.ravel() for params in NN_params])
 
-def reshape_from_gradient_format(NN_params,NN_dims,NN_shapes,real=False):
-	if real:
-		return jnp.concatenate([params.ravel() for params in NN_params])
-	else:
-		return (NN_params[0]+1j*NN_params[1]).reshape(NN_dims[0])
 
 

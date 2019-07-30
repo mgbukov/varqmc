@@ -93,7 +93,7 @@ class MC_sampler():
 
 
 
-	def exact(self,ints_ket,NN_params,N_neurons,evaluate_NN=None):
+	def exact(self,NN_params,N_neurons,evaluate_NN=None):
 		
 		# int_ket=np.array([60097],dtype=ints_ket.dtype)
 		# spinstate_ket=np.zeros(self.N_features,dtype=self.spinstates_ket.dtype)
@@ -103,7 +103,6 @@ class MC_sampler():
 		# print(int_ket)
 		# exit()
 		
-		#c_evaluate_NN(ints_ket,self.spinstates_ket,self.mod_kets,self.phase_kets,*NN_params,self.N_sites,N_neurons,self.N_MC_points)
 		if self.N_symms>1:
 			#log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))
 			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites),self.cyclicities_ket)
