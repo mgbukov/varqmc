@@ -2,16 +2,76 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax import jit, grad, vmap, random, ops, partial
-from jax.experimental.stax import relu
+from jax.experimental.stax import relu, BatchNorm
 
 import numpy as np
 
-seed=0
+seed=1
 np.random.seed(seed)
 np.random.RandomState(seed)
 rng = random.PRNGKey(seed)
 
+@jit
+def melu(x):
+	return jnp.where(jnp.abs(x)>1.0, jnp.abs(x)-0.5, 0.5*x**2)
+ 
 
+def create_NN(shape):
+
+	init_value_W=1E-1 
+	init_value_b=1E-1
+	
+	W_fc_base = random.uniform(rng,shape=shape[0], minval=-init_value_W, maxval=+init_value_W)
+	
+	W_fc_log_psi = random.uniform(rng,shape=shape[1], minval=-init_value_W,   maxval=+init_value_W)
+	W_fc_phase   = random.uniform(rng,shape=shape[2], minval=-init_value_W, maxval=+init_value_W)
+
+	b_fc_log_psi = random.uniform(rng,shape=(shape[1][1],), minval=-init_value_b, maxval=+init_value_b)
+	b_fc_phase   = random.uniform(rng,shape=(shape[2][1],), minval=-init_value_b, maxval=+init_value_b)
+
+	
+	architecture=[W_fc_base, W_fc_log_psi, W_fc_phase, b_fc_log_psi, b_fc_phase]
+
+	NN_shapes=np.array([W.shape for W in architecture])
+	NN_dims=np.array([np.prod(shape) for shape in NN_shapes])
+
+	return architecture, NN_dims, NN_shapes
+
+
+
+@jit
+def evaluate_NN(params,batch):
+
+	### common layer
+	Ws = jnp.einsum('ij,...lj->...il',params[0], batch)
+	# nonlinearity
+	#a_fc_base = jnp.log(jnp.cosh(Ws))
+	a_fc_base = melu(Ws) 
+	#a_fc_base = relu(Ws)
+	# symmetrize
+	a_fc_base = jnp.sum(a_fc_base, axis=[-1])
+
+	
+	### log_psi head
+	a_fc_log_psi = jnp.dot(a_fc_base, params[1]) + params[3]
+	#log_psi = jnp.log(jnp.cosh(a_fc_log_psi))
+	log_psi = melu(a_fc_log_psi) 
+	#log_psi = relu(a_fc_log_psi)
+
+	### phase head
+	a_fc_phase =jnp.dot(a_fc_base, params[2]) + params[4]
+	#phase_psi = jnp.log(jnp.cosh(a_fc_phase))
+	phase_psi = melu(a_fc_phase) 
+	#phase_psi = relu(a_fc_phase)
+
+	
+	log_psi = jnp.sum(log_psi, axis=[1])#/log_psi.shape[0]
+	phase_psi = jnp.sum(phase_psi, axis=[1])#/phase_psi.shape[0]	
+
+
+	return log_psi, phase_psi  #
+
+'''
 
 def create_NN(shape):
 
@@ -31,7 +91,10 @@ def create_NN(shape):
 
 	return architecture, NN_dims, NN_shapes
 
-#'''
+
+
+
+
 @jit
 def evaluate_NN(params,batch):
 
@@ -50,11 +113,12 @@ def evaluate_NN(params,batch):
 	log_psi = jnp.sum(a_fc_real,axis=[1,2])
 	phase_psi = jnp.sum(a_fc_imag,axis=[1,2])
 
-	return log_psi, phase_psi  #
+	#print(jnp.abs(a_fc_real).max(), jnp.abs(a_fc_real).min(), jnp.abs(log_psi).max(), jnp.abs(log_psi).min(), jnp.abs(phase_psi).max(), jnp.abs(phase_psi).min() )
+
+	return log_psi, phase_psi
 '''
 
-
-
+'''
 #@jit
 def evaluate_NN(params,batch):
 

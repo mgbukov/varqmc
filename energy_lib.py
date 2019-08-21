@@ -236,7 +236,7 @@ class Energy_estimator():
 		self._Eloc_sin=np.zeros(N_MC_points, dtype=np.float64)
 
 
-	def compute_local_energy(self,N_MC_points,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,MC_sampler,SdotS=False):
+	def compute_local_energy(self,N_MC_points,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,MC_sampler,log_psi_shift,SdotS=False):
 		
 
 		if SdotS:
@@ -274,7 +274,8 @@ class Energy_estimator():
 		if self.symmetrized:
 			#log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
 			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
-			psi_bras = jnp.exp(log_psi_bras)
+			psi_bras = jnp.exp(log_psi_bras-log_psi_shift)
+			#psi_bras = jnp.exp(log_psi_bras)
 
 			'''
 			##### exact GS

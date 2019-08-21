@@ -38,10 +38,10 @@ class VMC(object):
 
 		self.L=4 # system size
 		self.mode='exact' # 'MC'  #
-		self.optimizer='RK' #'NG' # 'adam' #  
+		self.optimizer='RK' # 'NG' #   'adam'  # 
 		
 		# training params
-		self.N_epochs=100 #500 
+		self.N_epochs=500 
 
 		### MC sampler
 		self.N_MC_points=107 #1000 #
@@ -58,8 +58,14 @@ class VMC(object):
 
 	def _create_NN(self):
 		### Neural network 
-		self.N_neurons=2
-		self.NN_params,self.NN_dims,self.NN_shapes=create_NN([self.N_neurons,self.L**2])
+		#self.N_neurons=2
+
+		N_neurons_fc1=2
+		N_neurons_fc2=4
+		shape=[[N_neurons_fc1,self.L**2],[N_neurons_fc1,N_neurons_fc2],[N_neurons_fc1,N_neurons_fc2]]
+
+		#self.NN_params,self.NN_dims,self.NN_shapes=create_NN([self.N_neurons,self.L**2])
+		self.NN_params,self.NN_dims,self.NN_shapes=create_NN(shape)
 
 		self.N_varl_params=self.NN_dims.sum()
 		
@@ -189,11 +195,10 @@ class VMC(object):
 				if self.MC_tool.MC_sampler.world_rank==0:
 					print('cpp/python consistency check passed!\n')
 
-		
-			#####
+			#####		
 			if self.MC_tool.MC_sampler.world_rank==0:
 				print("epoch {0:d}:".format(epoch))
-				print("E={0:0.14f} and SS={1:0.14f}.".format(self.Eloc_mean.real, self.SdotSloc_mean.real ), self.E_MC_std,  	)
+				print("E={0:0.14f} and SS={1:0.14f}.".format(self.Eloc_mean.real, self.SdotSloc_mean.real ), self.E_MC_std, self.params_dict['overlap']  	)
 
 
 			#### update model parameters
@@ -229,7 +234,7 @@ class VMC(object):
 
 		# save data
 		#self.data_structure.save(NN_params=self.NN_params)
-		#exit()
+		exit()
 
 
 		self.data_structure.compute_phase_hist()
@@ -241,18 +246,22 @@ class VMC(object):
 
 		##### MC sample #####
 		if self.mode=='exact':
-			self.MC_tool.exact(NN_params ,self.N_neurons, evaluate_NN=evaluate_NN)
+			self.MC_tool.exact(NN_params, evaluate_NN=evaluate_NN)
 		elif self.mode=='MC':
 			self.MC_tool.sample(tuple([W._value for W in NN_params]) ,self.N_neurons)
 
 		##### compute local energies #####
-		self.E_est.compute_local_energy(self.N_batch,evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.MC_sampler)
+		self.E_est.compute_local_energy(self.N_batch,evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.MC_sampler,self.MC_tool.log_psi_shift)
 			
 		if self.mode=='exact':
+			#print(self.MC_tool.mod_kets)
 			self.psi = self.MC_tool.mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(self.MC_tool.mod_kets[self.inv_index])
 			abs_psi_2=self.count*np.abs(self.psi)**2
+			#print(abs_psi_2)
+			#exit()
 			self.params_dict=dict(abs_psi_2=abs_psi_2,)
 			overlap=np.abs(self.psi[self.inv_index].dot(self.E_est.psi_GS_exact))**2
+			self.params_dict['overlap']=overlap
 		elif self.mode=='MC':
 			self.params_dict=dict(N_MC_points=self.N_MC_points)
 		
@@ -262,12 +271,12 @@ class VMC(object):
 		self.params_dict['E_diff']=E_diff_real+1j*E_diff_imag
 		self.params_dict['Eloc_mean']=self.Eloc_mean
 		self.params_dict['Eloc_var']=self.Eloc_var
-	
+
 		return self.params_dict
 
 	def get_Stot_data(self,NN_params): 
 		# check SU(2) conservation
-		self.E_est.compute_local_energy(self.N_batch,evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.MC_sampler,SdotS=True)
+		self.E_est.compute_local_energy(self.N_batch,evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.MC_sampler,self.MC_tool.log_psi_shift,SdotS=True)
 		self.SdotSloc_mean, SdotS_var, SdotS_diff_real, SdotS_diff_imag = self.E_est.process_local_energies(mode=self.mode,params_dict=self.params_dict,SdotS=True)
 		self.SdotS_MC_std=np.sqrt(SdotS_var/self.N_MC_points)
 
@@ -276,25 +285,28 @@ class VMC(object):
 
 		if self.optimizer=='RK':
 			# compute updated NN parameters
-			self.NN_params=self.NG.Runge_Kutta(self.NN_params,batch,self.params_dict,self.mode,self.get_training_data)
+			self.NN_params=self.NG.Runge_Kutta_2(self.NN_params,batch,self.params_dict,self.mode,self.get_training_data)
 			loss=self.NG.max_grads
 
 		else:
 			##### compute gradients
 			if self.optimizer=='NG':
 				# compute enatural gradients
-				grads=self.NG.compute(self.NN_params,batchself.params_dict,mode=self.mode)
+				grads=self.NG.compute(self.NN_params,batch,self.params_dict,mode=self.mode)
 				loss=self.NG.max_grads
 				
 			elif self.optimizer=='adam':
 				grads=self.compute_grad(self.NN_params,batch,self.params_dict)
-				loss=[np.max(np.real(grads)),0.0]
+				loss=[jnp.max([jnp.max(grads[j]) for j in range(self.NN_shapes.shape[0])]),0.0]
+
+				#print(loss)
+				#exit()
 
 			##### apply gradients
 			self.opt_state = self.opt_update(epoch, grads, self.opt_state) 
 			self.NG.update_params() # update NG params
 			self.NN_params=self.get_params(self.opt_state)
-
+			
 		##### compute loss
 		r2=self.NG.r2_cost
 
