@@ -192,7 +192,7 @@ class Monte_Carlo{
             seed=u; 
         };
 
-
+        /*
         int world_size=0;
         int world_rank=0;
 
@@ -228,13 +228,16 @@ class Monte_Carlo{
 	    {	int size_T = sizeof(T);
 	    	MPI_Allgather(send_data, size_T*send_count, MPI_CHAR, recv_data, size_T*recv_count, MPI_CHAR, MPI_COMM_WORLD);
 	    }
-
+		*/
+		
 
         // Produce a uniform random sample from the open interval (0, 1).
         double uniform() {
             std::uniform_real_distribution<double> unif(0,1);
             return unif(gen);
         };
+		
+
 
 
         std::unordered_map<I, double> phase_dict;

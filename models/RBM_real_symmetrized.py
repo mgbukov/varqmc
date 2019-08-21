@@ -16,6 +16,8 @@ def melu(x):
 	return jnp.where(jnp.abs(x)>1.0, jnp.abs(x)-0.5, 0.5*x**2)
  
 
+'''
+
 def create_NN(shape):
 
 	init_value_W=1E-1 
@@ -116,7 +118,7 @@ def evaluate_NN(params,batch):
 	#print(jnp.abs(a_fc_real).max(), jnp.abs(a_fc_real).min(), jnp.abs(log_psi).max(), jnp.abs(log_psi).min(), jnp.abs(phase_psi).max(), jnp.abs(phase_psi).min() )
 
 	return log_psi, phase_psi
-'''
+
 
 '''
 #@jit

@@ -2,6 +2,7 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
+from mpi4py import MPI
 import numpy as np
 from scipy.sparse.linalg import cg
 from scipy.linalg import eigh,eig
@@ -17,11 +18,14 @@ from scipy.linalg import eigh,eig
 
 class natural_gradient():
 
-	def __init__(self,N_MC_points,N_varl_params,compute_grad_log_psi,
+	def __init__(self,comm,N_MC_points,N_batch,N_varl_params,compute_grad_log_psi,
 				 reshape_to_gradient_format,reshape_from_gradient_format,NN_dims, NN_shapes):
+
+		self.comm=comm
 
 		dtype = np.float64
 
+		self.N_batch=N_batch
 		self.N_MC_points=N_MC_points
 		self.N_varl_params=N_varl_params
 		self.compute_grad_log_psi=compute_grad_log_psi
@@ -33,12 +37,15 @@ class natural_gradient():
 
 		# preallocate memory
 		
-		self.dlog_psi=np.zeros([self.N_MC_points,N_varl_params],dtype=np.complex128)
+		self.dlog_psi=np.zeros([self.N_batch,N_varl_params],dtype=np.complex128)
 		self.grad=np.zeros(N_varl_params,dtype=dtype)
 		self.nat_grad=np.zeros_like(self.grad)
 		self.current_grad_guess=np.zeros_like(self.grad)
 		self.Fisher=np.zeros(2*self.grad.shape,dtype=dtype)
 		self.nat_grad_guess=np.zeros_like(self.grad)
+
+		self.O_expt=np.zeros(N_varl_params,dtype=np.complex128)
+		self.OO_expt=np.zeros([N_varl_params,N_varl_params],dtype=np.float64)
 
 		
 		# CG params
@@ -62,13 +69,27 @@ class natural_gradient():
 
 		elif mode=='MC':
 
-			O_expt=jnp.sum(self.dlog_psi,axis=0)/self.N_MC_points
-			OO_expt = jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real)/self.N_MC_points \
-					 +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)/self.N_MC_points
+			# self.O_expt[:]=jnp.sum(self.dlog_psi,axis=0)
 
-		O_expt2=jnp.einsum('k,l->kl',O_expt.real,O_expt.real) + jnp.einsum('k,l->kl',O_expt.imag,O_expt.imag)
+			# OO_expt = jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real)/self.N_MC_points \
+			# 		 +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)/self.N_MC_points
 
-		self.Fisher[:] = (OO_expt - O_expt2)._value		
+
+			self.comm.Allreduce(jnp.sum(self.dlog_psi,axis=0)._value, self.O_expt, op=MPI.SUM)
+			self.O_expt/=self.N_MC_points
+
+
+
+			self.comm.Allreduce( ( jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real) \
+				                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)   )._value, \
+								self.OO_expt, op=MPI.SUM
+								)
+			self.OO_expt/=self.N_MC_points
+
+
+		O_expt2=jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real) + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag)
+
+		self.Fisher[:] = (self.OO_expt - O_expt2)._value		
 		
 		norm=jnp.linalg.norm(self.Fisher)
 
@@ -119,8 +140,15 @@ class natural_gradient():
 			self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real) + jnp.dot(E_diff.imag,self.dlog_psi.imag) 
 
 		elif mode=='MC':
-			self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real)/self.N_MC_points \
-			             + jnp.dot(E_diff.imag,self.dlog_psi.imag)/self.N_MC_points
+			# self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real)/self.N_MC_points \
+			#              + jnp.dot(E_diff.imag,self.dlog_psi.imag)/self.N_MC_points
+
+			self.comm.Allreduce((  jnp.dot(E_diff.real,self.dlog_psi.real) \
+			             		 + jnp.dot(E_diff.imag,self.dlog_psi.imag) )._value, \
+								self.grad, op=MPI.SUM
+								)
+			self.grad/=self.N_MC_points
+
 
 	def _compute_r2_cost(self,params_dict):
 		Eloc_var=params_dict['Eloc_var']
@@ -256,25 +284,25 @@ class natural_gradient():
 			### RK step 2
 			self.dy[:]=self.RK_A11*self.k1
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			### RK step 3
 			self.dy[:]=self.RK_A21*self.k1+self.RK_A22*self.k2
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k3[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			### RK step 4
 			self.dy[:]=self.RK_A31*self.k1+self.RK_A32*self.k2+self.RK_A33*self.k3
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k4[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			
 			### RK step 5
 			self.dy[:]=self.RK_A41*self.k1+self.RK_A42*self.k2+self.RK_A43*self.k3+self.RK_A44*self.k4
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			# print('there', params_dict['abs_psi_2'] )
 			# exit()
 			self.k5[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
@@ -283,13 +311,13 @@ class natural_gradient():
 			### RK step 6
 			self.dy[:]=self.RK_A51*self.k1+self.RK_A52*self.k2+self.RK_A53*self.k3+self.RK_A54*self.k4+self.RK_A55*self.k5
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k6[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			### RK step 7
 			self.dy[:]=self.RK_A61*self.k1+self.RK_A62*self.k2+self.RK_A63*self.k3+self.RK_A64*self.k4+self.RK_A65*self.k5+self.RK_A66*self.k6
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k7[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			self.dy_star[:]=self.RK_B21*self.k1 \
@@ -329,7 +357,6 @@ class natural_gradient():
 		params=self.reshape_from_gradient_format(NN_params,self.NN_dims,self.NN_shapes)
 		max_param=jnp.max(params)
 
-
 		initial_grad=self.compute(NN_params,batch,params_dict,mode=mode)
 		# cost and loss
 		self.max_grads=[jnp.max(np.abs(self.grad.real)), jnp.max(np.abs(self.nat_grad.real))]	
@@ -344,7 +371,7 @@ class natural_gradient():
 			### RK step 2
 			self.dy[:]=0.5*self.k1
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			self.dy[:]=0.5*self.k1 + 0.5*self.k2
 
@@ -356,17 +383,17 @@ class natural_gradient():
 			### RK step 2
 			self.dy_star[:]=0.5*self.k3
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k4[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k5[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4 + 0.5*self.k5
 			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
-			params_dict=get_training_data(NN_params_shifted)
+			batch, params_dict=get_training_data(NN_params_shifted)
 			self.k6[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4 + 0.5*self.k5 + 0.5*self.k6
@@ -376,7 +403,7 @@ class natural_gradient():
 
 			# self.dy[:]=-0.5*h*initial_grad
 			# NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
-			# params_dict=get_training_data(NN_params_shifted)
+			# batch, params_dict=get_training_data(NN_params_shifted)
 			# self.dy[:]+=-0.5*h*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			
 			# ###### two steps solution to estimate step size
@@ -385,18 +412,18 @@ class natural_gradient():
 			# ### fist h/2 step
 			# self.dy_star[:] = -0.5*h_star*initial_grad
 			# NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
-			# params_dict=get_training_data(NN_params_shifted)
+			# batch, params_dict=get_training_data(NN_params_shifted)
 			# self.dy_star[:] += -0.5*h_star*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			
 			# ### second h/2 step
 			# # update weights
 			# NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
-			# params_dict=get_training_data(NN_params_shifted)
+			# batch, params_dict=get_training_data(NN_params_shifted)
 			
 			# # RK-2 (use shifted parameters)
 			# self.dy_star[:] += -0.5*h_star*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			# NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
-			# params_dict=get_training_data(NN_params_shifted)
+			# batch, params_dict=get_training_data(NN_params_shifted)
 			# self.dy_star[:] += -0.5*h_star*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 

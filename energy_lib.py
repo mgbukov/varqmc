@@ -13,6 +13,7 @@ from quspin.operators._make_hamiltonian import _consolidate_static
 from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum 
 from cpp_code import c_evaluate_mod, c_evaluate_phase, c_evaluate_NN
 
+from mpi4py import MPI
 import numpy as np
 #import jax.numpy as np
 import time
@@ -26,7 +27,13 @@ import jax.numpy as jnp
 
 class Energy_estimator():
 
-	def __init__(self,L,symmetrized=False):
+	def __init__(self,comm,N_MC_points,N_batch,L,symmetrized=False):
+
+		# MPI commuicator
+		self.comm=comm
+		self.N_MC_points=N_MC_points
+		self.N_batch=N_batch
+
 
 		###### define model parameters ######
 		Lx=L
@@ -201,42 +208,45 @@ class Energy_estimator():
 
 
 
-	def init_global_params(self,N_MC_points,world_size):
+	def init_global_params(self):
 
-		self._spinstates_bra_holder=np.zeros((N_MC_points,self.N_sites*self.N_symms),dtype=np.int8)
-		self._ints_bra_holder=np.zeros((N_MC_points,),dtype=self.basis_type)
-		self._MEs_holder=np.zeros((N_MC_points,),dtype=np.float64)
-		self._ints_ket_ind_holder=np.zeros((N_MC_points,),dtype=np.uint32)
+		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
+		self._ints_bra_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
+		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
+		self._ints_ket_ind_holder=np.zeros((self.N_batch,),dtype=np.uint32)
 
-		self.Eloc_real_tot=np.zeros(world_size*N_MC_points,dtype=np.float64)
+		self.Eloc_real_tot=np.zeros(self.comm.Get_size()*self.N_batch,dtype=np.float64)
 		self.Eloc_imag_tot=np.zeros_like(self.Eloc_real_tot)
 
-		self.SdotS_real_tot=np.zeros(world_size*N_MC_points,dtype=np.float64)
+		self.SdotS_real_tot=np.zeros(self.comm.Get_size()*self.N_batch,dtype=np.float64)
 		self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
 
 
-	def _reset_locenergy_params(self,N_MC_points,SdotS=False):
+	def _reset_locenergy_params(self,SdotS=False):
 
 		if SdotS:
-			self._MEs=np.zeros(N_MC_points*self._n_offdiag_terms_SdotS,dtype=np.float64)
-			self._spinstates_bra=np.zeros((N_MC_points*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symms),dtype=np.int8)
-			self._ints_bra=np.zeros((N_MC_points*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
-			self._ints_ket_ind=np.zeros(N_MC_points*self._n_offdiag_terms_SdotS,dtype=np.uint32)
+			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.float64)
+			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symms),dtype=np.int8)
+			self._ints_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
+			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms_SdotS,dtype=np.int32)
 		else:
-			self._MEs=np.zeros(N_MC_points*self._n_offdiag_terms,dtype=np.float64)
-			self._spinstates_bra=np.zeros((N_MC_points*self._n_offdiag_terms,self.N_sites*self.N_symms),dtype=np.int8)
-			self._ints_bra=np.zeros((N_MC_points*self._n_offdiag_terms,),dtype=self.basis_type)
-			self._ints_ket_ind=np.zeros(N_MC_points*self._n_offdiag_terms,dtype=np.uint32)
+			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.float64)
+			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symms),dtype=np.int8)
+			self._ints_bra=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
+			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
 
 
 
-		self._Eloc_cos=np.zeros(N_MC_points, dtype=np.float64)
-		self._Eloc_sin=np.zeros(N_MC_points, dtype=np.float64)
+		self._Eloc_cos=np.zeros(self.N_batch, dtype=np.float64)
+		self._Eloc_sin=np.zeros(self.N_batch, dtype=np.float64)
+
+		self.Eloc_real=np.zeros_like(self._Eloc_cos)
+		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
 
 
-	def compute_local_energy(self,N_MC_points,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,MC_sampler,log_psi_shift,SdotS=False):
+	def compute_local_energy(self,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,log_psi_shift,SdotS=False):
 		
 
 		if SdotS:
@@ -247,12 +257,12 @@ class Energy_estimator():
 			static_list_diag=self._static_list_diag
 		
 		# preallocate variables
-		self._reset_locenergy_params(N_MC_points,SdotS=SdotS)
+		self._reset_locenergy_params(SdotS=SdotS)
 
 		nn=0
 		for j,(opstr,indx,J) in enumerate(static_list_offdiag):
 			
-			self._spinstates_bra_holder=np.zeros((N_MC_points,self.N_sites*self.N_symms),dtype=np.int8)
+			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
 			indx=np.asarray(indx,dtype=np.int32)
 			n = update_offdiag_ME(ints_ket,self._ints_bra_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
 			
@@ -310,28 +320,36 @@ class Energy_estimator():
 		cos_phase_kets=np.cos(phase_kets)/mod_kets
 		sin_phase_kets=np.sin(phase_kets)/mod_kets
 
-		Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets
-		Eloc_imag = self._Eloc_sin*cos_phase_kets - self._Eloc_cos*sin_phase_kets
+
+		self.Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets
+		self.Eloc_imag = self._Eloc_sin*cos_phase_kets - self._Eloc_cos*sin_phase_kets
 
 		# diag matrix elements, only real part
 		for opstr,indx,J in static_list_diag:
 
 			indx=np.asarray(indx,dtype=np.int32)
-			update_diag_ME(ints_ket,Eloc_real,opstr,indx,J) 
+			update_diag_ME(ints_ket,self.Eloc_real,opstr,indx,J) 
 
 		
 		if SdotS:
-			MC_sampler.mpi_allgather(Eloc_real,N_MC_points,self.SdotS_real_tot,N_MC_points)
-			MC_sampler.mpi_allgather(Eloc_imag,N_MC_points,self.SdotS_imag_tot,N_MC_points)
-			
-			self.SdotS_real_tot*=2.0 # double off-diagonal contribution
-			self.SdotS_real_tot+=0.75*self.N_sites # diagonal contribution
+			self.SdotS_real=2.0*self.Eloc_real # double off-diagonal contribution
+			self.SdotS_real=self.Eloc_real+0.75*self.N_sites # diagonal contribution
 
-			self.SdotS_imag_tot*=2.0 # double off-diagonal contribution
+			self.SdotS_imag=2.0*self.Eloc_imag # double off-diagonal contribution
 
-		else:
-			MC_sampler.mpi_allgather(Eloc_real,N_MC_points,self.Eloc_real_tot,N_MC_points)
-			MC_sampler.mpi_allgather(Eloc_imag,N_MC_points,self.Eloc_imag_tot,N_MC_points)
+		# if SdotS:
+		# 	self.comm.Allgather([self.Eloc_real,  MPI.DOUBLE], [self.SdotS_real_tot, MPI.DOUBLE])
+		# 	self.comm.Allgather([self.Eloc_imag,  MPI.DOUBLE], [self.SdotS_imag_tot, MPI.DOUBLE])
+
+		# 	self.SdotS_real_tot*=2.0 # double off-diagonal contribution
+		# 	self.SdotS_real_tot+=0.75*self.N_sites # diagonal contribution
+
+		# 	self.SdotS_imag_tot*=2.0 # double off-diagonal contribution
+
+		# else:
+
+		# 	self.comm.Allgather([self.Eloc_real,  MPI.DOUBLE], [self.Eloc_real_tot, MPI.DOUBLE])
+		# 	self.comm.Allgather([self.Eloc_imag,  MPI.DOUBLE], [self.Eloc_imag_tot, MPI.DOUBLE])
 
 
 
@@ -339,28 +357,43 @@ class Energy_estimator():
 	def process_local_energies(self,mode='MC',params_dict=None,SdotS=False):
 
 		if SdotS:
-			Eloc=self.SdotS_real_tot+1j*self.SdotS_imag_tot
+			loc=self.SdotS_real+1j*self.SdotS_imag
 		else:
-			Eloc=self.Eloc_real_tot+1j*self.Eloc_imag_tot
+			loc=self.Eloc_real+1j*self.Eloc_imag
 
+
+	
 		if mode=='MC':
-			Eloc_mean=np.mean(Eloc).real
-			Eloc_var=np.sum( np.abs(Eloc)**2)/self.Eloc_real_tot.shape[0] - Eloc_mean**2
+
+			Eloc_mean_g=np.zeros(1, dtype=np.complex128)
+			Eloc_var_g=np.zeros(1, dtype=np.float64)
+
+			# Eloc_mean=np.mean(loc).real
+			# Eloc_var=np.sum( np.abs(loc)**2)/self.Eloc_real_tot.shape[0] - Eloc_mean**2
+
+			self.comm.Allreduce(np.sum(       loc    ), Eloc_mean_g, op=MPI.SUM)
+			Eloc_mean_g/=self.N_MC_points
+
+			self.comm.Allreduce(np.sum(np.abs(loc)**2), Eloc_var_g,  op=MPI.SUM)
+			Eloc_var_g/=self.N_MC_points
+			Eloc_var_g-=np.abs(Eloc_mean_g)**2
+
 
 		elif mode=='exact':
 			abs_psi_2=params_dict['abs_psi_2']
-			Eloc_mean=np.sum(Eloc*abs_psi_2).real
-			Eloc_var=np.sum(abs_psi_2*np.abs(Eloc)**2) - Eloc_mean**2
+			Eloc_mean_g=np.sum(loc*abs_psi_2).real
+			Eloc_var_g=np.sum(abs_psi_2*np.abs(loc)**2) - Eloc_mean**2
 			
+
 		if SdotS:
-			E_diff_real=self.SdotS_real_tot-Eloc_mean.real
-			E_diff_imag=self.SdotS_imag_tot-Eloc_mean.imag
+			E_diff_real=self.SdotS_real-Eloc_mean_g.real
+			E_diff_imag=self.SdotS_imag-Eloc_mean_g.imag
 		else:
-			E_diff_real=self.Eloc_real_tot-Eloc_mean.real
-			E_diff_imag=self.Eloc_imag_tot-Eloc_mean.imag
+			E_diff_real=self.Eloc_real-Eloc_mean_g.real
+			E_diff_imag=self.Eloc_imag-Eloc_mean_g.imag
 
 
-		return Eloc_mean, Eloc_var, E_diff_real, E_diff_imag
+		return Eloc_mean_g[0], Eloc_var_g[0], E_diff_real, E_diff_imag
 
 
 

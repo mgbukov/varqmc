@@ -23,7 +23,7 @@ cdef extern from "sample_4x4.h":
         Monte_Carlo() except +
 
         unsigned int seed;
-        int world_size, world_rank;
+        # int world_size, world_rank;
 
         # Seed the random number generator 
         void set_seed(unsigned int) nogil
@@ -35,11 +35,11 @@ cdef extern from "sample_4x4.h":
         void evaluate_phase_dict(I [], double [], int) nogil
 
 
-        void mpi_init() nogil
+        # void mpi_init() nogil
 
-        void mpi_close() nogil
+        # void mpi_close() nogil
 
-        void mpi_allgather[T](T*, int, T*, int) nogil
+        # void mpi_allgather[T](T*, int, T*, int) nogil
 
 
         int sample_DNN(
@@ -218,6 +218,7 @@ cdef class cpp_Monte_Carlo:
         #def __set__(self, int seed):
         #    self.MC_c.seed = seed
 
+    """
     property world_size:
         def __get__(self):
             return self.MC_c.world_size
@@ -248,7 +249,7 @@ cdef class cpp_Monte_Carlo:
         elif send_data.dtype == np.float64:
             with nogil:
                 self.MC_c.mpi_allgather(<double*>send_data_ptr,send_count,<double*>recv_data_ptr,recv_count)
-
+    """
 
     def set_seed(self, unsigned int u):
         self.MC_c.set_seed(u)
