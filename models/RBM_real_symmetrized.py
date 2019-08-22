@@ -17,7 +17,6 @@ def melu(x):
  
 
 '''
-
 def create_NN(shape):
 
 	init_value_W=1E-1 
@@ -34,10 +33,7 @@ def create_NN(shape):
 	
 	architecture=[W_fc_base, W_fc_log_psi, W_fc_phase, b_fc_log_psi, b_fc_phase]
 
-	NN_shapes=np.array([W.shape for W in architecture])
-	NN_dims=np.array([np.prod(shape) for shape in NN_shapes])
-
-	return architecture, NN_dims, NN_shapes
+	return architecture
 
 
 
@@ -88,12 +84,7 @@ def create_NN(shape):
 
 	architecture=[W_fc_real, W_fc_imag,]# W_fc_real2, W_fc_imag2]
 
-	NN_shapes=np.array([W.shape for W in architecture])
-	NN_dims=np.array([np.prod(shape) for shape in NN_shapes])
-
-	return architecture, NN_dims, NN_shapes
-
-
+	return architecture
 
 
 
@@ -120,49 +111,7 @@ def evaluate_NN(params,batch):
 	return log_psi, phase_psi
 
 
-'''
-#@jit
-def evaluate_NN(params,batch):
 
-	# Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
-	Re_Ws = jnp.einsum('ij,...lj->...il',params[0], batch)
-	Im_Ws = jnp.einsum('ij,...lj->...il',params[1], batch)
-
-	a_fc_real = jnp.log(jnp.cosh(Re_Ws))
-	a_fc_imag = jnp.log(jnp.cosh(Im_Ws))
-
-	# a_fc_real = jnp.log(jnp.cosh(Re_Ws-Im_Ws))
-	# a_fc_imag = jnp.log(jnp.cosh(Im_Ws)) #jnp.abs(Im_Ws) #
-
-	# a_fc_real = relu(Re_Ws)
-	# a_fc_imag = relu(Im_Ws)
-
-	# a_fc_real = jnp.abs(Re_Ws)
-	# a_fc_imag = jnp.abs(Im_Ws)
-
-	# a_fc_real = -1.0+jnp.sqrt(1.0+Re_Ws**2)
-	# a_fc_imag = -1.0+jnp.sqrt(1.0+Im_Ws**2)
-
-	a_fc2_real = jnp.sum(a_fc_real,axis=[-1])
-	a_fc2_imag = jnp.sum(a_fc_imag,axis=[-1])
-
-	#####
-	
-	# log_psi   = relu( jnp.dot(a_fc2_real, params[2]).ravel() )
-	phase_psi = relu( jnp.dot(a_fc2_imag, params[3]).ravel() )
-	
-	log_psi   = jnp.log(jnp.cosh( jnp.einsum('ij,...j->...',params[2], a_fc2_real) ) )
-	#phase_psi = jnp.log(jnp.cosh( jnp.einsum('ij,...j->...',params[3], a_fc2_imag) ) )
-
-	
-	#log_psi = jnp.sum(a_fc_real,axis=[1])
-	#phase_psi = jnp.sum(a_fc_imag,axis=[1])
-
-	# log_psi = jnp.sum(a_fc_real,axis=[1,2])
-	# phase_psi = jnp.sum(a_fc_imag,axis=[1,2])
-
-	return log_psi, phase_psi  #
-'''
 
 @jit
 def loss_log_psi(params,batch,):

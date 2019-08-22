@@ -62,10 +62,10 @@ class natural_gradient():
 		if mode=='exact':
 			abs_psi_2=params_dict['abs_psi_2']#.copy()
 
-			O_expt=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi) 
+			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi) 
 
-			OO_expt = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real) \
-					 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag)
+			self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real) \
+							 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag)
 
 		elif mode=='MC':
 
@@ -108,7 +108,6 @@ class natural_gradient():
 			np.testing.assert_allclose(self.Fisher/norm,self.Fisher.T.conj()/norm, rtol=1E-14, atol=1E-14)
 
 			exit()
-		
 		
 		E = eigh(self.Fisher/norm,eigvals_only=True)
 		# E2 = eigh(self.Fisher/norm,eigvals_only=True)
@@ -156,7 +155,7 @@ class natural_gradient():
 
 
 	def compute(self,NN_params,batch,params_dict,mode='MC',):
-	
+		
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
 
 		self.compute_fisher_metric(params_dict=params_dict,mode=mode)

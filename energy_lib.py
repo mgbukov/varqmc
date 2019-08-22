@@ -378,11 +378,14 @@ class Energy_estimator():
 			Eloc_var_g/=self.N_MC_points
 			Eloc_var_g-=np.abs(Eloc_mean_g)**2
 
+			Eloc_mean_g=Eloc_mean_g[0]
+			Eloc_var_g=Eloc_var_g[0]
+
 
 		elif mode=='exact':
 			abs_psi_2=params_dict['abs_psi_2']
 			Eloc_mean_g=np.sum(loc*abs_psi_2).real
-			Eloc_var_g=np.sum(abs_psi_2*np.abs(loc)**2) - Eloc_mean**2
+			Eloc_var_g=np.sum(abs_psi_2*np.abs(loc)**2) - Eloc_mean_g**2
 			
 
 		if SdotS:
@@ -393,7 +396,7 @@ class Energy_estimator():
 			E_diff_imag=self.Eloc_imag-Eloc_mean_g.imag
 
 
-		return Eloc_mean_g[0], Eloc_var_g[0], E_diff_real, E_diff_imag
+		return Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag
 
 
 

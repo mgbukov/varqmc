@@ -42,7 +42,11 @@ class VMC(object):
 
 		self.L=4 # system size
 		self.mode='exact' #'MC'  # 
-		self.optimizer='NG' # 'RK' #   'adam'  # 
+		self.optimizer='RK' # 'NG' # 'adam'  #
+
+		self.save=False # True #
+		load_data=False # True #
+		self.plot_data=False
 		
 		# training params
 		self.N_epochs=10 #500 
@@ -58,52 +62,80 @@ class VMC(object):
 		else:
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 
-		self._create_NN()
+		
+		if load_data:
+			model_params=dict(model='RBMcpx',
+							  mode=self.mode, 
+							  symm=int(symmetrized),
+							  L=self.L,
+							  J2=0.5,
+							  opt=self.optimizer,
+							  NNstrct=((2,16),(2,16)),
+							  epochs=self.N_epochs,
+							  MCpts=self.N_MC_points,  
+							)
+			self._create_data_obj(model_params)
+		
+		self._create_NN(load_data=load_data)
 		self._create_optimizer()
 		self._create_energy_estimator()
 		self._create_MC_sampler()
-		self._create_data_obj()
-
-
-	def _create_NN(self):
-		### Neural network 
-		self.N_neurons=2
-
-		# N_neurons_fc1=2
-		# N_neurons_fc2=4
-		# shape=[[N_neurons_fc1,self.L**2],[N_neurons_fc1,N_neurons_fc2],[N_neurons_fc1,N_neurons_fc2]]
-
-		self.NN_params,self.NN_dims,self.NN_shapes=create_NN([self.N_neurons,self.L**2])
-		#self.NN_params,self.NN_dims,self.NN_shapes=create_NN(shape)
-
-		self.N_varl_params=self.NN_dims.sum()
+		if not load_data:
+			self._create_data_obj()
+		
 		
 
-		#self.NN_params=data_structure.load_weights()
-		#self.NN_params=jnp.array(self.NN_params).squeeze()
 
-		'''
-		self.NN_params=[ jnp.array(
-					[[ 0.00580084, -0.07497671, -0.06789109, -0.01204818, -0.01274435, -0.10384455,
-					  -0.10245288, -0.04374218, -0.08915268,  0.00177797, -0.04978558, -0.05587124,
-					   0.07693333, -0.07984009, -0.01530174, -0.12691828],
-					 [-0.21518007, -0.11389974, -0.20263269, -0.12619203, -0.08462431, -0.20707012,
-					  -0.17650112, -0.19922243, -0.16967753, -0.18817129, -0.20458634, -0.08676682,
-					  -0.11785064, -0.03068135, -0.04197004, -0.17183342]]
+	def _create_NN(self, load_data=False):
+		### Neural network 
 
-				  	),
+		if load_data:
 
-					jnp.array(
-					[[-0.00231961, -0.00895621,  0.06853679,  0.0069357,  -0.02742392,  0.00391063,
-					   0.02143496,  0.07258342,  0.05560984, -0.02823264,  0.02835682, -0.00693428,
-					   0.01221359,  0.05616201, -0.02058408,  0.0281348 ],
-					 [-0.1803375,  -0.12494415, -0.17192932, -0.11660786, -0.12339658, -0.18764674,
-					  -0.12699878, -0.17132069, -0.15470591, -0.13720351, -0.18281736, -0.10516087,
-					  -0.10887956, -0.07979148, -0.12417864, -0.16585421]]
-				  	)
-				 ]
-		'''
+			self.NN_params=jnp.array(self.data_structure.load_weights()[0])
+			self.NN_params=[W for W in self.NN_params]
 
+
+			'''
+			self.NN_params=[ jnp.array(
+						[[ 0.00580084, -0.07497671, -0.06789109, -0.01204818, -0.01274435, -0.10384455,
+						  -0.10245288, -0.04374218, -0.08915268,  0.00177797, -0.04978558, -0.05587124,
+						   0.07693333, -0.07984009, -0.01530174, -0.12691828],
+						 [-0.21518007, -0.11389974, -0.20263269, -0.12619203, -0.08462431, -0.20707012,
+						  -0.17650112, -0.19922243, -0.16967753, -0.18817129, -0.20458634, -0.08676682,
+						  -0.11785064, -0.03068135, -0.04197004, -0.17183342]]
+
+					  	),
+
+						jnp.array(
+						[[-0.00231961, -0.00895621,  0.06853679,  0.0069357,  -0.02742392,  0.00391063,
+						   0.02143496,  0.07258342,  0.05560984, -0.02823264,  0.02835682, -0.00693428,
+						   0.01221359,  0.05616201, -0.02058408,  0.0281348 ],
+						 [-0.1803375,  -0.12494415, -0.17192932, -0.11660786, -0.12339658, -0.18764674,
+						  -0.12699878, -0.17132069, -0.15470591, -0.13720351, -0.18281736, -0.10516087,
+						  -0.10887956, -0.07979148, -0.12417864, -0.16585421]]
+					  	)
+					 ]
+			'''
+
+
+		else:
+
+			self.N_neurons=2
+			self.NN_params=create_NN([self.N_neurons,self.L**2])
+			
+
+			# N_neurons_fc1=2
+			# N_neurons_fc2=4
+			# shape=[[N_neurons_fc1,self.L**2],[N_neurons_fc1,N_neurons_fc2],[N_neurons_fc1,N_neurons_fc2]]
+			# self.NN_params=create_NN(shape)
+
+		
+		self.NN_shapes=np.array([W.shape for W in self.NN_params])
+		self.NN_dims=np.array([np.prod(shape) for shape in self.NN_shapes])
+		self.N_varl_params=self.NN_dims.sum()
+
+	
+		
 
 	def _create_optimizer(self):
 
@@ -149,19 +181,23 @@ class VMC(object):
 		self.MC_tool.init_global_vars(self.L,self.N_batch,self.E_est.N_symms,self.E_est.basis_type)
 
 
-	def _create_data_obj(self):
+	def _create_data_obj(self,model_params=None):
 		### initialize data class
-		self.model_params=dict(model='RBMcpx',
-						  mode=self.mode, 
-						  symm=int(symmetrized),
-						  L=self.L,
-						  J2=self.E_est.J2,
-						  opt=self.optimizer,
-						  NNstrct=tuple(tuple(shape) for shape in self.NN_shapes),
-						  epochs=self.N_epochs,
-						  MCpts=self.N_MC_points,
-						  
-						)
+		if model_params is None:
+			self.model_params=dict(model='RBMcpx',
+							  mode=self.mode, 
+							  symm=int(symmetrized),
+							  L=self.L,
+							  J2=self.E_est.J2,
+							  opt=self.optimizer,
+							  NNstrct=tuple(tuple(shape) for shape in self.NN_shapes),
+							  epochs=self.N_epochs,
+							  MCpts=self.N_MC_points,
+							  
+							)
+		else:
+			self.model_params=model_params
+
 		extra_label=''#'-unique_configs'
 		self.data_structure=data(self.model_params,self.N_MC_points,self.N_epochs,extra_label=extra_label)
 
@@ -202,15 +238,17 @@ class VMC(object):
 					print('overlap', self.params_dict['overlap'] )
 
 
+			##### combine results from all cores
+			self.MC_tool.Allgather()	
+
+
 			#### update model parameters
 			if epoch<self.N_epochs-1:
 				loss, r2 = self.update_NN_params(epoch)
 
 
-			print("OMP-rank {0:d} calculation took {1:0.4f}secs.\n".format(self.comm.Get_rank(),time.time()-ti) )
-			#exit()
+			print("process_rank {0:d} calculation took {1:0.4f}secs.\n".format(self.comm.Get_rank(),time.time()-ti) )
 
- 
 
 			##### store data
 			if self.comm.Get_rank()==0:
@@ -227,17 +265,15 @@ class VMC(object):
 
 		if self.comm.Get_rank()==0:
 
-			# print(NN_params[0])
-			# print(NN_params[1])
-
-
+	
 			# save data
-			#self.data_structure.save(NN_params=self.NN_params)
-			exit()
-
-
-			self.data_structure.compute_phase_hist()
-			self.data_structure.plot(save=0)
+			if self.save:
+				self.data_structure.save(NN_params=self.NN_params)
+				
+			# plot data
+			if self.plot_data:
+				self.data_structure.compute_phase_hist()
+				self.data_structure.plot(save=0)
 
 	
 
@@ -302,8 +338,6 @@ class VMC(object):
 				
 			elif self.optimizer=='adam':
 				
-				# combine results from all cores
-				self.MC_tool.Allgather()
 				# reshape
 				if symmetrized:
 					self.MC_tool.spinstates_ket_tot=self.MC_tool.spinstates_ket_tot.reshape(-1,self.E_est.N_symms,self.E_est.N_sites)
@@ -312,12 +346,9 @@ class VMC(object):
 				batch=self.MC_tool.spinstates_ket_tot
 				
 
-
 				grads=self.compute_grad(self.NN_params,batch,self.params_dict)
 				loss=[jnp.max([jnp.max(grads[j]) for j in range(self.NN_shapes.shape[0])]),0.0]
 
-				#print(loss)
-				#exit()
 
 			##### apply gradients
 			self.opt_state = self.opt_update(epoch, grads, self.opt_state) 
