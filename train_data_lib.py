@@ -42,14 +42,14 @@ class VMC(object):
 
 		self.L=4 # system size
 		self.mode='exact' #'MC'  # 
-		self.optimizer='RK' # 'NG' # 'adam'  #
+		self.optimizer='RK' #'NG' #  'adam'  #
 
 		self.save=False # True #
-		load_data=False # True #
+		load_data=True #False # 
 		self.plot_data=False
 		
 		# training params
-		self.N_epochs=10 #500 
+		self.N_epochs=100 #500 
 
 		### MC sampler
 		self.N_MC_points=107 #10000 #
@@ -91,8 +91,50 @@ class VMC(object):
 
 		if load_data:
 
-			self.NN_params=jnp.array(self.data_structure.load_weights()[0])
-			self.NN_params=[W for W in self.NN_params]
+			self.NN_params=jnp.array(
+				[ [0.021258599215, -0.0823963887505,
+				-0.0764654369726, -0.0628942940286,
+				0.00182637347543, -0.00695127347814,
+				-0.00525690483403, 0.0481080176332,
+				0.000980873958246, -0.00692652171121,
+				-0.0169162330746, -0.0106888594278,
+				0.00585653048371, 0.0138074306434,
+				-0.0478208906869, 0.0548194907154,
+				0.00420109717598, -0.0124403232342,
+				0.00567369833488, 0.0371481096711,
+				0.0306937197576, -0.0224021086711,
+				-0.00400841403652, -0.0300551229252,
+				0.0732902932636, 0.0458134104469,
+				-0.0668617051509, -0.0580895073338,
+				0.01761345991, -0.00145492616907,
+				0.0320281652266, 0.0310190200109,
+				0.0100540410205, 0.00611392133309,
+				-0.0253986890351, 0.035396303171,
+				0.0140308059331, 0.000374839619012,
+				-0.0188215528856, 0.01156958282,
+				-0.00130670195036, 0.0498983872269,
+				-0.0330274839124, -0.0123636849822,
+				0.0225649581684, -0.0167168862779,
+				0.0315205951684, -0.0684157061108,
+				-0.0428906561036, 0.0754985501526,
+				-0.0295073373148, -0.0631896535519,
+				-0.09089461634, -0.0290092409887,
+				0.00408861284419, 0.00340387882643,
+				-0.000359464136101, 0.0218156069361,
+				-0.00775859832165, -0.0618378944315,
+				0.0478057783988, -0.0637107169233,
+				0.0398047959674, -0.0134030969116]
+				]
+				)
+
+
+			self.NN_params=[self.NN_params.reshape(32,2,order='F')[0:32:2,].T,
+						  	self.NN_params.reshape(32,2,order='F')[1:32:2,].T
+						  	]
+		
+
+			#self.NN_params=[W.reshape(2,16) for W in self.NN_params]
+
 
 
 			'''
@@ -130,6 +172,7 @@ class VMC(object):
 			# self.NN_params=create_NN(shape)
 
 		
+		
 		self.NN_shapes=np.array([W.shape for W in self.NN_params])
 		self.NN_dims=np.array([np.prod(shape) for shape in self.NN_shapes])
 		self.N_varl_params=self.NN_dims.sum()
@@ -147,7 +190,7 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			step_size=1E-2
+			step_size=5E-3
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=step_size)
 			self.opt_state = self.opt_init(self.NN_params)
 
@@ -161,8 +204,10 @@ class VMC(object):
 			self.opt_state = self.opt_init(self.NN_params)
 
 		elif self.optimizer=='RK':
-			step_size=1E-6
+			step_size=1E-4
 			self.NG.init_RK_params(step_size)
+
+		self.step_size=step_size
 
 
 
@@ -326,7 +371,7 @@ class VMC(object):
 
 		if self.optimizer=='RK':
 			# compute updated NN parameters
-			self.NN_params=self.NG.Runge_Kutta_2(self.NN_params,self.batch,self.params_dict,self.mode,self.get_training_data)
+			self.NN_params=self.NG.Runge_Kutta(self.NN_params,self.batch,self.params_dict,self.mode,self.get_training_data)
 			loss=self.NG.max_grads
 
 		else:
@@ -335,7 +380,7 @@ class VMC(object):
 				# compute enatural gradients
 				grads=self.NG.compute(self.NN_params,self.batch,self.params_dict,mode=self.mode)
 				loss=self.NG.max_grads
-				
+
 			elif self.optimizer=='adam':
 				
 				# reshape
