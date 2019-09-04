@@ -221,7 +221,7 @@ class natural_gradient():
 		self.RK_tol=5E-5 #self.tol
 		self.RK_inv_p=1.0/3.0
 		self.counter=0
-		self.delta=5E-5 #0.001 # NG Fisher matrix regularization strength
+		self.delta=0.001 # NG Fisher matrix regularization strength
 
 		self.RK_on=True
 		

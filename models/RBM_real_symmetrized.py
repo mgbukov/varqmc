@@ -73,8 +73,8 @@ def evaluate_NN(params,batch):
 
 def create_NN(shape):
 
-	init_value_Re=1E-3#1E-3 
-	init_value_Im=1E-3#1E-1 
+	init_value_Re=1E-1#1E-3 
+	init_value_Im=1E-1#1E-1 
 	
 	W_fc_real = random.uniform(rng,shape=shape, minval=-init_value_Re, maxval=+init_value_Re)
 	W_fc_imag = random.uniform(rng,shape=shape, minval=-init_value_Im, maxval=+init_value_Im)
