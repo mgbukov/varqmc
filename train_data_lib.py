@@ -49,7 +49,7 @@ class VMC(object):
 		self.plot_data=False
 		
 		# training params
-		self.N_epochs=100 #500 
+		self.N_epochs=2 #500 
 
 		### MC sampler
 		self.N_MC_points=107 #10000 #

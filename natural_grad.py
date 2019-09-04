@@ -219,7 +219,7 @@ class natural_gradient():
 		self.RK_step_size=learning_rate
 		self.RK_time=0.0
 		self.RK_tol=5E-5 #self.tol
-		#self.RK_inv_p=1.0/5.0
+		self.RK_inv_p=1.0/3.0
 		self.counter=0
 		self.delta=5E-5 #0.001 # NG Fisher matrix regularization strength
 
@@ -257,10 +257,9 @@ class natural_gradient():
 			self.k1[:]=-self.RK_step_size*initial_grad
 			
 			### RK step 2
-			self.dy[:]=self.k1
-			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy,self.NN_dims,self.NN_shapes)
+			NN_params_shifted=self.reshape_to_gradient_format(params+self.k1,self.NN_dims,self.NN_shapes)
 			batch, params_dict=get_training_data(NN_params_shifted)
-			self.nat_grad_guess[:]=self.dy/self.RK_step_size
+			self.nat_grad_guess[:]=self.k1/self.RK_step_size
 			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 			self.dy[:]=0.5*self.k1 + 0.5*self.k2
 
@@ -274,18 +273,24 @@ class natural_gradient():
 			batch, params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k3/(0.5*self.RK_step_size)
 			self.k4[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
+
+			# first half-step solution difference
+			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
 			
-			NN_params_shifted=self.reshape_to_gradient_format(params+0.5*(self.k3+self.k4),self.NN_dims,self.NN_shapes)
+			### RK step 1
+			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
 			batch, params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k4/(0.5*self.RK_step_size)
 			self.k5[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
-			NN_params_shifted=self.reshape_to_gradient_format(params+0.5*(self.k3+self.k4)+self.k5,self.NN_dims,self.NN_shapes)
+			### RK step 2
+			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star+self.k5,self.NN_dims,self.NN_shapes)
 			batch, params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k5/(0.5*self.RK_step_size)
 			self.k6[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
-			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4 + 0.5*self.k5 + 0.5*self.k6
+			# second half-step solution difference
+			self.dy_star[:]+=0.5*self.k5 + 0.5*self.k6
 
 
 			#######
@@ -299,7 +304,7 @@ class natural_gradient():
 			error_ratio=6.0*self.RK_tol/norm
 
 			
-			self.RK_step_size*=min(2.0,max(0.2,0.9*error_ratio**(0.333333333)))
+			self.RK_step_size*=min(2.0,max(0.2,0.9*error_ratio**self.RK_inv_p))
 
 			
 			self.counter+=5 # five gradient calculations
