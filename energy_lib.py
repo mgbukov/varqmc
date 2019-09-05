@@ -15,7 +15,6 @@ from cpp_code import c_evaluate_mod, c_evaluate_phase, c_evaluate_NN
 
 from mpi4py import MPI
 import numpy as np
-#import jax.numpy as np
 import time
 
 from jax.config import config
@@ -282,7 +281,6 @@ class Energy_estimator():
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
-
 		# evaluate network
 		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symms,self.N_sites))
 		log_psi_bras=log_psi_bras[inv_index]
@@ -319,23 +317,6 @@ class Energy_estimator():
 			self.SdotS_real=self.Eloc_real+0.75*self.N_sites # diagonal contribution
 
 			self.SdotS_imag=2.0*self.Eloc_imag # double off-diagonal contribution
-
-		# if SdotS:
-		# 	self.comm.Allgather([self.Eloc_real,  MPI.DOUBLE], [self.SdotS_real_tot, MPI.DOUBLE])
-		# 	self.comm.Allgather([self.Eloc_imag,  MPI.DOUBLE], [self.SdotS_imag_tot, MPI.DOUBLE])
-
-		# 	self.SdotS_real_tot*=2.0 # double off-diagonal contribution
-		# 	self.SdotS_real_tot+=0.75*self.N_sites # diagonal contribution
-
-		# 	self.SdotS_imag_tot*=2.0 # double off-diagonal contribution
-
-		# else:
-
-		# 	self.comm.Allgather([self.Eloc_real,  MPI.DOUBLE], [self.Eloc_real_tot, MPI.DOUBLE])
-		# 	self.comm.Allgather([self.Eloc_imag,  MPI.DOUBLE], [self.Eloc_imag_tot, MPI.DOUBLE])
-
-
-
 
 	def process_local_energies(self,mode='MC',params_dict=None,SdotS=False):
 

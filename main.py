@@ -1,33 +1,48 @@
-from jax import jit, grad 
+from jax import jit, grad, vmap, random, ops, partial
+from jax.config import config
+config.update("jax_enable_x64", True)
+from jax.experimental import optimizers
+import jax.numpy as jnp
+import numpy as np
+
+seed=1
+np.random.seed(seed)
+np.random.RandomState(seed)
+rng = random.PRNGKey(seed)
+
 from mpi4py import MPI
 
 symmetrized=True  # False  # 
-if symmetrized:
-	from models.RBM_real_symmetrized import *
-	#from models.RBM_cpx_symmetrized import *
-else:
-	from models.RBM_real import *
+#from models.RBM_real_symmetrized import *
+from cpp_code import Neural_Net
+from cpp_code import integer_to_spinstate
 
 from natural_grad import natural_gradient
 from MC_lib import MC_sampler
 from energy_lib import Energy_estimator
-
-from jax.config import config
-config.update("jax_enable_x64", True)
-from jax.experimental import optimizers
-
-from cpp_code import integer_to_spinstate
-
-import numpy as np
-from functools import partial
-
 from data_analysis import data
+
 
 import time
 np.set_printoptions(threshold=np.inf)
 
 # mpiexec -n 2 python train_data_lib.py 
 
+
+
+
+def reshape_to_gradient_format(gradient,NN_dims,NN_shapes):
+	NN_params=[]
+	Ndims=np.insert(np.cumsum(NN_dims), 0, 0)
+	# loop over network architecture
+	for j in range(NN_dims.shape[0]): 
+		NN_params.append( gradient[Ndims[j]:Ndims[j+1]].reshape(NN_shapes[j]) )
+		
+	return NN_params
+	
+
+def reshape_from_gradient_format(NN_params,NN_dims,NN_shapes):
+	return jnp.concatenate([params.ravel() for params in NN_params])
 
 
 
@@ -49,7 +64,7 @@ class VMC(object):
 		self.plot_data=False
 		
 		# training params
-		self.N_epochs=50 #500 
+		self.N_epochs=10 #500 
 
 		### MC sampler
 		self.N_MC_points=107 #10000 #
@@ -87,9 +102,10 @@ class VMC(object):
 
 
 	def _create_NN(self, load_data=False):
-		### Neural network 
-
+		
 		if load_data:
+			print('exiting...')
+			exit()
 
 			# self.NN_params=jnp.array(
 			# 	[ [0.021258599215, -0.0823963887505,
@@ -161,48 +177,82 @@ class VMC(object):
 			'''
 
 
-		else:
 
-			self.N_neurons=2
-			self.NN_params=create_NN([self.N_neurons,self.L**2])
-			
+		self.N_neurons=2
+		shape=[self.N_neurons,self.L**2]
+		#self.NN_params=create_NN(shape)
 
-			# N_neurons_fc1=2
-			# N_neurons_fc2=4
-			# shape=[[N_neurons_fc1,self.L**2],[N_neurons_fc1,N_neurons_fc2],[N_neurons_fc1,N_neurons_fc2]]
-			# self.NN_params=create_NN(shape)
+		### Neural network
+		self.DNN=Neural_Net(shape)
+		# jit functions
+		self.evaluate_NN=jit(self.DNN.evaluate)
+		#self.evaluate_NN=self.DNN.evaluate
 
-		
-		
-		self.NN_shapes=np.array([W.shape for W in self.NN_params])
-		self.NN_dims=np.array([np.prod(shape) for shape in self.NN_shapes])
-		self.N_varl_params=self.NN_dims.sum()
-
-	
 		
 
 	def _create_optimizer(self):
 
+
+		@jit
+		def loss_log_psi(NN_params,batch,):
+			log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)	
+			return jnp.sum(log_psi)
+
+
+		@jit
+		def loss_phase_psi(NN_params,batch,):
+			log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)	
+			return jnp.sum(phase_psi)
+
+		@jit
+		def compute_grad_log_psi(NN_params,batch,):
+
+			dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
+			dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
+			
+			N_MC_points=dlog_psi_s[0].shape[0]
+
+			return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
+
+
+
 		### self.optimizer params
 		# initiaize natural gradient class
 			
-		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.N_varl_params,compute_grad_log_psi,
-									reshape_to_gradient_format, reshape_from_gradient_format, self.NN_dims, self.NN_shapes)
+		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.DNN.N_varl_params,compute_grad_log_psi,
+									reshape_to_gradient_format, reshape_from_gradient_format, self.DNN.dims, self.DNN.shapes)
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
 			step_size=5E-3
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=step_size)
-			self.opt_state = self.opt_init(self.NN_params)
+			#self.opt_state = self.opt_init(self.NN_params)
+			self.opt_state = self.opt_init(self.DNN.params)
 
 		elif self.optimizer=='adam':
 			step_size=1E-3
 			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=step_size, b1=0.9, b2=0.99, eps=1e-08)
 			if self.mode=='exact':
+
+				@jit
+				def loss_energy_exact(NN_params,batch,params_dict):
+					log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)
+					return 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag ))
+
 				self.compute_grad=jit(grad(loss_energy_exact))
+			
 			elif self.mode=='MC':
+
+				@jit
+				def loss_energy_MC(NN_params,batch,params_dict,):
+					log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)
+					return 2.0*jnp.sum(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
+
+
+
 				self.compute_grad=jit(grad(loss_energy_MC))
-			self.opt_state = self.opt_init(self.NN_params)
+			#self.opt_state = self.opt_init(self.NN_params)
+			self.opt_state = self.opt_init(self.DNN.params)
 
 		elif self.optimizer=='RK':
 			step_size=1E-6
@@ -236,7 +286,7 @@ class VMC(object):
 							  L=self.L,
 							  J2=self.E_est.J2,
 							  opt=self.optimizer,
-							  NNstrct=tuple(tuple(shape) for shape in self.NN_shapes),
+							  NNstrct=tuple(tuple(shape) for shape in self.DNN.shapes),
 							  epochs=self.N_epochs,
 							  MCpts=self.N_MC_points,
 							  
@@ -262,13 +312,17 @@ class VMC(object):
 			ti=time.time()
 
 			##### evaluate model
-			self.get_training_data(self.NN_params)
-			self.get_Stot_data(self.NN_params)
+			#self.get_training_data(self.NN_params)
+			#self.get_Stot_data(self.NN_params)
+
+			self.get_training_data(self.DNN.params)
+			self.get_Stot_data(self.DNN.params)
 
 
 			##### check c++ and python DNN evaluation
 			if epoch==0:
-				self.MC_tool.check_consistency(evaluate_NN,self.NN_params,symmetrized)
+				#self.MC_tool.check_consistency(self.evaluate_NN,self.NN_params,symmetrized)
+				self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params,symmetrized)
 
 				if self.mode=='exact':
 					np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_est.H.expt_value(self.psi[self.inv_index]))
@@ -314,7 +368,8 @@ class VMC(object):
 	
 			# save data
 			if self.save:
-				self.data_structure.save(NN_params=self.NN_params)
+				#self.data_structure.save(NN_params=self.NN_params)
+				self.data_structure.save(NN_params=self.DNN.params)
 				
 			# plot data
 			if self.plot_data:
@@ -327,12 +382,12 @@ class VMC(object):
 
 		##### MC sample #####
 		if self.mode=='exact':
-			self.MC_tool.exact(NN_params, evaluate_NN=evaluate_NN)
+			self.MC_tool.exact(NN_params, evaluate_NN=self.evaluate_NN)
 		elif self.mode=='MC':
 			self.MC_tool.sample(tuple([W._value for W in NN_params]) ,self.N_neurons)
 
 		##### compute local energies #####
-		self.E_est.compute_local_energy(evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift)
+		self.E_est.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift)
 			
 		if self.mode=='exact':
 			#print(self.MC_tool.mod_kets)
@@ -355,6 +410,7 @@ class VMC(object):
 
 
 
+
 		##### total batch
 		self.batch=self.MC_tool.spinstates_ket.reshape(-1,self.E_est.N_symms,self.E_est.N_sites)
 
@@ -363,7 +419,7 @@ class VMC(object):
 
 	def get_Stot_data(self,NN_params): 
 		# check SU(2) conservation
-		self.E_est.compute_local_energy(evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,SdotS=True)
+		self.E_est.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,SdotS=True)
 		self.SdotSloc_mean, SdotS_var, SdotS_diff_real, SdotS_diff_imag = self.E_est.process_local_energies(mode=self.mode,params_dict=self.params_dict,SdotS=True)
 		self.SdotS_MC_std=np.sqrt(SdotS_var/self.N_MC_points)
 
@@ -372,14 +428,16 @@ class VMC(object):
 
 		if self.optimizer=='RK':
 			# compute updated NN parameters
-			self.NN_params=self.NG.Runge_Kutta(self.NN_params,self.batch,self.params_dict,self.mode,self.get_training_data)
+			#self.NN_params=self.NG.Runge_Kutta(self.NN_params,self.batch,self.params_dict,self.mode,self.get_training_data)
+			self.DNN.update_params(self.NG.Runge_Kutta(self.DNN.params,self.batch,self.params_dict,self.mode,self.get_training_data))
 			loss=self.NG.max_grads
 
 		else:
 			##### compute gradients
 			if self.optimizer=='NG':
 				# compute enatural gradients
-				grads=self.NG.compute(self.NN_params,self.batch,self.params_dict,mode=self.mode)
+				#grads=self.NG.compute(self.NN_params,self.batch,self.params_dict,mode=self.mode)
+				grads=self.NG.compute(self.DNN.params,self.batch,self.params_dict,mode=self.mode)
 				loss=self.NG.max_grads
 
 			elif self.optimizer=='adam':
@@ -392,14 +450,16 @@ class VMC(object):
 				batch=self.MC_tool.spinstates_ket_tot
 				
 
-				grads=self.compute_grad(self.NN_params,batch,self.params_dict)
-				loss=[jnp.max([jnp.max(grads[j]) for j in range(self.NN_shapes.shape[0])]),0.0]
+				#grads=self.compute_grad(self.NN_params,batch,self.params_dict)
+				grads=self.compute_grad(self.DNN.params,batch,self.params_dict)
+				loss=[jnp.max([jnp.max(grads[j]) for j in range(self.DNN.shapes.shape[0])]),0.0]
 
 
 			##### apply gradients
 			self.opt_state = self.opt_update(epoch, grads, self.opt_state) 
 			self.NG.update_params() # update NG params
-			self.NN_params=self.get_params(self.opt_state)
+			#self.NN_params=self.get_params(self.opt_state)
+			self.DNN.update_params(self.get_params(self.opt_state))
 			
 		##### compute loss
 		r2=self.NG.r2_cost

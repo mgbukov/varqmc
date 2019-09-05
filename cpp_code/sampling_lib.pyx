@@ -2,13 +2,26 @@
 ## cython: profile=True
 # distutils: language=c++
 
-
+from jax.config import config
+config.update("jax_enable_x64", True)
+import jax.numpy as jnp
+from jax import jit, grad, vmap, random, ops, partial
+from jax.experimental.stax import relu, BatchNorm
 
 cimport cython
 import numpy as np
 cimport numpy as np
 from libcpp.vector cimport vector
 #from libcpp cimport bool
+
+seed=1
+np.random.seed(seed)
+np.random.RandomState(seed)
+rng = random.PRNGKey(seed)
+
+
+##############################################
+
 
 L=4
 ctypedef np.uint16_t basis_type 
@@ -220,38 +233,6 @@ cdef class cpp_Monte_Carlo:
         #def __set__(self, int seed):
         #    self.MC_c.seed = seed
 
-    """
-    property world_size:
-        def __get__(self):
-            return self.MC_c.world_size
-
-    property world_rank:
-        def __get__(self):
-            return self.MC_c.world_rank
-
-    
-
-    def mpi_init(self):
-        self.MC_c.mpi_init()
-
-    def mpi_close(self):
-        self.MC_c.mpi_close()
-
-    @cython.boundscheck(False)
-    def mpi_allgather(self,np.ndarray send_data,int send_count,np.ndarray recv_data,int recv_count):
-        #cdef int send_count=send_data.shape[0]
-        #cdef int recv_count=recv_data.shape[0]
-        cdef void * send_data_ptr = np.PyArray_GETPTR1(send_data,0)
-        cdef void * recv_data_ptr = np.PyArray_GETPTR1(recv_data,0)
-
-
-        if send_data.dtype == np.int8:
-            with nogil:
-                self.MC_c.mpi_allgather(<np.int8_t*>send_data_ptr,send_count,<np.int8_t*>recv_data_ptr,recv_count)
-        elif send_data.dtype == np.float64:
-            with nogil:
-                self.MC_c.mpi_allgather(<double*>send_data_ptr,send_count,<double*>recv_data_ptr,recv_count)
-    """
 
     def set_seed(self, unsigned int u):
         self.MC_c.set_seed(u)
@@ -324,3 +305,119 @@ cdef class cpp_Monte_Carlo:
 
 
 
+
+###########################
+
+
+class Neural_Net:
+
+    def __init__(self,shape):
+
+        init_value_Re=1E-1#1E-3 
+        init_value_Im=1E-1#1E-1 
+        
+        self.W_fc_real = random.uniform(rng,shape=shape, minval=-init_value_Re, maxval=+init_value_Re)
+        self.W_fc_imag = random.uniform(rng,shape=shape, minval=-init_value_Im, maxval=+init_value_Im)
+
+        self.params=[self.W_fc_real, self.W_fc_imag,]
+
+
+        self.shapes=np.array([W.shape for W in self.params])
+        self.dims=np.array([np.prod(shape) for shape in self.shapes])
+        self.N_varl_params=self.dims.sum()
+
+
+    def update_params(self,params):
+        self.W_fc_real=params[0]
+        self.W_fc_imag=params[1]
+        self.params=params
+
+    def evaluate(self,params,batch):
+
+        # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
+        # Re_Ws = jnp.einsum('ij,...lj->...li',self.W_fc_real, batch)
+        # Im_Ws = jnp.einsum('ij,...lj->...li',self.W_fc_imag, batch)
+
+        #print(params[0]-self.W_fc_real)
+
+        Re_Ws = jnp.einsum('ij,...lj->...li',params[0], batch)
+        Im_Ws = jnp.einsum('ij,...lj->...li',params[1], batch)
+
+        Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
+        Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
+
+        #a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
+        #a_fc_imag = tf.atan( tf.tan(Im_Ws)*tf.tanh(Re_Ws) )
+        a_fc_real = 0.5*jnp.log(Re**2 + Im**2)
+        a_fc_imag = jnp.arctan2(Im,Re)
+
+        log_psi = jnp.sum(a_fc_real,axis=[1,2])
+        phase_psi = jnp.sum(a_fc_imag,axis=[1,2])
+
+
+        return log_psi, phase_psi
+
+   
+
+
+
+'''
+
+@jit
+def melu(x):
+    return jnp.where(jnp.abs(x)>1.0, jnp.abs(x)-0.5, 0.5*x**2)
+
+
+def create_NN(shape):
+
+    init_value_W=1E-1 
+    init_value_b=1E-1
+    
+    W_fc_base = random.uniform(rng,shape=shape[0], minval=-init_value_W, maxval=+init_value_W)
+    
+    W_fc_log_psi = random.uniform(rng,shape=shape[1], minval=-init_value_W,   maxval=+init_value_W)
+    W_fc_phase   = random.uniform(rng,shape=shape[2], minval=-init_value_W, maxval=+init_value_W)
+
+    b_fc_log_psi = random.uniform(rng,shape=(shape[1][1],), minval=-init_value_b, maxval=+init_value_b)
+    b_fc_phase   = random.uniform(rng,shape=(shape[2][1],), minval=-init_value_b, maxval=+init_value_b)
+
+    
+    architecture=[W_fc_base, W_fc_log_psi, W_fc_phase, b_fc_log_psi, b_fc_phase]
+
+    return architecture
+
+
+
+@jit
+def evaluate_NN(params,batch):
+
+    ### common layer
+    Ws = jnp.einsum('ij,...lj->...il',params[0], batch)
+    # nonlinearity
+    #a_fc_base = jnp.log(jnp.cosh(Ws))
+    a_fc_base = melu(Ws) 
+    #a_fc_base = relu(Ws)
+    # symmetrize
+    a_fc_base = jnp.sum(a_fc_base, axis=[-1])
+
+    
+    ### log_psi head
+    a_fc_log_psi = jnp.dot(a_fc_base, params[1]) + params[3]
+    #log_psi = jnp.log(jnp.cosh(a_fc_log_psi))
+    log_psi = melu(a_fc_log_psi) 
+    #log_psi = relu(a_fc_log_psi)
+
+    ### phase head
+    a_fc_phase =jnp.dot(a_fc_base, params[2]) + params[4]
+    #phase_psi = jnp.log(jnp.cosh(a_fc_phase))
+    phase_psi = melu(a_fc_phase) 
+    #phase_psi = relu(a_fc_phase)
+
+    
+    log_psi = jnp.sum(log_psi, axis=[1])#/log_psi.shape[0]
+    phase_psi = jnp.sum(phase_psi, axis=[1])#/phase_psi.shape[0]    
+
+
+    return log_psi, phase_psi  #
+
+'''

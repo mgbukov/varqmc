@@ -1,18 +1,40 @@
 from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
+from jax import jit, grad, vmap, random, ops, partial
 
 from mpi4py import MPI
 import numpy as np
 from scipy.sparse.linalg import cg
 from scipy.linalg import eigh,eig
 
-# seed=0
-# np.random.seed(seed)
-# np.random.RandomState(seed)
-# rng = random.PRNGKey(seed)
+from cpp_code import Neural_Net
+evaluate_NN=jit(Neural_Net.evaluate)
 
 
+# @jit
+# def loss_log_psi(NN_params,batch,):
+# 	log_psi, phase_psi = evaluate_NN(0,NN_params,batch,)	
+# 	return jnp.sum(log_psi)
+
+
+# @jit
+# def loss_phase_psi(NN_params,batch,):
+# 	log_psi, phase_psi = evaluate_NN(0,NN_params,batch,)	
+# 	return jnp.sum(phase_psi)
+
+
+
+# @jit
+# def compute_grad_log_psi(NN_params,batch,):
+
+# 	dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
+# 	dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
+	
+# 	N_MC_points=dlog_psi_s[0].shape[0]
+
+# 	return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
+	 
 
 
 
@@ -242,8 +264,8 @@ class natural_gradient():
 		# flatten weights
 		params=self.reshape_from_gradient_format(NN_params,self.NN_dims,self.NN_shapes)
 		
-		#max_param=jnp.max(np.abs(params))
-		max_param=jnp.max(np.abs(params[:32]+1j*params[32:]))
+		max_param=jnp.max(np.abs(params))
+		#max_param=jnp.max(np.abs(params[:32]+1j*params[32:]))
 
 		initial_grad=self.compute(NN_params,batch,params_dict,mode=mode)
 		# cost and loss
