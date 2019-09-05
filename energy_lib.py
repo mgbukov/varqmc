@@ -20,7 +20,7 @@ import time
 
 from jax.config import config
 config.update("jax_enable_x64", True)
-from jax import jit
+#from jax import jit
 import jax.numpy as jnp
 
 
@@ -278,40 +278,23 @@ class Energy_estimator():
 		# print(self._MEs[:nn])
 		# print(self._ints_bra[:nn])
 		# exit()
-		#print(nn)
+
+		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra[:nn], return_index=True, return_inverse=True, return_counts=True)
+		nn_uq=_ints_bra_uq.shape[0]
+
 
 		# evaluate network
-		if self.symmetrized:
-			#log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
-			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
-			psi_bras = jnp.exp(log_psi_bras-log_psi_shift)
-			#psi_bras = jnp.exp(log_psi_bras)
+		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symms,self.N_sites))
+		log_psi_bras=log_psi_bras[inv_index]
+		phase_psi_bras=phase_psi_bras[inv_index]
 
-			'''
-			##### exact GS
-			psi_bras=np.zeros((nn,),dtype=np.float64)
-			phase_psi_bras=np.zeros((nn,),dtype=np.float64)
-			evaluate_NN.evaluate_mod_dict(self._ints_bra[:nn], psi_bras, nn)
-			evaluate_NN.evaluate_phase_dict(self._ints_bra[:nn], phase_psi_bras, nn)
-			
-			'''
+		#log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
+		
 
-			'''
-			##### jax, complex weights evaluation
-			# log_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
-			# psi_bras = jnp.exp(log_psi_bras.real)
-			# phase_psi_bras = log_psi_bras.imag
-			'''	
+		psi_bras = jnp.exp(log_psi_bras-log_psi_shift)
+		#psi_bras = jnp.exp(log_psi_bras)
 
-			#'''
-			##### cpp evaluation
-			# psi_bras=np.zeros((nn,),dtype=np.float64)
-			# phase_psi_bras=np.zeros_like(psi_bras)
-			# c_evaluate_NN(self._ints_bra[:nn],self._spinstates_bra.flatten()[:nn],psi_bras,phase_psi_bras, NN_params[0]._value, NN_params[1]._value, self.N_sites, 12, nn)
-			#'''
-		else:
-			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn])
-			psi_bras = jnp.exp(log_psi_bras)
+
 
 		# compute real and imaginary part of local energy
 		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],psi_bras._value,phase_psi_bras._value)

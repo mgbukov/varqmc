@@ -25,6 +25,14 @@ int op(I &r,double &m,const int n_op,const char opstr[],const int indx[], const 
 		const bool a = (bool)((r >> ind)&one);
 		const char op = opstr[j];
 		switch(op){
+			case '+':
+				m *= (a?0:1);
+				r ^= b;
+				break;
+			case '-':
+				m *= (a?1:0);
+				r ^= b;
+				break;
 			case 'z':
 				m *= (a?0.5:-0.5);
 				break;
@@ -40,14 +48,7 @@ int op(I &r,double &m,const int n_op,const char opstr[],const int indx[], const 
 			case 'I':
 				break;
 			*/
-			case '+':
-				m *= (a?0:1);
-				r ^= b;
-				break;
-			case '-':
-				m *= (a?1:0);
-				r ^= b;
-				break;
+			
 			default:
 				return -1;
 		}
@@ -98,17 +99,14 @@ inline void _int_to_spinstate(const int N,T state,npy_int8 out[])
 
 
 template<class I>
-npy_uint32 int_to_spinstate(const int N,I t,npy_int8 out[])
+I int_to_spinstate(const int N,I s,npy_int8 out[])
 {	
 	
-	//t=ref_state(t);
+	I t = s;
+	I r = s;
 
-	int counter=0;
-	bool encountered=0;
-	
-	std::vector<I> Ts(N_symms,0);
-	Ts[counter]=t;
-	
+	npy_uint16 counter=0;
+
 	for(int i=0;i<2;i++){
 		for(int j=0;j<2;j++){
 			for(int k=0;k<2;k++){
@@ -116,35 +114,12 @@ npy_uint32 int_to_spinstate(const int N,I t,npy_int8 out[])
 					for(int m=0;m<_L;m++){
 						for(int n=0;n<_L;n++){
 
-							
+							if(t > r) r = t;
+						
 							_int_to_spinstate(N,t,&out[counter*N]);
 							t = shift_x(t);
 							counter++;
-							
-							// t = shift_x(t);
-
-							// // check if state has been encountered
-							// for(int _k=0;_k<counter+1;_k++){
-							// 	if(t==Ts[_k]){
-							// 		encountered=1;
-							// 		break;
-							// 	}
-							// }
-
-							// // break loop if state has been encountered
-							// if(encountered){
-							// 	encountered=0;
-							// 	break;
-							// }
-							// else{
-							// 	_int_to_spinstate(N,t,&out[counter*N]);
-							// 	Ts[counter]=t;
-							// 	counter++;
-								
-							// }
-
-
-								
+														
 						}
 						t = shift_y(t);
 					}
@@ -157,7 +132,7 @@ npy_uint32 int_to_spinstate(const int N,I t,npy_int8 out[])
 		t = flip_d(t);
 	}	
 
-	return counter;	
+	return r;	
 	
 		
 }
@@ -337,6 +312,7 @@ class Monte_Carlo{
 						int thermalization_time,
 						int auto_correlation_time,
 						//
+						npy_int8 spin_states[],
 						npy_int8 rep_spin_states[],
 						I ket_states[],
 						I rep_ket_states[],
@@ -351,7 +327,7 @@ class Monte_Carlo{
 		{			
 			int N_sites=_L*_L;
 
-			I t;
+			I t, s_rep, t_rep;
 			double mod_psi_s, mod_psi_t, phase_psi_s;
 
 			npy_uint16 _i,_j;
@@ -360,7 +336,7 @@ class Monte_Carlo{
 			std::vector<npy_int8> spinstate_s(N_sites*N_symms), spinstate_t(N_sites*N_symms);
 		 
 
-			int_to_spinstate(N_sites,s,&spinstate_s[0]);
+			s_rep=int_to_spinstate(N_sites,s,&spinstate_s[0]);
 			mod_psi_s=evaluate_mod(&spinstate_s[0],W_fc_real,W_fc_imag,N_sites,N_fc);
 				  		    
 
@@ -390,7 +366,7 @@ class Monte_Carlo{
 		    	// 	spinstate_t[N_sites-1-_j + _k*N_sites] = spinstate_s[N_sites-1-_i + _k*N_sites];
 		    	// }
 
-		    	int_to_spinstate(N_sites,t,&spinstate_t[0]);
+		    	t_rep=int_to_spinstate(N_sites,t,&spinstate_t[0]);
 		    	
 		    	   	
 		    	// compute amplitude
@@ -402,6 +378,7 @@ class Monte_Carlo{
 		    	double eps = uniform();
 		    	if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t){ // accept
 					s = t;
+					s_rep = t_rep;
 					mod_psi_s = mod_psi_t;
 					spinstate_s = spinstate_t;
 					accepted++;
@@ -413,7 +390,7 @@ class Monte_Carlo{
 					//cout << j << " , " << thermalization_time << " , " << auto_correlation_time << endl;
 
 					for(int i=0;i<N_sites*N_symms;++i){
-						rep_spin_states[k*N_sites*N_symms + i] = spinstate_s[i];
+						spin_states[k*N_sites*N_symms + i] = spinstate_s[i];
 					};
 				
 					
@@ -421,6 +398,7 @@ class Monte_Carlo{
 					
 					
 					ket_states[k] = s;
+					rep_ket_states[k] = s_rep;
 					phase_kets[k]=phase_psi_s;
 					mod_kets[k]=mod_psi_s;
 
@@ -483,11 +461,11 @@ int update_offdiag(const int n_op,
 				M[l] = m;
 				ket_index[l]=j;
 
-				bra[l] = ref_state(r);
+				//bra[l] = ref_state(r);
 
 				//std::cout << l << " , " << bra[l] << " , " << r  << " , " << j << std::endl;
 
-				int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+				bra[l] = int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
 				
 				l++;
 

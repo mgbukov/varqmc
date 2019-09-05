@@ -3,6 +3,7 @@
 # distutils: language=c++
 
 
+
 cimport cython
 import numpy as np
 cimport numpy as np
@@ -16,7 +17,6 @@ ctypedef np.uint16_t basis_type
 #ctypedef np.uint64_t basis_type
 
 N_sites=L*L
-
 
 
 cdef extern from "sample_4x4.h":
@@ -50,6 +50,7 @@ cdef extern from "sample_4x4.h":
                             int ,
                             #
                             np.int8_t [],
+                            np.int8_t [],
                             basis_type [],
                             basis_type [],
                             double [],
@@ -69,7 +70,7 @@ cdef extern from "sample_4x4.h":
     
     void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[]) nogil
 
-    int int_to_spinstate[T](const int,T ,np.int8_t []) nogil
+    T int_to_spinstate[T](const int,T ,np.int8_t []) nogil
 
 
     double evaluate_mod(
@@ -276,6 +277,7 @@ cdef class cpp_Monte_Carlo:
                     int thermalization_time,
                     int auto_correlation_time,
                     #
+                    np.int8_t[::1] spin_states,
                     np.int8_t[::1] rep_spin_states,
                     basis_type[:] ket_states,
                     basis_type[:] rep_ket_states,
@@ -305,6 +307,7 @@ cdef class cpp_Monte_Carlo:
                        thermalization_time,
                        auto_correlation_time,
                        #
+                       &spin_states[0],
                        &rep_spin_states[0],
                        &ket_states[0],
                        &rep_ket_states[0],
