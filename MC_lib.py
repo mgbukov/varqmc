@@ -75,17 +75,25 @@ class MC_sampler():
 		
 
 
-	def sample(self,NN_params,N_neurons):
+	def sample(self,NN_params,N_neurons,DNN=None):
 
 		self._reset_global_vars()
 		assert(self.spinstates_ket.max()==0)
 		assert(self.rep_spinstates_ket.max()==0)
 
 		#ti = time.time()
-		N_accepted=self.MC_sampler.sample_DNN(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
-						self.spinstates_ket,self.rep_spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,self.phase_kets,
-						*NN_params,N_neurons,
+
+		# N_accepted=self.MC_sampler.sample_DNN(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
+		# 				self.spinstates_ket,self.rep_spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,self.phase_kets,
+		# 				*NN_params,N_neurons,
+		# 				)
+
+		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
+						self.spinstates_ket,self.rep_spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,
 						)
+		self.phase_kets=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))._value
+		
+
 		self.log_psi_shift=0.0 #log_psi[0]
 		
 		#print("cpp sampling took {0:.4f} sec with acceptance ratio {1:.4f}".format(time.time()-ti, N_accepted/self.N_MC_points))
@@ -116,7 +124,7 @@ class MC_sampler():
 		else:
 			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_sites))
 		self.log_psi_shift=0.0 #log_psi[0]
-		self.mod_kets = np.exp((log_psi-self.log_psi_shift)._value)
+		self.mod_kets = jnp.exp((log_psi-self.log_psi_shift))._value
 		#self.mod_kets = np.exp(log_psi._value)
 		self.phase_kets= phase_kets._value
 
@@ -159,6 +167,7 @@ class MC_sampler():
 		# # print()
 		# print(mod_kets_tot)
 		# print(np.exp(log_psi))
+
 		
 		# test results for consistency
 		np.testing.assert_allclose(phase_psi_tot, phase_kets_tot)

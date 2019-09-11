@@ -56,7 +56,7 @@ class VMC(object):
 
 
 		self.L=4 # system size
-		self.mode='exact' #'MC'  # 
+		self.mode='MC'  # 'exact' #
 		self.optimizer='RK' #'NG' #  'adam'  #
 
 		self.save=False # True #
@@ -64,7 +64,7 @@ class VMC(object):
 		self.plot_data=False
 		
 		# training params
-		self.N_epochs=10 #500 
+		self.N_epochs=20 #500 
 
 		### MC sampler
 		self.N_MC_points=107 #10000 #
@@ -389,7 +389,7 @@ class VMC(object):
 		if self.mode=='exact':
 			self.MC_tool.exact(NN_params, evaluate_NN=self.evaluate_NN)
 		elif self.mode=='MC':
-			self.MC_tool.sample(tuple([W._value for W in NN_params]) ,self.N_neurons)
+			self.MC_tool.sample(tuple([W._value for W in NN_params]) ,self.N_neurons, self.DNN)
 
 		##### compute local energies #####
 		self.E_est.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift)

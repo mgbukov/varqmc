@@ -348,7 +348,7 @@ class Monte_Carlo{
 		    while(k < N_MC_points){
 
 		    	t=s;
-		    	spinstate_t=spinstate_s;
+		    	//spinstate_t=spinstate_s;
 
 		    	// propose a new state until a nontrivial configuration is drawn
 		    	while(t==s){
