@@ -8,8 +8,8 @@ import numpy as np
 from scipy.sparse.linalg import cg
 from scipy.linalg import eigh,eig
 
-from cpp_code import Neural_Net
-evaluate_NN=jit(Neural_Net.evaluate)
+#from cpp_code import Neural_Net
+#evaluate_NN=jit(Neural_Net.evaluate)
 
 
 # @jit

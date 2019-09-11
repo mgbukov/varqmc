@@ -184,24 +184,25 @@ class VMC(object):
 
 		### Neural network
 		self.DNN=Neural_Net(shape)
+
 		# jit functions
 		self.evaluate_NN=jit(self.DNN.evaluate)
 		#self.evaluate_NN=self.DNN.evaluate
 
-		
+
 
 	def _create_optimizer(self):
 
 
 		@jit
 		def loss_log_psi(NN_params,batch,):
-			log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)	
+			log_psi, _ = self.evaluate_NN(NN_params,batch,)	
 			return jnp.sum(log_psi)
 
 
 		@jit
 		def loss_phase_psi(NN_params,batch,):
-			log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)	
+			_, phase_psi = self.evaluate_NN(NN_params,batch,)	
 			return jnp.sum(phase_psi)
 
 		@jit
@@ -209,7 +210,7 @@ class VMC(object):
 
 			dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
 			dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
-			
+	
 			N_MC_points=dlog_psi_s[0].shape[0]
 
 			return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
@@ -307,6 +308,10 @@ class VMC(object):
 
 
 		for epoch in range(self.N_epochs): 
+
+			
+
+			# s
 
 			
 			ti=time.time()
