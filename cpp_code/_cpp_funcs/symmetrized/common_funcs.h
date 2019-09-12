@@ -313,7 +313,6 @@ class Monte_Carlo{
 						int auto_correlation_time,
 						//
 						npy_int8 spin_states[],
-						npy_int8 rep_spin_states[],
 						I ket_states[],
 						I rep_ket_states[],
 						double mod_kets[],

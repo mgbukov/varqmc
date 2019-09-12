@@ -12,6 +12,7 @@ cimport cython
 import numpy as np
 cimport numpy as np
 from libcpp.vector cimport vector
+from libc.stdlib cimport rand, srand, RAND_MAX
 #from libcpp cimport bool
 
 seed=1
@@ -24,7 +25,6 @@ rng = random.PRNGKey(seed)
 
 
 L=4
-N_symms=128 
 ctypedef np.uint16_t basis_type 
 
 #L=6    
@@ -63,7 +63,6 @@ cdef extern from "sample_4x4.h":
                             int ,
                             int ,
                             #
-                            np.int8_t [],
                             np.int8_t [],
                             basis_type [],
                             basis_type [],
@@ -154,6 +153,7 @@ def c_evaluate_phase(
   
 
 
+
 @cython.boundscheck(False)
 def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features):
     cdef int i;
@@ -163,6 +163,7 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
     with nogil:
         for i in range (Ns):
             int_to_spinstate(Nsites,states[i],&out[i*N_features])
+
 
 
 
@@ -260,7 +261,6 @@ cdef class cpp_Monte_Carlo:
                     int auto_correlation_time,
                     #
                     np.int8_t[::1] spin_states,
-                    np.int8_t[::1] rep_spin_states,
                     basis_type[:] ket_states,
                     basis_type[:] rep_ket_states,
                     np.float64_t[:] mod_kets,
@@ -290,7 +290,6 @@ cdef class cpp_Monte_Carlo:
                        auto_correlation_time,
                        #
                        &spin_states[0],
-                       &rep_spin_states[0],
                        &ket_states[0],
                        &rep_ket_states[0],
                        &mod_kets[0],
@@ -317,15 +316,18 @@ cdef class Neural_Net:
     cdef object params
 
     cdef np.ndarray shapes, dims 
-    cdef int N_varl_params
+    cdef int N_varl_params, N_symm, N_sites
 
     cdef object evaluate_phase, evaluate_mod
 
     cdef np.int8_t[:,:] spinstate_s, spinstate_t
-    
+    cdef object spinstate_s_py, spinstate_t_py
 
 
-    def __init__(self,shape):
+    def __init__(self,shape,seed=0):
+
+        # fix seed
+        srand(seed)
 
         init_value_Re=1E-1#1E-3 
         init_value_Im=1E-1#1E-1 
@@ -340,12 +342,25 @@ cdef class Neural_Net:
         self.dims=np.array([np.prod(shape) for shape in self.shapes])
         self.N_varl_params=self.dims.sum()
 
+        self.N_symm=128
+        self.N_sites=L*L
+
 
         #self.evaluate_mod  =self._evaluate_mod
         #self.evaluate_phase=self._evaluate_phase
 
+        # define network evaluation on GPU
         self.evaluate_mod  =jit(self._evaluate_mod)
         self.evaluate_phase=jit(self._evaluate_phase)
+
+
+        self.spinstate_s=np.zeros([self.N_symm,self.N_sites],dtype=np.int8)
+        self.spinstate_t=np.zeros([self.N_symm,self.N_sites],dtype=np.int8)
+
+        # access data in device array; transfer memory from numpy to jax
+        self.spinstate_s_py=np.asarray(self.spinstate_s)
+        self.spinstate_t_py=np.asarray(self.spinstate_t)
+
 
 
     property shapes:
@@ -381,6 +396,7 @@ cdef class Neural_Net:
         self.W_fc_imag=params[1]
         self.params=params
 
+
     def evaluate(self, params, batch):
 
         # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
@@ -409,8 +425,8 @@ cdef class Neural_Net:
 
     cpdef object _evaluate_mod(self, object batch):
 
-        Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
-        Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
+        Re_Ws = jnp.einsum('ij,lj->il',self.W_fc_real, batch)
+        Im_Ws = jnp.einsum('ij,lj->il',self.W_fc_imag, batch)
 
         Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
         Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
@@ -447,7 +463,6 @@ cdef class Neural_Net:
                     int auto_correlation_time,
                     #
                     np.int8_t[::1] spin_states,
-                    np.int8_t[::1] rep_spin_states,
                     basis_type[:] ket_states,
                     basis_type[:] rep_ket_states,
                     np.float64_t[:] mod_kets
@@ -456,9 +471,6 @@ cdef class Neural_Net:
 
         cdef basis_type s_c
         cdef int N_accepted
-
-        self.spinstate_s=np.zeros([N_symms,N_sites],dtype=np.int8)
-        self.spinstate_t=np.zeros([N_symms,N_sites],dtype=np.int8)
 
 
         # initial configuration
@@ -471,22 +483,26 @@ cdef class Neural_Net:
         s_c=s
 
 
-        #with nogil:
-        N_accepted=self._MC_core(
-                   s_c,
-                   N_MC_points,
-                   thermalization_time,
-                   auto_correlation_time,
-                   #
-                   &spin_states[0],
-                   &ket_states[0],
-                   &rep_ket_states[0],
-                   &mod_kets[0]
+        with nogil:
+            N_accepted=self._MC_core(
+                       s_c,
+                       N_MC_points,
+                       thermalization_time,
+                       auto_correlation_time,
+                       #
+                       &spin_states[0],
+                       &ket_states[0],
+                       &rep_ket_states[0],
+                       &mod_kets[0]
 
-        )
+            )
 
         return N_accepted;
    
+    # OpenMPI: has headers 
+    # cython: from ehader define function from cpp MPI that I wanna use; nogil etc
+    # cpp version better than python version
+
     @cython.boundscheck(False)
     cdef int _MC_core(self, basis_type s,
                             int N_MC_points,
@@ -497,11 +513,9 @@ cdef class Neural_Net:
                             basis_type * ket_states,
                             basis_type * rep_ket_states,
                             double * mod_kets
-        ):           
+        ) nogil:           
         
-        cdef int i=0, ii=0;
-        cdef int j=0;
-        cdef int k=0;
+        cdef int i=0, ii=0, j=0, k=0;
         cdef int N_accepted=0;
 
         cdef double eps;
@@ -511,12 +525,13 @@ cdef class Neural_Net:
 
         cdef np.uint16_t _i,_j;
 
-
-        s_rep=int_to_spinstate(N_sites,s,&self.spinstate_s[0,0]);
-        mod_psi_s=self.evaluate_mod(np.asarray(self.spinstate_s));
-                        
         
-
+        # not quite full rep
+        s_rep=int_to_spinstate(self.N_sites,s,&self.spinstate_s[0,0]);
+        with gil:
+            mod_psi_s=self.evaluate_mod(self.spinstate_s_py);
+                    
+     
         while(k < N_MC_points):
 
             t=s;
@@ -524,29 +539,33 @@ cdef class Neural_Net:
 
             # propose a new state until a nontrivial configuration is drawn
             while(t==s):
-                _i = np.random.randint(N_sites)
-                _j = np.random.randint(N_sites)
+                _i = rand()%self.N_sites 
+                _j = rand()%self.N_sites 
                 t = swap_bits(s,_i,_j);
             
 
-            t_rep=int_to_spinstate(N_sites,t,&self.spinstate_t[0,0]);
-            mod_psi_t=self.evaluate_mod(np.asarray(self.spinstate_t));
+            t_rep=int_to_spinstate(self.N_sites,t,&self.spinstate_t[0,0]);
+            with gil:
+                mod_psi_t=self.evaluate_mod(self.spinstate_t_py);
 
 
-            eps = np.random.uniform(0,1);
+            eps = rand()/RAND_MAX;
             if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t): # accept
                 s = t;
                 s_rep = t_rep;
                 mod_psi_s = mod_psi_t;
-                self.spinstate_s[:] = self.spinstate_t[:];
+                # loop over indices; release gil
+                for i in range(self.N_symm):
+                    for ii in range(self.N_sites):
+                        self.spinstate_s[i,ii] = self.spinstate_t[i,ii];
                 N_accepted+=1;
     
 
             if( (j > thermalization_time) & (j % auto_correlation_time) == 0):
-                            
-                for i in range(N_symms):
-                    for ii in range(N_sites):
-                       spin_states[k*N_sites*N_symms + i*N_sites + ii] = self.spinstate_s[i,ii];
+                
+                for i in range(self.N_symm):
+                    for ii in range(self.N_sites):
+                       spin_states[k*self.N_sites*self.N_symm + i*self.N_sites + ii] = self.spinstate_s[i,ii];
 
                 ket_states[k] = s;
                 rep_ket_states[k] = s_rep;
@@ -558,7 +577,6 @@ cdef class Neural_Net:
                 
             j+=1;
 
-        
 
         return N_accepted;
 

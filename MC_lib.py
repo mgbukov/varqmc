@@ -16,6 +16,8 @@ from cpp_code import c_evaluate_NN
 
 from mpi4py import MPI
 import numpy as np
+config.update("jax_enable_x64", True)
+import jax.numpy as jnp
 import time
 
 
@@ -53,7 +55,6 @@ class MC_sampler():
 		self.phase_kets=np.zeros((N_MC_points,),dtype=np.float64)
 
 		self.spinstates_ket_tot=np.zeros((self.comm.Get_size()*self.N_MC_points*self.N_features,),dtype=np.int8)
-		self.rep_spinstates_ket_tot=np.zeros((self.comm.Get_size()*self.N_MC_points*self.N_features,),dtype=np.int8)
 		self.mod_kets_tot=np.zeros((self.comm.Get_size()*N_MC_points,),dtype=np.float64)
 		self.phase_kets_tot=np.zeros((self.comm.Get_size()*N_MC_points,),dtype=np.float64)
 
@@ -62,7 +63,6 @@ class MC_sampler():
 
 	def Allgather(self):
 
-		self.comm.Allgather([self.rep_spinstates_ket,  MPI.INT], [self.rep_spinstates_ket_tot, MPI.INT])
 		self.comm.Allgather([self.spinstates_ket,  MPI.INT], [self.spinstates_ket_tot, MPI.INT])
 		self.comm.Allgather([self.mod_kets,  MPI.DOUBLE], [self.mod_kets_tot, MPI.DOUBLE])
 		self.comm.Allgather([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_tot, MPI.DOUBLE])
@@ -71,7 +71,6 @@ class MC_sampler():
 
 	def _reset_global_vars(self):
 		self.spinstates_ket=np.zeros((self.N_MC_points*self.N_features,),dtype=np.int8)
-		self.rep_spinstates_ket=np.zeros((self.N_MC_points*self.N_features,),dtype=np.int8)
 		
 
 
@@ -79,17 +78,16 @@ class MC_sampler():
 
 		self._reset_global_vars()
 		assert(self.spinstates_ket.max()==0)
-		assert(self.rep_spinstates_ket.max()==0)
-
+		
 		#ti = time.time()
 
 		# N_accepted=self.MC_sampler.sample_DNN(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
-		# 				self.spinstates_ket,self.rep_spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,self.phase_kets,
+		# 				self.spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,self.phase_kets,
 		# 				*NN_params,N_neurons,
 		# 				)
 
 		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
-						self.spinstates_ket,self.rep_spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,
+						self.spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,
 						)
 		self.phase_kets=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))._value
 		

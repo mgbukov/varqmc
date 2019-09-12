@@ -64,7 +64,7 @@ class VMC(object):
 		self.plot_data=False
 		
 		# training params
-		self.N_epochs=20 #500 
+		self.N_epochs=10 #500 
 
 		### MC sampler
 		self.N_MC_points=107 #10000 #
@@ -208,8 +208,11 @@ class VMC(object):
 		@jit
 		def compute_grad_log_psi(NN_params,batch,):
 
-			dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
-			dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
+			# dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
+			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
+
+			dlog_psi_s   = vmap(grad(loss_log_psi),   in_axes=(None,0) )(NN_params,batch, )
+			dphase_psi_s = vmap(grad(loss_phase_psi), in_axes=(None,0) )(NN_params,batch, )
 	
 			N_MC_points=dlog_psi_s[0].shape[0]
 
@@ -308,10 +311,6 @@ class VMC(object):
 
 
 		for epoch in range(self.N_epochs): 
-
-			
-
-			# s
 
 			
 			ti=time.time()
@@ -417,7 +416,7 @@ class VMC(object):
 
 
 		##### total batch
-		self.batch=self.MC_tool.spinstates_ket.reshape(-1,self.E_est.N_symms,self.E_est.N_sites)
+		self.batch=self.MC_tool.spinstates_ket.reshape(-1,self.E_est.N_symms,self.E_est.N_sites)#.T
 
 
 		return self.batch, self.params_dict
