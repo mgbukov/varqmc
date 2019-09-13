@@ -9,9 +9,9 @@ sys.path.insert(0,quspin_path)
 
 from jax.config import config
 config.update("jax_enable_x64", True)
+from jax import jit
 
 from cpp_code import cpp_Monte_Carlo
-#from cpp_code import c_evaluate_mod, c_evaluate_phase, integer_to_spinstate
 
 from mpi4py import MPI
 import numpy as np
@@ -88,7 +88,7 @@ class MC_sampler():
 		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
 						self.spinstates_ket,self.ints_ket,self.mod_kets,
 						)
-		self.phase_kets=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))._value
+		self.phase_kets[:]=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))#._value
 		
 
 		self.log_psi_shift=0.0 #log_psi[0]
@@ -121,9 +121,9 @@ class MC_sampler():
 		else:
 			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_sites))
 		self.log_psi_shift=0.0 #log_psi[0]
-		self.mod_kets = jnp.exp((log_psi-self.log_psi_shift))._value
+		self.mod_kets[:] = jnp.exp((log_psi-self.log_psi_shift)).block_until_ready()#._value
 		#self.mod_kets = np.exp(log_psi._value)
-		self.phase_kets= phase_kets._value
+		self.phase_kets[:]= phase_kets#._value
 
 
 

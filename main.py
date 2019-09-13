@@ -26,7 +26,7 @@ from data_analysis import data
 import time
 np.set_printoptions(threshold=np.inf)
 
-# mpiexec -n 2 python train_data_lib.py 
+# mpiexec -n 2 python main.py 
 
 
 
@@ -67,7 +67,7 @@ class VMC(object):
 		self.N_epochs=10 #500 
 
 		### MC sampler
-		self.N_MC_points=107 #10000 #
+		self.N_MC_points=2000 #107 #10000 #
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
 			self.N_batch=self.N_MC_points#
@@ -456,7 +456,7 @@ class VMC(object):
 
 				#grads=self.compute_grad(self.NN_params,batch,self.params_dict)
 				grads=self.compute_grad(self.DNN.params,batch,self.params_dict)
-				loss=[jnp.max([jnp.max(grads[j]) for j in range(self.DNN.shapes.shape[0])]),0.0]
+				loss=[jnp.max([jnp.max(grads[j]) for j in range(self.DNN.shapes.shape[0])]).block_until_ready(),0.0]
 
 
 			##### apply gradients

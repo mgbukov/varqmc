@@ -18,7 +18,7 @@ import time
 
 from jax.config import config
 config.update("jax_enable_x64", True)
-#from jax import jit
+from jax import jit
 import jax.numpy as jnp
 
 
@@ -280,24 +280,23 @@ class Energy_estimator():
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
+
 		#print(_ints_bra_uq)
 		#print(_ints_bra_uq.shape)
 		
-		# evaluate network
+		# evaluate network on unique representatives only
 		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symms,self.N_sites))
-		log_psi_bras=log_psi_bras[inv_index]
-		phase_psi_bras=phase_psi_bras[inv_index]
+		log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
+		phase_psi_bras=phase_psi_bras[inv_index]._value
 
 		#log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
 		
-
-		psi_bras = jnp.exp(log_psi_bras-log_psi_shift)
-		#psi_bras = jnp.exp(log_psi_bras)
-
+		#psi_bras = jnp.exp(log_psi_bras-log_psi_shift).block_until_ready()._value
+		
 
 
 		# compute real and imaginary part of local energy
-		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],psi_bras._value,phase_psi_bras._value)
+		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras)
 		#c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],psi_bras,phase_psi_bras)
 		
 		cos_phase_kets=np.cos(phase_kets)/mod_kets

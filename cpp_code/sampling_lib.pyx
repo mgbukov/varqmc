@@ -1,12 +1,15 @@
-# cython: language_level=2
-## cython: profile=True
 # distutils: language=c++
+# cython: language_level=2
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=True
+#cython: profile=True
 
 from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
-from jax import jit, grad, vmap, random, ops, partial
-from jax.experimental.stax import relu, BatchNorm
+from jax import jit, grad, random, device_put 
+#from jax.experimental.stax import relu, BatchNorm
 
 cimport cython
 import numpy as np
@@ -146,7 +149,7 @@ def c_offdiag_sum(
     
     with nogil:
         offdiag_sum(Ns,&n_per_term[0],&Eloc_cos[0],&Eloc_sin[0],&ket_indx[0],&MEs[0],&psi_bras[0],&phase_psi_bras[0])
-
+        
 
 
 @cython.boundscheck(False)
@@ -283,12 +286,18 @@ cdef class Neural_Net:
         self.N_sites=L*L
 
 
-        #self.evaluate_mod  =self._evaluate_mod
-        #self.evaluate_phase=self._evaluate_phase
+        ################################################
+
+
+        # self.evaluate_mod  =self._evaluate_mod
+        # self.evaluate_phase=self._evaluate_phase
 
         # define network evaluation on GPU
         self.evaluate_mod  =jit(self._evaluate_mod)
         self.evaluate_phase=jit(self._evaluate_phase)
+
+
+        ################################################
 
 
         self.spinstate_s=np.zeros([self.N_symm,self.N_sites],dtype=np.int8)
@@ -506,8 +515,6 @@ cdef class Neural_Net:
         return N_accepted;
 
         
-
-   
 
 
 

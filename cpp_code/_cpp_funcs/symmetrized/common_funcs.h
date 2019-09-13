@@ -106,7 +106,7 @@ I rep_int_to_spinstate(const int N,I s,npy_int8 out[])
 	I r = s;
 	I p = s;
 
-	npy_uint16 counter=0;
+	int counter=0;
 
 	
 	for(int i=0;i<2;i++){
@@ -480,7 +480,7 @@ int update_offdiag(const int n_op,
 						  		npy_uint32 ket_index[],
 						  		double M[]
 						  )
-{	int l=0; 
+{	int l=0;
 	int N=_L*_L;
 	//#pragma omp parallel
 	{		
@@ -488,26 +488,55 @@ int update_offdiag(const int n_op,
 		//#pragma omp for schedule(dynamic,chunk) 
 		for(int j=0;j<Ns;j++){
 			
+			
+			// const I one = 1; 
+			// I r = ket[j];
+
+			// // operator site indices
+			// const int ind_0 = N-indx[0]-1;
+			// const int ind_1 = N-indx[1]-1;
+			
+			// const bool a_0 = (bool)((r >> ind_0)&one);
+			// const bool a_1 = (bool)((r >> ind_1)&one);
+
+			// const bool bool_A = (opstr[0]=='+' && opstr[1]=='-' && (!a_0) &&   a_1 );
+			// const bool bool_B = (opstr[0]=='-' && opstr[1]=='+' &&   a_0  && (!a_1));
+
+			// if(bool_A || bool_B){
+
+			// 	r ^= (one << ind_0)^(one << ind_1);
+
+			// 	M[l] = A;
+			// 	ket_index[l]=j;
+
+			// 	bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+
+			// 	l++;
+			// }
+			
+
 			double m = A;
 			I r = ket[j];
-			
-			op(r,m,n_op,opstr,indx,_L*_L);
-			bool pcon_bool = (count_bits(r)==N/2);
 
-			if(pcon_bool && m!=0.0){ // r state in same particle-number sector
+			op(r,m,n_op,opstr,indx,N);
+			//bool pcon_bool = (count_bits(r)==N/2);
+
+			//cout << pcon_bool << " , " << m << endl;
+
+			if(m!=0.0){ // r state in same particle-number sector
 
 				M[l] = m;
 				ket_index[l]=j;
 
-				//bra[l] = ref_state(r);
-
-				//std::cout << l << " , " << bra[l] << " , " << r  << " , " << j << std::endl;
-
+				// bra_rep[l] = ref_state(r);
+				// int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+				
 				bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
 				
 				l++;
 
 			}
+			
 		}
 	}
 	return l;
@@ -565,8 +594,8 @@ void offdiag_sum(int Ns,
 			
 			//cout << l << " , "<< i << " , "<< n << " , "<<j<< " , " << Eloc_cos[ket_ind[j]] << " , " << ket_ind[j] << " , " << psi_bras[j] << " , " << std::cos(phase_psi_bras[j]) << endl;
 			 
-			Eloc_cos[ket_ind[j]] += MEs[j] * psi_bras[j] * std::cos(phase_psi_bras[j]);
-			Eloc_sin[ket_ind[j]] += MEs[j] * psi_bras[j] * std::sin(phase_psi_bras[j]);
+			Eloc_cos[ket_ind[j]] += MEs[j] * std::exp(psi_bras[j]) * std::cos(phase_psi_bras[j]);
+			Eloc_sin[ket_ind[j]] += MEs[j] * std::exp(psi_bras[j]) * std::sin(phase_psi_bras[j]);
 		}
 
 		n_cum+=n;

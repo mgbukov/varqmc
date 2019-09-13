@@ -1,40 +1,14 @@
 from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
-from jax import jit, grad, vmap, random, ops, partial
+from jax import jit
 
 from mpi4py import MPI
 import numpy as np
 from scipy.sparse.linalg import cg
 from scipy.linalg import eigh,eig
 
-#from cpp_code import Neural_Net
-#evaluate_NN=jit(Neural_Net.evaluate)
 
-
-# @jit
-# def loss_log_psi(NN_params,batch,):
-# 	log_psi, phase_psi = evaluate_NN(0,NN_params,batch,)	
-# 	return jnp.sum(log_psi)
-
-
-# @jit
-# def loss_phase_psi(NN_params,batch,):
-# 	log_psi, phase_psi = evaluate_NN(0,NN_params,batch,)	
-# 	return jnp.sum(phase_psi)
-
-
-
-# @jit
-# def compute_grad_log_psi(NN_params,batch,):
-
-# 	dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
-# 	dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
-	
-# 	N_MC_points=dlog_psi_s[0].shape[0]
-
-# 	return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
-	 
 
 
 
@@ -84,10 +58,10 @@ class natural_gradient():
 		if mode=='exact':
 			abs_psi_2=params_dict['abs_psi_2']#.copy()
 
-			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi) 
+			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi).block_until_ready() 
 
-			self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real) \
-							 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag)
+			self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
+							 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()
 
 		elif mode=='MC':
 
@@ -97,23 +71,23 @@ class natural_gradient():
 			# 		 +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)/self.N_MC_points
 
 
-			self.comm.Allreduce(jnp.sum(self.dlog_psi,axis=0)._value, self.O_expt, op=MPI.SUM)
+			self.comm.Allreduce(jnp.sum(self.dlog_psi,axis=0).block_until_ready()._value, self.O_expt, op=MPI.SUM)
 			self.O_expt/=self.N_MC_points
 
 
 
 			self.comm.Allreduce( ( jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real) \
-				                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)   )._value, \
+				                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)   ).block_until_ready()._value, \
 								self.OO_expt, op=MPI.SUM
 								)
 			self.OO_expt/=self.N_MC_points
 
 
-		O_expt2=jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real) + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag)
+		O_expt2=jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()
 
-		self.Fisher[:] = (self.OO_expt - O_expt2)._value		
+		self.Fisher[:] = (self.OO_expt - O_expt2)#._value		
 		
-		norm=jnp.linalg.norm(self.Fisher)
+		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
 
 		#print(self.dlog_psi)
 		#print(np.linalg.norm(abs_psi_2), np.linalg.norm(OO_expt), np.linalg.norm(O_expt2))
@@ -158,22 +132,22 @@ class natural_gradient():
 		if mode=='exact':
 			abs_psi_2=params_dict['abs_psi_2'].copy()
 			E_diff*=abs_psi_2
-			self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real) + jnp.dot(E_diff.imag,self.dlog_psi.imag) 
+			self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real).block_until_ready() + jnp.dot(E_diff.imag,self.dlog_psi.imag).block_until_ready()
 
 		elif mode=='MC':
 			# self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real)/self.N_MC_points \
 			#              + jnp.dot(E_diff.imag,self.dlog_psi.imag)/self.N_MC_points
 
 			self.comm.Allreduce((  jnp.dot(E_diff.real,self.dlog_psi.real) \
-			             		 + jnp.dot(E_diff.imag,self.dlog_psi.imag) )._value, \
-								self.grad, op=MPI.SUM
+			             		 + jnp.dot(E_diff.imag,self.dlog_psi.imag) ).block_until_ready()._value, \
+								self.grad[:], op=MPI.SUM
 								)
 			self.grad/=self.N_MC_points
 
 
 	def _compute_r2_cost(self,params_dict):
 		Eloc_var=params_dict['Eloc_var']
-		return (jnp.dot(self.nat_grad.conj(), jnp.dot(self.Fisher,self.nat_grad)) - 2.0*jnp.dot(self.grad.conj(),self.nat_grad).real + Eloc_var )/Eloc_var 
+		return (jnp.dot(self.nat_grad.conj(), jnp.dot(self.Fisher,self.nat_grad)).block_until_ready() - 2.0*jnp.dot(self.grad.conj(),self.nat_grad).block_until_ready().real + Eloc_var )/Eloc_var 
 
 
 	def compute(self,NN_params,batch,params_dict,mode='MC',):
@@ -203,8 +177,8 @@ class natural_gradient():
 		# normalize gradients
 		if not self.RK_on:
 			self.r2_cost=self._compute_r2_cost(params_dict)
-			self.max_grads=[jnp.max(np.abs(self.grad.real)), jnp.max(np.abs(self.nat_grad.real))]
-			self.nat_grad /= jnp.sqrt(jnp.dot(self.grad.conj(),self.nat_grad).real)
+			self.max_grads=[jnp.max(jnp.abs(self.grad.real)).block_until_ready(), jnp.max(jnp.abs(self.nat_grad.real)).block_until_ready()]
+			self.nat_grad /= jnp.sqrt(jnp.dot(self.grad.conj(),self.nat_grad).real).block_until_ready()
 		
 			
 			return self.reshape_to_gradient_format(self.nat_grad, self.NN_dims, self.NN_shapes)
@@ -264,12 +238,12 @@ class natural_gradient():
 		# flatten weights
 		params=self.reshape_from_gradient_format(NN_params,self.NN_dims,self.NN_shapes)
 		
-		max_param=jnp.max(np.abs(params))
+		max_param=jnp.max(jnp.abs(params)).block_until_ready()
 		#max_param=jnp.max(np.abs(params[:32]+1j*params[32:]))
 
 		initial_grad=self.compute(NN_params,batch,params_dict,mode=mode)
 		# cost and loss
-		self.max_grads=[jnp.max(np.abs(self.grad.real)), jnp.max(np.abs(self.nat_grad.real))]	
+		self.max_grads=[jnp.max(jnp.abs(self.grad.real)).block_until_ready(), jnp.max(jnp.abs(self.nat_grad.real)).block_until_ready()]	
 		self.r2_cost=self._compute_r2_cost(params_dict)
 	
 		error_ratio=0.0
@@ -320,7 +294,7 @@ class natural_gradient():
 			# dy=self.dy[:32]+1j*self.dy[32:]
 			# dy_star=self.dy_star[:32]+1j*self.dy_star[32:]
 
-			norm=jnp.max(jnp.abs(self.dy-self.dy_star))/max_param
+			norm=jnp.max(jnp.abs(self.dy-self.dy_star)).block_until_ready()/max_param
 			#norm=jnp.max(jnp.abs(dy-dy_star))/max_param
 
 			error_ratio=6.0*self.RK_tol/norm
