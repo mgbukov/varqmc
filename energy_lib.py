@@ -10,8 +10,7 @@ sys.path.insert(0,quspin_path)
 
 from quspin.operators._make_hamiltonian import _consolidate_static
 
-from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum 
-from cpp_code import c_evaluate_mod, c_evaluate_phase, c_evaluate_NN
+from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum
 
 from mpi4py import MPI
 import numpy as np
@@ -210,7 +209,7 @@ class Energy_estimator():
 	def init_global_params(self):
 
 		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
-		self._ints_bra_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
+		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
 		self._ints_ket_ind_holder=np.zeros((self.N_batch,),dtype=np.uint32)
 
@@ -226,13 +225,13 @@ class Energy_estimator():
 		if SdotS:
 			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.float64)
 			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symms),dtype=np.int8)
-			self._ints_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
+			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
 			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms_SdotS,dtype=np.int32)
 		else:
 			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.float64)
 			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symms),dtype=np.int8)
-			self._ints_bra=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
+			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
 			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
 
@@ -263,10 +262,10 @@ class Energy_estimator():
 			
 			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
 			indx=np.asarray(indx,dtype=np.int32)
-			n = update_offdiag_ME(ints_ket,self._ints_bra_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
+			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
 			
 			self._MEs[nn:nn+n]=self._MEs_holder[:n]
-			self._ints_bra[nn:nn+n]=self._ints_bra_holder[:n]
+			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[:n]
 			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[:n]
 			self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
 
@@ -275,12 +274,15 @@ class Energy_estimator():
 
 		# print(ints_ket)
 		# print(self._MEs[:nn])
-		# print(self._ints_bra[:nn])
+		# print(self._ints_bra_rep[:nn])
 		# exit()
 
-		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra[:nn], return_index=True, return_inverse=True, return_counts=True)
+		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
+		#print(_ints_bra_uq)
+		#print(_ints_bra_uq.shape)
+		
 		# evaluate network
 		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symms,self.N_sites))
 		log_psi_bras=log_psi_bras[inv_index]

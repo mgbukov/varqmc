@@ -11,7 +11,6 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 from cpp_code import cpp_Monte_Carlo
-from cpp_code import c_evaluate_NN
 #from cpp_code import c_evaluate_mod, c_evaluate_phase, integer_to_spinstate
 
 from mpi4py import MPI
@@ -50,7 +49,7 @@ class MC_sampler():
 
 	
 		self.ints_ket=np.zeros((N_MC_points,),dtype=self.basis_type)
-		self.ints_ket_reps=np.zeros_like(self.ints_ket)
+		#self.ints_ket_reps=np.zeros_like(self.ints_ket)
 		self.mod_kets=np.zeros((N_MC_points,),dtype=np.float64)
 		self.phase_kets=np.zeros((N_MC_points,),dtype=np.float64)
 
@@ -82,12 +81,12 @@ class MC_sampler():
 		#ti = time.time()
 
 		# N_accepted=self.MC_sampler.sample_DNN(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
-		# 				self.spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,self.phase_kets,
+		# 				self.spinstates_ket,self.ints_ket,self.mod_kets,self.phase_kets,
 		# 				*NN_params,N_neurons,
 		# 				)
 
 		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
-						self.spinstates_ket,self.ints_ket,self.ints_ket_reps,self.mod_kets,
+						self.spinstates_ket,self.ints_ket,self.mod_kets,
 						)
 		self.phase_kets=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))._value
 		

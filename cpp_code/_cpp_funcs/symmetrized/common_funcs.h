@@ -99,41 +99,83 @@ inline void _int_to_spinstate(const int N,T state,npy_int8 out[])
 
 
 template<class I>
-I int_to_spinstate(const int N,I s,npy_int8 out[])
+I rep_int_to_spinstate(const int N,I s,npy_int8 out[])
 {	
 	
 	I t = s;
 	I r = s;
+	I p = s;
 
 	npy_uint16 counter=0;
 
+	
 	for(int i=0;i<2;i++){
 		for(int j=0;j<2;j++){
 			for(int k=0;k<2;k++){
-				//for(int l=0;l<2;l++){
-					for(int m=0;m<_L;m++){
-						for(int n=0;n<_L;n++){
+				for(int m=0;m<_L;m++){
+					for(int n=0;n<_L;n++){
 
-							if(t > r) r = t;
-						
-							_int_to_spinstate(N,t,&out[counter*N]);
-							t = shift_x(t);
-							counter++;
-														
+						p = t;
+						for(int l=0;l<2;l++){
+							if(p > r) r = p;
+
+							p = inv_spin(p);
 						}
-						t = shift_y(t);
+
+						//if(t > r) r = t;	
+
+						
+						_int_to_spinstate(N,t,&out[counter*N]);
+						t = shift_x(t);
+						counter++;
+													
 					}
-				//	t = inv_spin(t);
-				//}
+					t = shift_y(t);
+				}
 				t = flip_x(t);
 			}
 			t = flip_y(t);
 		}
 		t = flip_d(t);
-	}	
+	}
+		
 
 	return r;	
 	
+		
+}
+
+
+
+template<class I>
+void int_to_spinstate(const int N,I s,npy_int8 out[])
+{	
+	
+	I t = s;
+
+	npy_uint16 counter=0;
+
+	
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+				for(int m=0;m<_L;m++){
+					for(int n=0;n<_L;n++){
+
+						_int_to_spinstate(N,t,&out[counter*N]);
+						t = shift_x(t);
+						counter++;
+													
+					}
+					t = shift_y(t);
+				}
+				t = flip_x(t);
+			}
+			t = flip_y(t);
+		}
+		t = flip_d(t);
+	}
+		
 		
 }
 
@@ -314,7 +356,6 @@ class Monte_Carlo{
 						//
 						npy_int8 spin_states[],
 						I ket_states[],
-						I rep_ket_states[],
 						double mod_kets[],
 						double phase_kets[],
 						//
@@ -326,7 +367,7 @@ class Monte_Carlo{
 		{			
 			int N_sites=_L*_L;
 
-			I t, s_rep, t_rep;
+			I t;
 			double mod_psi_s, mod_psi_t, phase_psi_s;
 
 			npy_uint16 _i,_j;
@@ -335,7 +376,7 @@ class Monte_Carlo{
 			std::vector<npy_int8> spinstate_s(N_sites*N_symms), spinstate_t(N_sites*N_symms);
 		 
 
-			s_rep=int_to_spinstate(N_sites,s,&spinstate_s[0]);
+			int_to_spinstate(N_sites,s,&spinstate_s[0]);
 			mod_psi_s=evaluate_mod(&spinstate_s[0],W_fc_real,W_fc_imag,N_sites,N_fc);
 				  		    
 
@@ -365,7 +406,7 @@ class Monte_Carlo{
 		    	// 	spinstate_t[N_sites-1-_j + _k*N_sites] = spinstate_s[N_sites-1-_i + _k*N_sites];
 		    	// }
 
-		    	t_rep=int_to_spinstate(N_sites,t,&spinstate_t[0]);
+		    	int_to_spinstate(N_sites,t,&spinstate_t[0]);
 		    	
 		    	   	
 		    	// compute amplitude
@@ -377,7 +418,6 @@ class Monte_Carlo{
 		    	double eps = uniform();
 		    	if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t){ // accept
 					s = t;
-					s_rep = t_rep;
 					mod_psi_s = mod_psi_t;
 					spinstate_s = spinstate_t;
 					accepted++;
@@ -397,7 +437,6 @@ class Monte_Carlo{
 					
 					
 					ket_states[k] = s;
-					rep_ket_states[k] = s_rep;
 					phase_kets[k]=phase_psi_s;
 					mod_kets[k]=mod_psi_s;
 
@@ -436,7 +475,7 @@ int update_offdiag(const int n_op,
 						  const double A,
 						  const int Ns,
 						  const	I ket[], // col
-						  		I bra[],
+						  		I bra_rep[],
 						  		npy_int8 spin_bra[], // row
 						  		npy_uint32 ket_index[],
 						  		double M[]
@@ -464,7 +503,7 @@ int update_offdiag(const int n_op,
 
 				//std::cout << l << " , " << bra[l] << " , " << r  << " , " << j << std::endl;
 
-				bra[l] = int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+				bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
 				
 				l++;
 

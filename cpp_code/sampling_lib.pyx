@@ -65,7 +65,6 @@ cdef extern from "sample_4x4.h":
                             #
                             np.int8_t [],
                             basis_type [],
-                            basis_type [],
                             double [],
                             double [],
                             #
@@ -83,74 +82,9 @@ cdef extern from "sample_4x4.h":
     
     void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[]) nogil
 
-    T int_to_spinstate[T](const int,T ,np.int8_t []) nogil
+    void int_to_spinstate[T](const int,T ,np.int8_t []) nogil
 
-
-    double evaluate_mod(
-                                np.int8_t[],
-                                const double[],
-                                const double[],
-                                const int,
-                                const int
-                                
-                                )
-
-    double evaluate_phase(
-                                np.int8_t[],
-                                const double[],
-                                const double[],
-                                const int,
-                                const int
-                                
-                                )
-
-    void evaluate_rbm[I](
-                    I [],
-                    np.int8_t [],
-                    double [],
-                    double [],
-                    const double [],
-                    const double [],
-                    const int ,
-                    const int ,
-                    const int 
-                    
-                    ) nogil
-
-
-@cython.boundscheck(False)
-def c_evaluate_NN(basis_type[::1] states,
-                    np.int8_t[::1] spinstate,
-                    np.float64_t[::1] mod_psi,
-                    np.float64_t[::1] phase_psi,
-                    const np.float64_t[:,::1] W_fc_real,
-                    const np.float64_t[:,::1] W_fc_imag,
-                    int N_sites,
-                    int N_fc,
-                    int Ns,
-                    ):
-    with nogil:
-        evaluate_rbm(&states[0],&spinstate[0],&mod_psi[0],&phase_psi[0],&W_fc_real[0,0],&W_fc_imag[0,0],N_sites,N_fc,Ns)
-
-
-@cython.boundscheck(False)
-def c_evaluate_mod(
-                    np.int8_t[::1] spinstate,
-                    const np.float64_t[:,::1] W_fc_real,
-                    const np.float64_t[:,::1] W_fc_imag,
-                    int N_sites,
-                    int N_fc):
-     return evaluate_mod(&spinstate[0], &W_fc_real[0,0], &W_fc_imag[0,0],N_sites,N_fc)
-    
-@cython.boundscheck(False)
-def c_evaluate_phase(
-                    np.int8_t[::1] spinstate,
-                    const np.float64_t[:,::1] W_fc_real,
-                    const np.float64_t[:,::1] W_fc_imag,
-                    int N_sites,
-                    int N_fc):
-    return evaluate_phase(&spinstate[0], &W_fc_real[0,0], &W_fc_imag[0,0],N_sites,N_fc)
-  
+    T rep_int_to_spinstate[T](const int,T ,np.int8_t []) nogil
 
 
 
@@ -262,7 +196,6 @@ cdef class cpp_Monte_Carlo:
                     #
                     np.int8_t[::1] spin_states,
                     basis_type[:] ket_states,
-                    basis_type[:] rep_ket_states,
                     np.float64_t[:] mod_kets,
                     np.float64_t[:] phase_kets,
                     #
@@ -291,7 +224,6 @@ cdef class cpp_Monte_Carlo:
                        #
                        &spin_states[0],
                        &ket_states[0],
-                       &rep_ket_states[0],
                        &mod_kets[0],
                        &phase_kets[0],
                        #
@@ -464,7 +396,6 @@ cdef class Neural_Net:
                     #
                     np.int8_t[::1] spin_states,
                     basis_type[:] ket_states,
-                    basis_type[:] rep_ket_states,
                     np.float64_t[:] mod_kets
 
                     ):
@@ -492,7 +423,6 @@ cdef class Neural_Net:
                        #
                        &spin_states[0],
                        &ket_states[0],
-                       &rep_ket_states[0],
                        &mod_kets[0]
 
             )
@@ -511,7 +441,6 @@ cdef class Neural_Net:
                             #
                             np.int8_t * spin_states,
                             basis_type * ket_states,
-                            basis_type * rep_ket_states,
                             double * mod_kets
         ) nogil:           
         
@@ -520,14 +449,14 @@ cdef class Neural_Net:
 
         cdef double eps;
 
-        cdef basis_type t, s_rep, t_rep;
+        cdef basis_type t;
         cdef double mod_psi_s, mod_psi_t
 
         cdef np.uint16_t _i,_j;
 
         
         # not quite full rep
-        s_rep=int_to_spinstate(self.N_sites,s,&self.spinstate_s[0,0]);
+        int_to_spinstate(self.N_sites,s,&self.spinstate_s[0,0]);
         with gil:
             mod_psi_s=self.evaluate_mod(self.spinstate_s_py);
                     
@@ -544,7 +473,7 @@ cdef class Neural_Net:
                 t = swap_bits(s,_i,_j);
             
 
-            t_rep=int_to_spinstate(self.N_sites,t,&self.spinstate_t[0,0]);
+            int_to_spinstate(self.N_sites,t,&self.spinstate_t[0,0]);
             with gil:
                 mod_psi_t=self.evaluate_mod(self.spinstate_t_py);
 
@@ -552,7 +481,6 @@ cdef class Neural_Net:
             eps = rand()/RAND_MAX;
             if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t): # accept
                 s = t;
-                s_rep = t_rep;
                 mod_psi_s = mod_psi_t;
                 # loop over indices; release gil
                 for i in range(self.N_symm):
@@ -568,8 +496,6 @@ cdef class Neural_Net:
                        spin_states[k*self.N_sites*self.N_symm + i*self.N_sites + ii] = self.spinstate_s[i,ii];
 
                 ket_states[k] = s;
-                rep_ket_states[k] = s_rep;
-                
                 mod_kets[k]=mod_psi_s;
 
 
