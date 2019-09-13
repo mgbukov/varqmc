@@ -56,7 +56,7 @@ class VMC(object):
 
 
 		self.L=4 # system size
-		self.mode='exact' #'MC'  # 
+		self.mode='MC'  # 'exact' #
 		self.optimizer='RK' #'NG' #  'adam'  #
 
 		self.save=False # True #

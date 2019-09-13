@@ -32,6 +32,9 @@ ctypedef np.uint16_t basis_type
 
 N_sites=L*L
 
+cdef extern from "<stdlib.h>" nogil:
+    void random_shuffle[RandomIt](RandomIt, RandomIt ) nogil;
+
 
 cdef extern from "sample_4x4.h":
     cdef cppclass Monte_Carlo[I]:
@@ -255,6 +258,8 @@ cdef class Neural_Net:
     cdef np.int8_t[:,:] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
 
+    cdef vector[np.uint16_t] sites
+
 
     def __init__(self,shape,seed=0):
 
@@ -293,7 +298,9 @@ cdef class Neural_Net:
         self.spinstate_s_py=np.asarray(self.spinstate_s)
         self.spinstate_t_py=np.asarray(self.spinstate_t)
 
-
+        self.sites=np.arange(self.N_sites,dtype=np.uint16)
+     
+        
 
     property shapes:
         def __get__(self):
@@ -400,23 +407,10 @@ cdef class Neural_Net:
 
                     ):
 
-        cdef basis_type s_c
         cdef int N_accepted
-
-
-        # initial configuration
-        s=[0 for _ in range(N_sites//2)] + [1 for _ in range(N_sites//2)]
-        np.random.shuffle(s)
-        s = np.array(s)
-        s=''.join([str(j) for j in s])
-        s=int(s,2)
-
-        s_c=s
-
 
         with nogil:
             N_accepted=self._MC_core(
-                       s_c,
                        N_MC_points,
                        thermalization_time,
                        auto_correlation_time,
@@ -430,12 +424,11 @@ cdef class Neural_Net:
         return N_accepted;
    
     # OpenMPI: has headers 
-    # cython: from ehader define function from cpp MPI that I wanna use; nogil etc
+    # cython: from header define function from cpp MPI that I wanna use; nogil etc
     # cpp version better than python version
 
     @cython.boundscheck(False)
-    cdef int _MC_core(self, basis_type s,
-                            int N_MC_points,
+    cdef int _MC_core(self, int N_MC_points,
                             int thermalization_time,
                             int auto_correlation_time,
                             #
@@ -444,18 +437,25 @@ cdef class Neural_Net:
                             double * mod_kets
         ) nogil:           
         
-        cdef int i=0, ii=0, j=0, k=0;
+        cdef int i=0, ii=0, j=0, k=0; # counters
         cdef int N_accepted=0;
 
-        cdef double eps;
+        cdef double eps; # acceptance random float
 
         cdef basis_type t;
         cdef double mod_psi_s, mod_psi_t
 
         cdef np.uint16_t _i,_j;
+        cdef vector[np.uint16_t] sites=self.sites;
+        cdef basis_type s=0, one=1;
+
+        # draw random initial state
+        random_shuffle(sites.begin(), sites.end() )
+        for i in range(self.N_sites//2):
+            s |= (one<<sites[i])
 
         
-        # not quite full rep
+        # compute initial spin config and its amplitude value
         int_to_spinstate(self.N_sites,s,&self.spinstate_s[0,0]);
         with gil:
             mod_psi_s=self.evaluate_mod(self.spinstate_s_py);
@@ -464,8 +464,7 @@ cdef class Neural_Net:
         while(k < N_MC_points):
 
             t=s;
-            #self.spinstate_t=self.spinstate_s;
-
+     
             # propose a new state until a nontrivial configuration is drawn
             while(t==s):
                 _i = rand()%self.N_sites 
@@ -477,12 +476,12 @@ cdef class Neural_Net:
             with gil:
                 mod_psi_t=self.evaluate_mod(self.spinstate_t_py);
 
-
+            # MC step
             eps = rand()/RAND_MAX;
             if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t): # accept
                 s = t;
                 mod_psi_s = mod_psi_t;
-                # loop over indices; release gil
+                # set spin configs
                 for i in range(self.N_symm):
                     for ii in range(self.N_sites):
                         self.spinstate_s[i,ii] = self.spinstate_t[i,ii];
