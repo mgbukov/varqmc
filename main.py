@@ -67,7 +67,8 @@ class VMC(object):
 		self.N_epochs=10 #500 
 
 		### MC sampler
-		self.N_MC_points=2000 #107 #10000 #
+		self.N_MC_points=1000 #107 #10000 #
+		self.N_MC_chains = 2
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
 			self.N_batch=self.N_MC_points#
@@ -183,7 +184,7 @@ class VMC(object):
 		#self.NN_params=create_NN(shape)
 
 		### Neural network
-		self.DNN=Neural_Net(shape)
+		self.DNN=Neural_Net(shape,self.N_MC_chains)
 
 		# jit functions
 		self.evaluate_NN=jit(self.DNN.evaluate)

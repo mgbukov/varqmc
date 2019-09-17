@@ -8,7 +8,7 @@
 #include <fstream>
 using namespace std;
 #include <unordered_map>
-#include <mpi.h>
+//#include <mpi.h>
 
 
 

@@ -18,6 +18,9 @@ from libcpp.vector cimport vector
 from libc.stdlib cimport rand, srand, RAND_MAX
 #from libcpp cimport bool
 
+from cython.parallel cimport prange, threadid, parallel
+cimport openmp
+
 seed=1
 np.random.seed(seed)
 np.random.RandomState(seed)
@@ -35,8 +38,25 @@ ctypedef np.uint16_t basis_type
 
 N_sites=L*L
 
+
+cdef extern from *:
+    """
+    #define START_OMP_PARALLEL_PRAGMA() _Pragma("omp parallel") {
+    #define END_OMP_PRAGMA() }
+    #define START_OMP_SINGLE_PRAGMA() _Pragma("omp single") {
+    #define START_OMP_CRITICAL_PRAGMA() _Pragma("omp critical") {
+    #define OMP_BARRIER_PRAGMA() _Pragma("omp barrier")   
+    """
+    void START_OMP_PARALLEL_PRAGMA() nogil
+    void END_OMP_PRAGMA() nogil
+    void START_OMP_SINGLE_PRAGMA() nogil
+    void START_OMP_CRITICAL_PRAGMA() nogil
+    void OMP_BARRIER_PRAGMA() nogil
+
+
+
 cdef extern from "<stdlib.h>" nogil:
-    void random_shuffle[RandomIt](RandomIt, RandomIt ) nogil;
+    int rand_r(unsigned int *seed) nogil;
 
 
 cdef extern from "sample_4x4.h":
@@ -247,6 +267,11 @@ cdef class cpp_Monte_Carlo:
 ###########################
 
 
+cdef int myrandom(int i) nogil:
+    return rand()%i;
+
+
+
 
 cdef class Neural_Net:
 
@@ -258,13 +283,24 @@ cdef class Neural_Net:
 
     cdef object evaluate_phase, evaluate_mod
 
-    cdef np.int8_t[:,:] spinstate_s, spinstate_t
+    cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
 
+    cdef vector[double] mod_psi_s, mod_psi_t
+    
     cdef vector[np.uint16_t] sites
 
+    cdef int N_MC_chains, N_spinconfigelmts
 
-    def __init__(self,shape,seed=0):
+    cdef vector[unsigned int] thread_seeds
+        
+
+
+    def __init__(self,shape,N_MC_chains,seed=0):
+
+        
+        # OMP ars
+        
 
         # fix seed
         srand(seed)
@@ -298,17 +334,28 @@ cdef class Neural_Net:
 
 
         ################################################
+        self.N_MC_chains=N_MC_chains
+        self.N_spinconfigelmts=self.N_symm*self.N_sites
 
-
-        self.spinstate_s=np.zeros([self.N_symm,self.N_sites],dtype=np.int8)
-        self.spinstate_t=np.zeros([self.N_symm,self.N_sites],dtype=np.int8)
+        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
+        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
 
         # access data in device array; transfer memory from numpy to jax
-        self.spinstate_s_py=np.asarray(self.spinstate_s)
-        self.spinstate_t_py=np.asarray(self.spinstate_t)
+        self.spinstate_s_py=np.asarray(self.spinstate_s).reshape([self.N_MC_chains,self.N_symm,self.N_sites])
+        self.spinstate_t_py=np.asarray(self.spinstate_t).reshape([self.N_MC_chains,self.N_symm,self.N_sites])
+
+        self.mod_psi_s=np.zeros(self.N_MC_chains,dtype=np.int8)
+        self.mod_psi_t=np.zeros(self.N_MC_chains,dtype=np.int8)
+
+        ###############################################################
 
         self.sites=np.arange(self.N_sites,dtype=np.uint16)
-     
+
+        self.thread_seeds=np.zeros(self.N_MC_chains,dtype=np.uint)
+        for i in range(self.N_MC_chains):
+            self.thread_seeds[i]=(rand()%RAND_MAX)
+
+  
         
 
     property shapes:
@@ -337,6 +384,7 @@ cdef class Neural_Net:
             return self.evaluate_mod
 
     
+
 
 
     def update_params(self,params):
@@ -373,8 +421,8 @@ cdef class Neural_Net:
 
     cpdef object _evaluate_mod(self, object batch):
 
-        Re_Ws = jnp.einsum('ij,lj->il',self.W_fc_real, batch)
-        Im_Ws = jnp.einsum('ij,lj->il',self.W_fc_imag, batch)
+        Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
+        Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
 
         Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
         Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
@@ -416,19 +464,46 @@ cdef class Neural_Net:
 
                     ):
 
-        cdef int N_accepted
+        cdef int N_accepted=0, n_accepted=0
+        cdef int chain_n
 
+        #cdef int n_threads=0
+
+
+        # reduce MC points per chain
+        cdef int n_MC_points=N_MC_points//self.N_MC_chains
+        #print("{0:d} MC points per MC chain.".format(n_MC_points) )
+
+
+        #openmp.omp_set_num_threads(self.N_MC_chains)
+         
         with nogil:
-            N_accepted=self._MC_core(
-                       N_MC_points,
-                       thermalization_time,
-                       auto_correlation_time,
-                       #
-                       &spin_states[0],
-                       &ket_states[0],
-                       &mod_kets[0]
 
-            )
+            for chain_n in prange(self.N_MC_chains,schedule='static', num_threads=self.N_MC_chains):
+            #START_OMP_PARALLEL_PRAGMA()
+            #for chain_n in range(self.N_MC_chains):
+
+                N_accepted+=self._MC_core(
+                                           n_MC_points,
+                                           thermalization_time,
+                                           auto_correlation_time,
+                                           #
+                                           &spin_states[chain_n*n_MC_points*self.N_symm*self.N_sites],
+                                           &ket_states[chain_n*n_MC_points],
+                                           &mod_kets[chain_n*n_MC_points],
+                                           # 
+                                           # &self.spinstate_s[chain_n,0,0],
+                                           # &self.spinstate_t[chain_n,0,0],
+                                           &self.spinstate_s[chain_n*self.N_spinconfigelmts],
+                                           &self.spinstate_t[chain_n*self.N_spinconfigelmts],
+                                           #
+                                           chain_n
+                                        )
+
+            
+
+        #print(N_accepted)
+        #exit()
 
         return N_accepted;
    
@@ -443,32 +518,49 @@ cdef class Neural_Net:
                             #
                             np.int8_t * spin_states,
                             basis_type * ket_states,
-                            double * mod_kets
+                            double * mod_kets,
+                            #
+                            np.int8_t * spinstate_s,
+                            np.int8_t * spinstate_t,
+                            #
+                            int chain_n
         ) nogil:           
         
-        cdef int i=0, ii=0, j=0, k=0; # counters
+        cdef int i=0, j=0, k=0; # counters
         cdef int N_accepted=0;
+        cdef int thread_id = threadid();
+        cdef unsigned int * thread_seed = &self.thread_seeds[thread_id];
 
         cdef double eps; # acceptance random float
 
         cdef basis_type t;
-        cdef double mod_psi_s, mod_psi_t
-
+        
         cdef np.uint16_t _i,_j;
-        cdef vector[np.uint16_t] sites=self.sites;
         cdef basis_type s=0, one=1;
 
+
         # draw random initial state
-        random_shuffle(sites.begin(), sites.end() )
         for i in range(self.N_sites//2):
-            s |= (one<<sites[i])
+            s |= (one<< <np.int16_t>(rand_r(thread_seed)%self.N_sites) )
+       
+        # with gil:
+        #     print(thread_id, s)
 
         
         # compute initial spin config and its amplitude value
-        int_to_spinstate(self.N_sites,s,&self.spinstate_s[0,0]);
-        with gil:
-            mod_psi_s=self.evaluate_mod(self.spinstate_s_py);
-                    
+        int_to_spinstate(self.N_sites,s,&spinstate_s[0]);
+
+
+        # set omp barrier
+        OMP_BARRIER_PRAGMA()
+        # evaluate DNN on GPU
+        if thread_id==0:
+            with gil:
+                self.mod_psi_s=self.evaluate_mod(self.spinstate_s_py);
+        # set barrier
+        OMP_BARRIER_PRAGMA()
+
+
      
         while(k < N_MC_points):
 
@@ -476,40 +568,48 @@ cdef class Neural_Net:
      
             # propose a new state until a nontrivial configuration is drawn
             while(t==s):
-                _i = rand()%self.N_sites 
-                _j = rand()%self.N_sites 
+                _i = rand_r(thread_seed)%self.N_sites 
+                _j = rand_r(thread_seed)%self.N_sites 
                 t = swap_bits(s,_i,_j);
             
 
-            int_to_spinstate(self.N_sites,t,&self.spinstate_t[0,0]);
-            with gil:
-                mod_psi_t=self.evaluate_mod(self.spinstate_t_py);
+            int_to_spinstate(self.N_sites,t,&spinstate_t[0]);
+
+
+            # set omp barrier
+            OMP_BARRIER_PRAGMA()
+            # evaluate DNN on GPU
+            if thread_id==0:
+                with gil:
+                    self.mod_psi_t=self.evaluate_mod(self.spinstate_t_py);
+            # set barrier
+            OMP_BARRIER_PRAGMA()
+
 
             # MC step
-            eps = rand()/RAND_MAX;
-            if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t): # accept
+            eps = float(rand_r(thread_seed))/float(RAND_MAX);
+            if(eps*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] <= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n]): # accept
                 s = t;
-                mod_psi_s = mod_psi_t;
+                self.mod_psi_s[chain_n] = self.mod_psi_t[chain_n];
                 # set spin configs
-                for i in range(self.N_symm):
-                    for ii in range(self.N_sites):
-                        self.spinstate_s[i,ii] = self.spinstate_t[i,ii];
+                for i in range(self.N_symm*self.N_sites):
+                    spinstate_s[i] = spinstate_t[i];
                 N_accepted+=1;
     
 
             if( (j > thermalization_time) & (j % auto_correlation_time) == 0):
                 
-                for i in range(self.N_symm):
-                    for ii in range(self.N_sites):
-                       spin_states[k*self.N_sites*self.N_symm + i*self.N_sites + ii] = self.spinstate_s[i,ii];
+                for i in range(self.N_symm*self.N_sites):
+                    spin_states[k*self.N_sites*self.N_symm + i] = spinstate_s[i];
 
                 ket_states[k] = s;
-                mod_kets[k]=mod_psi_s;
+                mod_kets[k]=self.mod_psi_s[chain_n];
 
 
                 k+=1;
                 
             j+=1;
+
 
 
         return N_accepted;

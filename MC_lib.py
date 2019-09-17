@@ -164,6 +164,7 @@ class MC_sampler():
 		# # print()
 		# print(mod_kets_tot)
 		# print(np.exp(log_psi))
+		# exit()
 
 		
 		# test results for consistency
