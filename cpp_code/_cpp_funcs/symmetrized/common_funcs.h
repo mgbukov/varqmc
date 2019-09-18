@@ -9,6 +9,7 @@
 using namespace std;
 #include <unordered_map>
 //#include <mpi.h>
+#include <omp.h>
 
 
 
@@ -477,15 +478,22 @@ int update_offdiag(const int n_op,
 						  const	I ket[], // col
 						  		I bra_rep[],
 						  		npy_int8 spin_bra[], // row
-						  		npy_uint32 ket_index[],
+						  		npy_int32 ket_index[],
 						  		double M[]
 						  )
-{	int l=0;
-	int N=_L*_L;
-	//#pragma omp parallel
+{	int N=_L*_L;
+	
+	
+	#pragma omp parallel
 	{		
-		//const npy_intp chunk = std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
-		//#pragma omp for schedule(dynamic,chunk) 
+
+		int a=Ns/(100*omp_get_num_threads());
+		int b=1;
+
+		cout << omp_get_num_threads() << " , " << omp_get_max_threads() << endl;
+
+		const npy_intp chunk = (a < b) ? b : a; // std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
+		#pragma omp for schedule(dynamic,chunk) 
 		for(int j=0;j<Ns;j++){
 			
 			
@@ -529,17 +537,35 @@ int update_offdiag(const int n_op,
 				// bra_rep[l] = ref_state(r);
 				// int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
 				
-				bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
-				M[l] = m;
-				ket_index[l]=j;
+				// bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+				// M[l] = m;
+				// ket_index[l]=j;
+				// l++;
 
-				
-				l++;
+				bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*j]);
+				M[j] = m;
+				ket_index[j]=j;
+
+							
 
 			}
-			
 		}
 	}
+
+
+	int l=0;
+	for(int j=0;j<Ns;j++){
+
+		if(ket_index[j]>=0){
+
+			ket_index[l]=j;
+
+			l++;
+		}
+	}
+
+
+
 	return l;
 }
 

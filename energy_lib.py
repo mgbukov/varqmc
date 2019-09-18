@@ -157,7 +157,7 @@ class Energy_estimator():
 
 			
 		###### setting up bases ######
-		basis_symm = spin_basis_general(self.N_sites, pauli=False, Ns_block_est=200,
+		self.basis_symm = spin_basis_general(self.N_sites, pauli=False, Ns_block_est=200,
 											Nup=self.N_sites//2,
 											kxblock=(T_x,0),kyblock=(T_y,0),
 											pdblock=(P_d,0),
@@ -171,7 +171,7 @@ class Energy_estimator():
 		self.H=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis,dtype=np.float64) #
 		self.SdotS=hamiltonian(self.static_off_diag_SdotS+self.static_diag_SdotS, [], basis=self.basis,dtype=np.float64)
 
-		ref_states, index, inv_index, count=np.unique(basis_symm.representative(self.basis.states), return_index=True, return_inverse=True, return_counts=True)
+		ref_states, index, inv_index, count=np.unique(self.basis_symm.representative(self.basis.states), return_index=True, return_inverse=True, return_counts=True)
 		self.ref_states=ref_states
 
 		# j=1#5
@@ -211,7 +211,7 @@ class Energy_estimator():
 		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
 		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
-		self._ints_ket_ind_holder=np.zeros((self.N_batch,),dtype=np.uint32)
+		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
 
 		self.Eloc_real_tot=np.zeros(self.comm.Get_size()*self.N_batch,dtype=np.float64)
 		self.Eloc_imag_tot=np.zeros_like(self.Eloc_real_tot)
@@ -260,15 +260,24 @@ class Energy_estimator():
 		nn=0
 		for j,(opstr,indx,J) in enumerate(static_list_offdiag):
 			
-			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
+			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
+			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
+
 			indx=np.asarray(indx,dtype=np.int32)
 			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
 			
-			self._MEs[nn:nn+n]=self._MEs_holder[:n]
-			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[:n]
-			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[:n]
+
+			# self._MEs[nn:nn+n]=self._MEs_holder[:n]
+			# self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[:n]
+			# self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[:n]
+			# self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
+
+			self._MEs[nn:nn+n]=self._MEs_holder[self._ints_ket_ind_holder[:n]]
+			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[self._ints_ket_ind_holder[:n]]
+			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[self._ints_ket_ind_holder[:n]]
 			self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
 
+			
 			self._n_per_term[j]=n
 			nn+=n
 
@@ -277,9 +286,13 @@ class Energy_estimator():
 		# print(self._ints_bra_rep[:nn])
 		# exit()
 
+
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
+		
+		print(nn, nn_uq)
+		
 
 		#print(_ints_bra_uq)
 		#print(_ints_bra_uq.shape)

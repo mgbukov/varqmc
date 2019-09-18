@@ -5,6 +5,7 @@
 #cython: cdivision=True
 #cython: profile=True
 
+
 from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
@@ -55,6 +56,7 @@ cdef extern from *:
 
 
 
+
 cdef extern from "<stdlib.h>" nogil:
     int rand_r(unsigned int *seed) nogil;
 
@@ -102,7 +104,7 @@ cdef extern from "sample_4x4.h":
 
     T swap_bits[T](const T, int, int) nogil
     
-    int update_offdiag[I](const int, const char[], const int[], const double, const int, const I[], I[], np.int8_t [], np.uint32_t[], double[] ) nogil  
+    int update_offdiag[I](const int, const char[], const int[], const double, const int, const I[], I[], np.int8_t [], np.int32_t[], double[] ) nogil  
     
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
@@ -139,7 +141,7 @@ def update_diag_ME(np.ndarray ket,double[::1] M,object opstr,int[::1] indx,doubl
 
 
 @cython.boundscheck(False)
-def update_offdiag_ME(np.ndarray ket,basis_type[:] bra, np.int8_t[:,:] spin_bra,np.uint32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J):
+def update_offdiag_ME(np.ndarray ket,basis_type[:] bra, np.int8_t[:,:] spin_bra,np.int32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J):
     cdef char[::1] c_opstr = bytearray(opstr,"utf-8")
     cdef int n_op = indx.shape[0]
     cdef int Ns = ket.shape[0]
@@ -538,8 +540,13 @@ cdef class Neural_Net:
 
 
         # draw random initial state
-        for i in range(self.N_sites//2):
-            s |= (one<< <np.int16_t>(rand_r(thread_seed)%self.N_sites) )
+        s=(one<<(self.N_sites//2))-one;
+        t=s;
+        while(t==s):
+            _i = rand_r(thread_seed)%self.N_sites 
+            _j = rand_r(thread_seed)%self.N_sites 
+            t = swap_bits(s,_i,_j);
+        s=t;
        
         # with gil:
         #     print(thread_id, s)
