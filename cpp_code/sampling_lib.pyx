@@ -492,8 +492,6 @@ cdef class Neural_Net:
                                            &ket_states[chain_n*n_MC_points],
                                            &mod_kets[chain_n*n_MC_points],
                                            # 
-                                           # &self.spinstate_s[chain_n,0,0],
-                                           # &self.spinstate_t[chain_n,0,0],
                                            &self.spinstate_s[chain_n*self.N_spinconfigelmts],
                                            &self.spinstate_t[chain_n*self.N_spinconfigelmts],
                                            #

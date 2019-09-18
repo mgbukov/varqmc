@@ -525,13 +525,14 @@ int update_offdiag(const int n_op,
 
 			if(m!=0.0){ // r state in same particle-number sector
 
-				M[l] = m;
-				ket_index[l]=j;
-
+				
 				// bra_rep[l] = ref_state(r);
 				// int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
 				
 				bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+				M[l] = m;
+				ket_index[l]=j;
+
 				
 				l++;
 
