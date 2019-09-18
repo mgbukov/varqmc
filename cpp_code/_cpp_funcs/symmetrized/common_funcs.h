@@ -490,8 +490,6 @@ int update_offdiag(const int n_op,
 		int a=Ns/(100*omp_get_num_threads());
 		int b=1;
 
-		cout << omp_get_num_threads() << " , " << omp_get_max_threads() << endl;
-
 		const npy_intp chunk = (a < b) ? b : a; // std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
 		#pragma omp for schedule(dynamic,chunk) 
 		for(int j=0;j<Ns;j++){

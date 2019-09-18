@@ -291,9 +291,7 @@ class Energy_estimator():
 		nn_uq=_ints_bra_uq.shape[0]
 
 		
-		print(nn, nn_uq)
-		
-
+		#print(nn, nn_uq)
 		#print(_ints_bra_uq)
 		#print(_ints_bra_uq.shape)
 		

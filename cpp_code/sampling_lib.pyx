@@ -55,8 +55,6 @@ cdef extern from *:
     void OMP_BARRIER_PRAGMA() nogil
 
 
-
-
 cdef extern from "<stdlib.h>" nogil:
     int rand_r(unsigned int *seed) nogil;
 
@@ -297,12 +295,10 @@ cdef class Neural_Net:
     cdef vector[unsigned int] thread_seeds
         
 
-
     def __init__(self,shape,N_MC_chains,seed=0):
 
-        
         # OMP ars
-        
+        openmp.omp_set_num_threads(N_MC_chains)
 
         # fix seed
         srand(seed)
@@ -476,9 +472,7 @@ cdef class Neural_Net:
         cdef int n_MC_points=N_MC_points//self.N_MC_chains
         #print("{0:d} MC points per MC chain.".format(n_MC_points) )
 
-
-        #openmp.omp_set_num_threads(self.N_MC_chains)
-         
+    
         with nogil:
 
             for chain_n in prange(self.N_MC_chains,schedule='static', num_threads=self.N_MC_chains):

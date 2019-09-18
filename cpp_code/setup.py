@@ -47,8 +47,8 @@ def configuration(parent_package='', top_path=None):
     include_dirs.append(os.path.join(package_dir,"_cpp_funcs"))
 
     # mpi compiler
-    os.environ["CC"] = "mpicc"
-    os.environ["CXX"] = "mpicxx"
+    # os.environ["CC"] = "mpicc"
+    # os.environ["CXX"] = "mpicxx"
 
     #os.environ["CC"] = "gcc-8"
     #os.environ["CXX"] = "g++-8"

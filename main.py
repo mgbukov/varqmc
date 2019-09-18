@@ -67,7 +67,7 @@ class VMC(object):
 		self.N_epochs=2 #500 
 
 		### MC sampler
-		self.N_MC_points=20 #107 #10000 #
+		self.N_MC_points=1000 #107 #10000 #
 		self.N_MC_chains = 2
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
