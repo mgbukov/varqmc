@@ -287,6 +287,8 @@ class Energy_estimator():
 		# exit()
 
 
+		# per MPI process: 160
+
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
@@ -300,9 +302,9 @@ class Energy_estimator():
 		log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
 		phase_psi_bras=phase_psi_bras[inv_index]._value
 
-		#log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
-		
-		#psi_bras = jnp.exp(log_psi_bras-log_psi_shift).block_until_ready()._value
+		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
+		# log_psi_bras=log_psi_bras._value - log_psi_shift
+		# phase_psi_bras=phase_psi_bras._value
 		
 
 

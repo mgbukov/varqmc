@@ -64,11 +64,12 @@ class VMC(object):
 		self.plot_data=False
 		
 		# training params
-		self.N_epochs=2 #500 
+		self.N_epochs=10 #500 
 
 		### MC sampler
 		self.N_MC_points=1000 #107 #10000 #
-		self.N_MC_chains = 2
+		self.N_MC_chains = 1 # number of MC chains to run in parallel
+
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
 			self.N_batch=self.N_MC_points#

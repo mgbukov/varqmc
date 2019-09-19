@@ -512,12 +512,11 @@ int update_offdiag(const int n_op,
 
 			// 	r ^= (one << ind_0)^(one << ind_1);
 
-			// 	M[l] = A;
-			// 	ket_index[l]=j;
+			// 	M[j] = A;
+			// 	ket_index[j]=j;
 
-			// 	bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+			// 	bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*j]);
 
-			// 	l++;
 			// }
 			
 
@@ -531,20 +530,17 @@ int update_offdiag(const int n_op,
 
 			if(m!=0.0){ // r state in same particle-number sector
 
-				
-				// bra_rep[l] = ref_state(r);
-				// int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
-				
 				// bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
 				// M[l] = m;
 				// ket_index[l]=j;
 				// l++;
-
+				
+				// bra_rep[j] = ref_state(r);
+				// int_to_spinstate(N,r,&spin_bra[N*N_symms*j]);
+				
 				bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*j]);
 				M[j] = m;
 				ket_index[j]=j;
-
-							
 
 			}
 		}

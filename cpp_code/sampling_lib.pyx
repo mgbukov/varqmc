@@ -40,6 +40,7 @@ ctypedef np.uint16_t basis_type
 N_sites=L*L
 
 
+
 cdef extern from *:
     """
     #define START_OMP_PARALLEL_PRAGMA() _Pragma("omp parallel") {
