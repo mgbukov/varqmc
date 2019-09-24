@@ -88,7 +88,7 @@ class MC_sampler():
 		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
 						self.spinstates_ket,self.ints_ket,self.mod_kets,
 						)
-		self.phase_kets[:]=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))#._value
+		self.phase_kets[:]=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points*self.N_symms,self.N_sites))#._value
 		
 
 		self.log_psi_shift=0.0 #log_psi[0]

@@ -64,10 +64,10 @@ class VMC(object):
 		self.plot_data=False
 		
 		# training params
-		self.N_epochs=10 #500 
+		self.N_epochs=5 #500 
 
 		### MC sampler
-		self.N_MC_points=1000 #107 #10000 #
+		self.N_MC_points=100 #107 #10000 #
 		self.N_MC_chains = 1 # number of MC chains to run in parallel
 
 		# number of processors must fix MC sampling ratio
@@ -197,8 +197,13 @@ class VMC(object):
 
 
 		@jit
+		def loss_psi(NN_params,batch,):
+			log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)
+			return jnp.sum(log_psi), jnp.sum(phase_psi)
+
+		@jit
 		def loss_log_psi(NN_params,batch,):
-			log_psi, _ = self.evaluate_NN(NN_params,batch,)	
+			log_psi, _ = self.evaluate_NN(NN_params,batch,)
 			return jnp.sum(log_psi)
 
 
@@ -213,8 +218,11 @@ class VMC(object):
 			# dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
 			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
 
-			dlog_psi_s   = vmap(grad(loss_log_psi),   in_axes=(None,0) )(NN_params,batch, )
-			dphase_psi_s = vmap(grad(loss_phase_psi), in_axes=(None,0) )(NN_params,batch, )
+			#dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0) )(NN_params,batch, )
+			#dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0) )(NN_params,batch, )
+
+			dlog_psi_s, dphase_psi_s = vmap(jit(grad(loss_psi)), in_axes=(None,0), out_axes=(None,) )(NN_params,batch, )
+
 	
 			N_MC_points=dlog_psi_s[0].shape[0]
 

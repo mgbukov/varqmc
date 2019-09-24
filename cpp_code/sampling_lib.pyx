@@ -340,8 +340,8 @@ cdef class Neural_Net:
         self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
 
         # access data in device array; transfer memory from numpy to jax
-        self.spinstate_s_py=np.asarray(self.spinstate_s).reshape([self.N_MC_chains,self.N_symm,self.N_sites])
-        self.spinstate_t_py=np.asarray(self.spinstate_t).reshape([self.N_MC_chains,self.N_symm,self.N_sites])
+        self.spinstate_s_py=np.asarray(self.spinstate_s).reshape([self.N_MC_chains*self.N_symm,self.N_sites])
+        self.spinstate_t_py=np.asarray(self.spinstate_t).reshape([self.N_MC_chains*self.N_symm,self.N_sites])
 
         self.mod_psi_s=np.zeros(self.N_MC_chains,dtype=np.int8)
         self.mod_psi_t=np.zeros(self.N_MC_chains,dtype=np.int8)
@@ -398,35 +398,39 @@ cdef class Neural_Net:
         # Re_Ws = jnp.einsum('ij,...lj->...li',self.W_fc_real, batch)
         # Im_Ws = jnp.einsum('ij,...lj->...li',self.W_fc_imag, batch)
 
-        #print(params[0]-self.W_fc_real)
-
-        Re_Ws = jnp.einsum('ij,...lj->il...',params[0], batch)
-        Im_Ws = jnp.einsum('ij,...lj->il...',params[1], batch)
+        batch=batch.reshape(-1,self.N_sites)
+        
+        Re_Ws = jnp.einsum('ij,lj->il',params[0], batch)
+        Im_Ws = jnp.einsum('ij,lj->il',params[1], batch)
 
         Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
         Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
 
+        
         #a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
         #a_fc_imag = tf.atan( tf.tan(Im_Ws)*tf.tanh(Re_Ws) )
-        a_fc_real = 0.5*jnp.log(Re**2 + Im**2)
-        a_fc_imag = jnp.arctan2(Im,Re)
+      
+        a_fc_real = 0.5*jnp.log(Re**2+Im**2).reshape((self.shapes[0][0],self.N_symm,-1),order='F')#.squeeze()
+        a_fc_imag = jnp.arctan2(Im,Re).reshape((self.shapes[1][0],self.N_symm,-1),order='F')#.squeeze()
 
         log_psi = jnp.sum(a_fc_real,axis=[0,1])
         phase_psi = jnp.sum(a_fc_imag,axis=[0,1])
-
 
         return log_psi, phase_psi
 
 
     cpdef object _evaluate_mod(self, object batch):
 
-        Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
-        Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
+        # Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
+        # Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
+
+        Re_Ws = jnp.einsum('ij,lj->il',self.W_fc_real, batch)
+        Im_Ws = jnp.einsum('ij,lj->il',self.W_fc_imag, batch)
 
         Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
         Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
 
-        a_fc_real = 0.5*jnp.log(Re**2 + Im**2)
+        a_fc_real = 0.5*jnp.log(Re**2 + Im**2).reshape(self.shapes[0][0],self.N_symm,-1,order='F')
   
         log_psi = jnp.sum(a_fc_real,axis=[0,1])
 
@@ -435,13 +439,18 @@ cdef class Neural_Net:
     # cpdef so it can be jitted
     cpdef object _evaluate_phase(self, object batch):
 
-        Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
-        Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
+        #batch=batch.reshape(-1,self.N_sites)
+
+        # Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
+        # Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
+
+        Re_Ws = jnp.einsum('ij,lj->il',self.W_fc_real, batch)
+        Im_Ws = jnp.einsum('ij,lj->il',self.W_fc_imag, batch)
 
         Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
         Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
 
-        a_fc_imag = jnp.arctan2(Im,Re)
+        a_fc_imag = jnp.arctan2(Im,Re).reshape(self.shapes[1][0],self.N_symm,-1,order='F')
 
         phase_psi = jnp.sum(a_fc_imag,axis=[0,1])
 
