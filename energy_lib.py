@@ -1,13 +1,3 @@
-import sys,os
-
-os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
-os.environ['OMP_NUM_THREADS']='1' # set number of OpenMP threads to run in parallel
-os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
-
-quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
-sys.path.insert(0,quspin_path)
-
-
 from quspin.operators._make_hamiltonian import _consolidate_static
 
 from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum

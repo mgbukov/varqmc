@@ -12,6 +12,8 @@ import jax.numpy as jnp
 from jax import jit, grad, random, device_put 
 #from jax.experimental.stax import relu, BatchNorm
 
+
+
 cimport cython
 import numpy as np
 cimport numpy as np
@@ -26,6 +28,9 @@ seed=1
 np.random.seed(seed)
 np.random.RandomState(seed)
 rng = random.PRNGKey(seed)
+
+
+from DNN_architectures import *
 
 
 ##############################################
@@ -61,46 +66,7 @@ cdef extern from "<stdlib.h>" nogil:
 
 
 cdef extern from "sample_4x4.h":
-    cdef cppclass Monte_Carlo[I]:
-        Monte_Carlo() except +
-
-        unsigned int seed;
-        # int world_size, world_rank;
-
-        # Seed the random number generator 
-        void set_seed(unsigned int) nogil
-
-        int build_ED_dicts(int, int, double) nogil
-
-        void evaluate_mod_dict(I [], double [], int) nogil
-
-        void evaluate_phase_dict(I [], double [], int) nogil
-
-
-        # void mpi_init() nogil
-
-        # void mpi_close() nogil
-
-        # void mpi_allgather[T](T*, int, T*, int) nogil
-
-
-        int sample_DNN(
-                            I ,
-                            int ,
-                            int ,
-                            int ,
-                            #
-                            np.int8_t [],
-                            basis_type [],
-                            double [],
-                            double [],
-                            #
-                            const double [],
-                            const double [],
-                            const int,
-
-                        ) nogil
-
+    
     T swap_bits[T](const T, int, int) nogil
     
     int update_offdiag[I](const int, const char[], const int[], const double, const int, const I[], I[], np.int8_t [], np.int32_t[], double[] ) nogil  
@@ -124,7 +90,6 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
     with nogil:
         for i in range (Ns):
             int_to_spinstate(Nsites,states[i],&out[i*N_features])
-
 
 
 
@@ -173,110 +138,28 @@ def c_offdiag_sum(
         
 
 
-@cython.boundscheck(False)
-cdef class cpp_Monte_Carlo:
-    
-    cdef Monte_Carlo[basis_type] * MC_c # hold a C++ instance
-    
-    def __cinit__(self):
-        self.MC_c = new Monte_Carlo[basis_type]()
-
-    #def __init__(self):
-    #    self.seed=self.MC_c.seed_value
-    
-    def __dealloc__(self):
-        del self.MC_c
-
-
-
-
-    property seed:
-        def __get__(self):
-            return self.MC_c.seed
-        #def __set__(self, int seed):
-        #    self.MC_c.seed = seed
-
-
-    def set_seed(self, unsigned int u):
-        self.MC_c.set_seed(u)
-
-
-    @cython.boundscheck(False)
-    def build_ED_dicts(self,int sign, int L, double J2):
-        return self.MC_c.build_ED_dicts(sign, L, J2)
-
-    @cython.boundscheck(False)
-    def evaluate_mod_dict(self,basis_type[:] keys, np.float64_t[:] values, int Ns):
-        self.MC_c.evaluate_mod_dict(&keys[0], &values[0], Ns)
-
-    @cython.boundscheck(False)
-    def evaluate_phase_dict(self,basis_type[:] keys, np.float64_t[:] values, int Ns):
-        self.MC_c.evaluate_phase_dict(&keys[0], &values[0], Ns)
-
-
-
-    @cython.boundscheck(False)
-    def sample_DNN(self,
-                    int N_MC_points,
-                    int thermalization_time,
-                    int auto_correlation_time,
-                    #
-                    np.int8_t[::1] spin_states,
-                    basis_type[:] ket_states,
-                    np.float64_t[:] mod_kets,
-                    np.float64_t[:] phase_kets,
-                    #
-                    const np.float64_t[:,::1] W_fc_real,
-                    const np.float64_t[:,::1] W_fc_imag,
-                    int N_fc,
-
-                    ):
-
-        cdef basis_type s_c
-
-        s=[0 for _ in range(N_sites//2)] + [1 for _ in range(N_sites//2)]
-        np.random.shuffle(s)
-        s = np.array(s)
-        s=''.join([str(j) for j in s])
-        s=int(s,2)
-
-        s_c=s
-
-        with nogil:
-            N_accepted=self.MC_c.sample_DNN(
-                       s_c,
-                       N_MC_points,
-                       thermalization_time,
-                       auto_correlation_time,
-                       #
-                       &spin_states[0],
-                       &ket_states[0],
-                       &mod_kets[0],
-                       &phase_kets[0],
-                       #
-                       &W_fc_real[0,0],
-                       &W_fc_imag[0,0],
-                       N_fc
-
-            )
-
-        return N_accepted;
-
-
 
 
 ###########################
 
 
+
+
+
+
+
+###########################
+@cython.boundscheck(False)
 cdef int myrandom(int i) nogil:
     return rand()%i;
 
 
 
-
+@cython.boundscheck(False)
 cdef class Neural_Net:
 
-    cdef object W_fc_real, W_fc_imag 
+    cdef object apply_dense, apply_dense_cpx
+    cdef object W_fc_real, W_fc_imag, W
     cdef object params
 
     cdef np.ndarray shapes, dims 
@@ -296,21 +179,31 @@ cdef class Neural_Net:
     cdef vector[unsigned int] thread_seeds
         
 
-    def __init__(self,shape,N_MC_chains,seed=0):
+    def __init__(self,shapes,N_MC_chains,seed=0):
 
-        # OMP ars
-        openmp.omp_set_num_threads(N_MC_chains)
-
+        W_shape=shapes[0]
+ 
         # fix seed
         srand(seed)
 
-        init_value_Re=1E-1#1E-3 
-        init_value_Im=1E-1#1E-1 
+        # order important
+        self._init_NN(W_shape)
+        self._init_evaluate()
+        self._init_variables(N_MC_chains)
         
-        self.W_fc_real = random.uniform(rng,shape=shape, minval=-init_value_Re, maxval=+init_value_Re)
-        self.W_fc_imag = random.uniform(rng,shape=shape, minval=-init_value_Im, maxval=+init_value_Im)
 
-        self.params=[self.W_fc_real, self.W_fc_imag,]
+
+    def _init_NN(self,W_shape):
+
+        init_dense, self.apply_dense = GeneralDeep(W_shape)
+        self.W_fc_real, _ = init_dense(rng)
+        self.W_fc_imag, _ = init_dense(rng)
+        self.params=[self.W_fc_real, self.W_fc_imag, ]
+
+
+        # init_dense_cpx, self.apply_dense_cpx = self.GeneralDeepComplex(W_shape)
+        # self.W, _ = init_dense_cpx(rng)
+        # self.params=[self.W, ]
 
 
         self.shapes=np.array([W.shape for W in self.params])
@@ -321,8 +214,10 @@ cdef class Neural_Net:
         self.N_sites=L*L
 
 
-        ################################################
+        
 
+
+    def _init_evaluate(self):
 
         # self.evaluate_mod  =self._evaluate_mod
         # self.evaluate_phase=self._evaluate_phase
@@ -332,7 +227,8 @@ cdef class Neural_Net:
         self.evaluate_phase=jit(self._evaluate_phase)
 
 
-        ################################################
+    def _init_variables(self,N_MC_chains):
+
         self.N_MC_chains=N_MC_chains
         self.N_spinconfigelmts=self.N_symm*self.N_sites
 
@@ -373,7 +269,6 @@ cdef class Neural_Net:
         def __get__(self):
             return self.params
 
-
     property evaluate_phase:
         def __get__(self):
             return self.evaluate_phase
@@ -382,77 +277,62 @@ cdef class Neural_Net:
         def __get__(self):
             return self.evaluate_mod
 
-    
 
-
-
+    @cython.boundscheck(False)
     def update_params(self,params):
         self.W_fc_real=params[0]
         self.W_fc_imag=params[1]
         self.params=params
 
+    
 
+    @cython.boundscheck(False)
     def evaluate(self, params, batch):
 
-        # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
-        # Re_Ws = jnp.einsum('ij,...lj->...li',self.W_fc_real, batch)
-        # Im_Ws = jnp.einsum('ij,...lj->...li',self.W_fc_imag, batch)
-
+        # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(-1,self.N_sites)
+
+        # apply dense layer
+        Re_Ws = self.apply_dense(params[0], batch)
+        Im_Ws = self.apply_dense(params[1], batch)
         
-        Re_Ws = jnp.einsum('ij,lj->il',params[0], batch)
-        Im_Ws = jnp.einsum('ij,lj->il',params[1], batch)
-
-        Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
-        Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
-
+        # apply logcosh nonlinearity
+        Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
+        Re_z_fc = cpx_log_real(Re, Im, ) 
+        Im_z_fc = cpx_log_imag(Re, Im, ) 
         
-        #a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
-        #a_fc_imag = tf.atan( tf.tan(Im_Ws)*tf.tanh(Re_Ws) )
-      
-        a_fc_real = 0.5*jnp.log(Re**2+Im**2).reshape((self.shapes[0][0],self.N_symm,-1),order='F')#.squeeze()
-        a_fc_imag = jnp.arctan2(Im,Re).reshape((self.shapes[1][0],self.N_symm,-1),order='F')#.squeeze()
-
-        log_psi = jnp.sum(a_fc_real,axis=[0,1])
-        phase_psi = jnp.sum(a_fc_imag,axis=[0,1])
+        # symmetrize
+        log_psi   = jnp.sum(Re_z_fc.reshape((self.shapes[0][0],self.N_symm,-1),order='F'), axis=[0,1])
+        phase_psi = jnp.sum(Im_z_fc.reshape((self.shapes[1][0],self.N_symm,-1),order='F'), axis=[0,1])
 
         return log_psi, phase_psi
 
-
+    # cpdef so it can be jitted
+    @cython.boundscheck(False)
     cpdef object _evaluate_mod(self, object batch):
 
-        # Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
-        # Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
+        Re_Ws = self.apply_dense(self.W_fc_real, batch)
+        Im_Ws = self.apply_dense(self.W_fc_imag, batch)
 
-        Re_Ws = jnp.einsum('ij,lj->il',self.W_fc_real, batch)
-        Im_Ws = jnp.einsum('ij,lj->il',self.W_fc_imag, batch)
-
-        Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
-        Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
-
-        a_fc_real = 0.5*jnp.log(Re**2 + Im**2).reshape(self.shapes[0][0],self.N_symm,-1,order='F')
-  
-        log_psi = jnp.sum(a_fc_real,axis=[0,1])
+        Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
+        Re_z_fc = cpx_log_real(Re, Im, ) 
+        
+        log_psi = jnp.sum(Re_z_fc.reshape((self.shapes[0][0],self.N_symm,-1),order='F'), axis=[0,1])
 
         return jnp.exp(log_psi)     
 
+
     # cpdef so it can be jitted
+    @cython.boundscheck(False)
     cpdef object _evaluate_phase(self, object batch):
+     
+        Re_Ws = self.apply_dense(self.W_fc_real, batch)
+        Im_Ws = self.apply_dense(self.W_fc_imag, batch)
 
-        #batch=batch.reshape(-1,self.N_sites)
-
-        # Re_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_real, batch)
-        # Im_Ws = jnp.einsum('ij,...lj->il...',self.W_fc_imag, batch)
-
-        Re_Ws = jnp.einsum('ij,lj->il',self.W_fc_real, batch)
-        Im_Ws = jnp.einsum('ij,lj->il',self.W_fc_imag, batch)
-
-        Re = jnp.cos(Im_Ws)*jnp.cosh(Re_Ws)
-        Im = jnp.sin(Im_Ws)*jnp.sinh(Re_Ws)
-
-        a_fc_imag = jnp.arctan2(Im,Re).reshape(self.shapes[1][0],self.N_symm,-1,order='F')
-
-        phase_psi = jnp.sum(a_fc_imag,axis=[0,1])
+        Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
+        Im_z_fc = cpx_log_imag(Re, Im, ) 
+        
+        phase_psi = jnp.sum(Im_z_fc.reshape((self.shapes[1][0],self.N_symm,-1),order='F'), axis=[0,1])
 
         return phase_psi
 

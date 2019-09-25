@@ -17,7 +17,7 @@ using namespace std;
 
 template<typename I>
 int op(I &r,double &m,const int n_op,const char opstr[],const int indx[], const int N){
-	//const I s = r;
+	const I s = r;
 	const I one = 1;
 	for(int j=n_op-1;j>-1;j--){
 
@@ -53,12 +53,12 @@ int op(I &r,double &m,const int n_op,const char opstr[],const int indx[], const 
 			default:
 				return -1;
 		}
-		/*
+
 		if(std::abs(m)==0){
 			r = s;
 			break;
 		}
-		*/
+
 	}
 
 	return 0;
@@ -188,7 +188,7 @@ void int_to_spinstate(const int N,I s,npy_int8 out[])
 
 
 
-
+/*
 template <class I>
 class Monte_Carlo{
 
@@ -210,31 +210,31 @@ class Monte_Carlo{
             seed=u; 
         };
 
-        /*
-        int world_size=0;
-        int world_rank=0;
+        
+  //       int world_size=0;
+  //       int world_rank=0;
 
-        void mpi_init() {
-		    // Initialize the MPI environment
-		    MPI_Init(NULL, NULL);
+  //       void mpi_init() {
+		//     // Initialize the MPI environment
+		//     MPI_Init(NULL, NULL);
 
-		    // Get the number of processes
-		    //int world_size;
-		    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+		//     // Get the number of processes
+		//     //int world_size;
+		//     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-		    // Get the rank of the process
-		    //int world_rank;
-		    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+		//     // Get the rank of the process
+		//     //int world_rank;
+		//     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-		    // Get the name of the processor
-		    char processor_name[MPI_MAX_PROCESSOR_NAME];
-		    int name_len;
-		    MPI_Get_processor_name(processor_name, &name_len);
+		//     // Get the name of the processor
+		//     char processor_name[MPI_MAX_PROCESSOR_NAME];
+		//     int name_len;
+		//     MPI_Get_processor_name(processor_name, &name_len);
 
-		    // Print off a hello world message
-		    printf("initialized processor %s, rank %d/%d\n", processor_name, world_rank, world_size);
+		//     // Print off a hello world message
+		//     printf("initialized processor %s, rank %d/%d\n", processor_name, world_rank, world_size);
 
-		}
+		// }
 
 		void mpi_close() {
 			MPI_Finalize();
@@ -246,7 +246,7 @@ class Monte_Carlo{
 	    {	int size_T = sizeof(T);
 	    	MPI_Allgather(send_data, size_T*send_count, MPI_CHAR, recv_data, size_T*recv_count, MPI_CHAR, MPI_COMM_WORLD);
 	    }
-		*/
+		
 		
 
         // Produce a uniform random sample from the open interval (0, 1).
@@ -453,11 +453,8 @@ class Monte_Carlo{
 		    return accepted;
 
 		};
-
-
-
 };
-
+*/
 
 
 
@@ -489,6 +486,8 @@ int update_offdiag(const int n_op,
 
 		int a=Ns/(100*omp_get_num_threads());
 		int b=1;
+
+		//cout << omp_get_num_threads() << " , " << omp_get_max_threads() << endl;
 
 		const npy_intp chunk = (a < b) ? b : a; // std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
 		#pragma omp for schedule(dynamic,chunk) 

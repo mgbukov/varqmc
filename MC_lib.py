@@ -11,8 +11,6 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 from jax import jit
 
-from cpp_code import cpp_Monte_Carlo
-
 from mpi4py import MPI
 import numpy as np
 config.update("jax_enable_x64", True)
@@ -30,9 +28,9 @@ class MC_sampler():
 
 		self.comm=comm
 
-		self.MC_sampler=cpp_Monte_Carlo()
-		self.MC_sampler.set_seed(seed_vec[self.comm.Get_rank()])
-		self.MC_sampler.build_ED_dicts(*build_dict_args)
+		# self.MC_sampler=cpp_Monte_Carlo()
+		# self.MC_sampler.set_seed(seed_vec[self.comm.Get_rank()])
+		# self.MC_sampler.build_ED_dicts(*build_dict_args)
 
 	def init_global_vars(self,L,N_MC_points,N_symms,basis_type):
 
@@ -80,10 +78,6 @@ class MC_sampler():
 		
 		#ti = time.time()
 
-		# N_accepted=self.MC_sampler.sample_DNN(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
-		# 				self.spinstates_ket,self.ints_ket,self.mod_kets,self.phase_kets,
-		# 				*NN_params,N_neurons,
-		# 				)
 
 		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
 						self.spinstates_ket,self.ints_ket,self.mod_kets,

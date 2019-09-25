@@ -1,3 +1,12 @@
+import sys,os
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
+#os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
+
+quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
+sys.path.insert(0,quspin_path)
+
+
 from jax import jit, grad, vmap, random, ops, partial
 from jax.config import config
 config.update("jax_enable_x64", True)
@@ -26,6 +35,8 @@ from data_analysis import data
 import time
 np.set_printoptions(threshold=np.inf)
 
+# export KMP_DUPLICATE_LIB_OK=TRUE
+# export OMP_NUM_THREADS=4
 # mpiexec -n 2 python main.py 
 
 
@@ -69,6 +80,8 @@ class VMC(object):
 		### MC sampler
 		self.N_MC_points=100 #107 #10000 #
 		self.N_MC_chains = 1 # number of MC chains to run in parallel
+		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
+
 
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
@@ -181,11 +194,11 @@ class VMC(object):
 
 
 		self.N_neurons=2
-		shape=[self.N_neurons,self.L**2]
+		shapes=([self.N_neurons,self.L**2], )
 		#self.NN_params=create_NN(shape)
 
 		### Neural network
-		self.DNN=Neural_Net(shape,self.N_MC_chains)
+		self.DNN=Neural_Net(shapes,self.N_MC_chains)
 
 		# jit functions
 		self.evaluate_NN=jit(self.DNN.evaluate)
@@ -218,11 +231,8 @@ class VMC(object):
 			# dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
 			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
 
-			#dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0) )(NN_params,batch, )
-			#dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0) )(NN_params,batch, )
-
-			dlog_psi_s, dphase_psi_s = vmap(jit(grad(loss_psi)), in_axes=(None,0), out_axes=(None,) )(NN_params,batch, )
-
+			dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0) )(NN_params,batch, )
+			dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0) )(NN_params,batch, )
 	
 			N_MC_points=dlog_psi_s[0].shape[0]
 
