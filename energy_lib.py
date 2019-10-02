@@ -15,19 +15,19 @@ import jax.numpy as jnp
 
 class Energy_estimator():
 
-	def __init__(self,comm,N_MC_points,N_batch,L,symmetrized=False):
+	def __init__(self,comm,N_MC_points,N_batch,L,N_symm,NN_type):
 
 		# MPI commuicator
 		self.comm=comm
 		self.N_MC_points=N_MC_points
 		self.N_batch=N_batch
+		self.NN_type=NN_type
 
 
 		###### define model parameters ######
 		Lx=L
 		Ly=Lx # linear dimension of spin 1 2d lattice
 		N_sites = Lx*Ly # number of sites for spin 1
-		self.symmetrized=symmetrized
 		#
 		###### setting up user-defined symmetry transformations for 2d lattice ######
 		sites = np.arange(N_sites,dtype=np.int32) # sites [0,1,2,....]
@@ -49,6 +49,7 @@ class Energy_estimator():
 		sign=-1.0
 		
 		self.N_sites=N_sites
+		self.N_symm=N_symm
 		self.sign=int(sign)
 		self.J2=J2
 		self.L=L
@@ -93,6 +94,7 @@ class Energy_estimator():
 		self._static_list_offdiag=static_list_offdiag
 		self._static_list_diag=static_list_diag
 
+
 		# self.static_off_diag=self.static_off_diag_SdotS
 		# self.static_diag=self.static_diag_SdotS
 		
@@ -103,15 +105,13 @@ class Energy_estimator():
 
 
 		if Lx==4:
-			self.basis_type=np.uint16
-			self.N_symms=128 if self.symmetrized else 1
+			self.basis_type=np.uint16	
 			if J2==0:
 				self.E_GS= -11.228483 #-0.7017801875*self.N_sites
 			else:
 				self.E_GS= -8.45792 #-0.528620*self.N_sites
 		elif Lx==6:
 			self.basis_type=np.uint64
-			self.N_symms=288 if self.symmetrized else 1
 			if J2==0:
 				self.E_GS= -24.4393969968 #-0.6788721388*self.N_sites
 			else:
@@ -122,6 +122,7 @@ class Energy_estimator():
 
 
 	def get_exact_kets(self):
+
 
 		assert(self.L==4)
 
@@ -145,7 +146,6 @@ class Energy_estimator():
 
 		Z   = -(sites+1) # spin inversion
 
-			
 		###### setting up bases ######
 		self.basis_symm = spin_basis_general(self.N_sites, pauli=False, Ns_block_est=200,
 											Nup=self.N_sites//2,
@@ -155,10 +155,11 @@ class Energy_estimator():
 											zblock=(Z,0),
 											block_order=['zblock','pdblock','pyblock','pxblock','kyblock','kxblock']
 										)
-
 		self.basis = spin_basis_general(self.N_sites, pauli=False, Nup=self.N_sites//2)
 
+		
 		self.H=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis,dtype=np.float64) #
+		
 		self.SdotS=hamiltonian(self.static_off_diag_SdotS+self.static_diag_SdotS, [], basis=self.basis,dtype=np.float64)
 
 		ref_states, index, inv_index, count=np.unique(self.basis_symm.representative(self.basis.states), return_index=True, return_inverse=True, return_counts=True)
@@ -198,7 +199,7 @@ class Energy_estimator():
 
 	def init_global_params(self):
 
-		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
+		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
 		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
@@ -214,13 +215,13 @@ class Energy_estimator():
 
 		if SdotS:
 			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.float64)
-			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symms),dtype=np.int8)
+			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symm),dtype=np.int8)
 			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
 			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms_SdotS,dtype=np.int32)
 		else:
 			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.float64)
-			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symms),dtype=np.int8)
+			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.int8)
 			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
 			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
@@ -250,11 +251,11 @@ class Energy_estimator():
 		nn=0
 		for j,(opstr,indx,J) in enumerate(static_list_offdiag):
 			
-			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symms),dtype=np.int8)
+			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
 
 			indx=np.asarray(indx,dtype=np.int32)
-			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
+			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J,self.N_symm,self.NN_type)
 			
 
 			# self._MEs[nn:nn+n]=self._MEs_holder[:n]
@@ -288,15 +289,14 @@ class Energy_estimator():
 		#print(_ints_bra_uq.shape)
 		
 		# evaluate network on unique representatives only
-		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symms,self.N_sites))
+		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
 		log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
 		phase_psi_bras=phase_psi_bras[inv_index]._value
 
-		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symms,self.N_sites))
+		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symm,self.N_sites))
 		# log_psi_bras=log_psi_bras._value - log_psi_shift
 		# phase_psi_bras=phase_psi_bras._value
 		
-
 
 		# compute real and imaginary part of local energy
 		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras)

@@ -8,8 +8,8 @@ const uint bits (1 << ld_bits);
 
 #define ld_bits 4
 #define bits (1 << ld_bits)  
-#define cyclicity_factor 256 //4*4*2*2*2*2
-#define N_symms 128 //4*4*2*2*2 // no Z symemtry
+//#define cyclicity_factor 256 //4*4*2*2*2*2
+//#define N_symms 128 //4*4*2*2*2 // no Z symemtry
 
 
 

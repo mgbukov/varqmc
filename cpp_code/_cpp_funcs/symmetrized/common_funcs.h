@@ -1,6 +1,6 @@
 #include "numpy/ndarraytypes.h"
 //#include "./DNN.h"
-#include "models/RBM_real_symm.h"
+//#include "models/RBM_real_symm.h"
 #include <random>
 #include <cmath>
 #include <vector>
@@ -180,6 +180,79 @@ void int_to_spinstate(const int N,I s,npy_int8 out[])
 		
 }
 
+
+
+template<class I>
+I rep_int_to_spinstate_conv(const int N,I s,npy_int8 out[])
+{	
+	
+	I t = s;
+	I r = s;
+	I p = s;
+
+	int counter=0;
+
+	
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+				
+				p = t;
+				for(int l=0;l<2;l++){
+					for(int m=0;m<_L;m++){
+						for(int n=0;n<_L;n++){
+							if(p > r) r = p;
+
+							p = shift_x(p);
+						}
+						p = shift_y(p);
+					}
+					p = inv_spin(p);
+				}
+				
+				_int_to_spinstate(N,t,&out[counter*N]);
+				t = flip_x(t);
+				counter++;
+
+			}
+			t = flip_y(t);
+		}
+		t = flip_d(t);
+	}
+		
+
+	return r;	
+	
+		
+}
+
+
+
+template<class I>
+void int_to_spinstate_conv(const int N,I s,npy_int8 out[])
+{	
+	
+	I t = s;
+
+	npy_uint16 counter=0;
+
+	
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+				
+				_int_to_spinstate(N,t,&out[counter*N]);
+				t = flip_x(t);
+				counter++;												
+					
+			}
+			t = flip_y(t);
+		}
+		t = flip_d(t);
+	}
+
+	
+}
 
 
 ///////////////////////////////////////////////////////////
@@ -468,18 +541,20 @@ class Monte_Carlo{
 
 template<class I>
 int update_offdiag(const int n_op,
-						  const char opstr[],
-						  const int indx[],
-						  const double A,
-						  const int Ns,
-						  const	I ket[], // col
-						  		I bra_rep[],
-						  		npy_int8 spin_bra[], // row
-						  		npy_int32 ket_index[],
-						  		double M[]
-						  )
-{	int N=_L*_L;
-	
+				  const char opstr[],
+				  const int indx[],
+				  const double A,
+				  const int Ns,
+				  const int N_symm,
+				  const	I ket[], // col
+				  		I bra_rep[],
+				  		npy_int8 spin_bra[], // row
+				  		npy_int32 ket_index[],
+				  		double M[],
+				  I rep_int_to_spinconfig(const int,I,npy_int8*)
+				  )
+{	
+	int N=_L*_L;
 	
 	#pragma omp parallel
 	{		
@@ -514,7 +589,7 @@ int update_offdiag(const int n_op,
 			// 	M[j] = A;
 			// 	ket_index[j]=j;
 
-			// 	bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*j]);
+			// 	bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symm*j]);
 
 			// }
 			
@@ -529,15 +604,16 @@ int update_offdiag(const int n_op,
 
 			if(m!=0.0){ // r state in same particle-number sector
 
-				// bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
+				// bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symm*l]);
 				// M[l] = m;
 				// ket_index[l]=j;
 				// l++;
 				
 				// bra_rep[j] = ref_state(r);
-				// int_to_spinstate(N,r,&spin_bra[N*N_symms*j]);
+				// int_to_spinstate(N,r,&spin_bra[N*N_symm*j]);
 				
-				bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symms*j]);
+				//bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symm*j]);
+				bra_rep[j] = rep_int_to_spinconfig(N,r,&spin_bra[N*N_symm*j]);
 				M[j] = m;
 				ket_index[j]=j;
 
@@ -575,10 +651,16 @@ void update_diag(const int n_op,
 				const I ket[], // col
 				  	  double M[]
 				  )
-{	//#pragma omp parallel
+{	
+	#pragma omp parallel
 	{		
-		//const npy_intp chunk = std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
-		//#pragma omp for schedule(dynamic,chunk) 
+		int a=Ns/(100*omp_get_num_threads());
+		int b=1;
+
+		//cout << omp_get_num_threads() << " , " << omp_get_max_threads() << endl;
+
+		const npy_intp chunk = (a < b) ? b : a;
+		#pragma omp for schedule(dynamic,chunk) 
 		for(int j=0;j<Ns;j++){
 			
 			double m = A;

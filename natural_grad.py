@@ -153,7 +153,7 @@ class natural_gradient():
 	def compute(self,NN_params,batch,params_dict,mode='MC',):
 		
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
-
+		
 		self.compute_fisher_metric(params_dict=params_dict,mode=mode)
 		self.compute_gradients(params_dict=params_dict,mode=mode)
 

@@ -24,20 +24,20 @@ class MC_sampler():
 
 	def __init__(self,comm,build_dict_args=None):
 
-		seed_vec=seed_vec=[3,7,19,117]
-
+		
 		self.comm=comm
 
+		# seed_vec=seed_vec=[3,7,19,117]
 		# self.MC_sampler=cpp_Monte_Carlo()
 		# self.MC_sampler.set_seed(seed_vec[self.comm.Get_rank()])
 		# self.MC_sampler.build_ED_dicts(*build_dict_args)
 
-	def init_global_vars(self,L,N_MC_points,N_symms,basis_type):
+	def init_global_vars(self,L,N_MC_points,N_symm,basis_type):
 
 		self.N_MC_points=N_MC_points
 		self.N_sites=L**2
-		self.N_symms=N_symms
-		self.N_features=self.N_symms*self.N_sites	
+		self.N_symm=N_symm
+		self.N_features=self.N_symm*self.N_sites	
 		self.basis_type=basis_type
 		
 
@@ -71,18 +71,17 @@ class MC_sampler():
 		
 
 
-	def sample(self,NN_params,N_neurons,DNN=None):
+	def sample(self,DNN):
 
 		self._reset_global_vars()
 		assert(self.spinstates_ket.max()==0)
 		
 		#ti = time.time()
-
-
 		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
 						self.spinstates_ket,self.ints_ket,self.mod_kets,
 						)
-		self.phase_kets[:]=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points*self.N_symms,self.N_sites))#._value
+
+		self.phase_kets[:]=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points*self.N_symm,self.N_sites))#._value
 		
 
 		self.log_psi_shift=0.0 #log_psi[0]
@@ -100,39 +99,24 @@ class MC_sampler():
 
 
 	def exact(self,NN_params,evaluate_NN=None):
+
+		log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symm,self.N_sites))
 		
-		# int_ket=np.array([60097],dtype=ints_ket.dtype)
-		# spinstate_ket=np.zeros(self.N_features,dtype=self.spinstates_ket.dtype)
-		# integer_to_spinstate(int_ket, spinstate_ket, self.N_features)
-		# print(spinstate_ket.reshape(-1,4,4))
-		# print(np.unique(spinstate_ket.reshape(-1,self.N_sites),axis=0).shape )
-		# print(int_ket)
-		# exit()
-		
-		if self.N_symms>1:
-			#log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))
-			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symms,self.N_sites))
-		else:
-			log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_sites))
-		self.log_psi_shift=0.0 #log_psi[0]
+		self.log_psi_shift=log_psi[0]._value
 		self.mod_kets[:] = jnp.exp((log_psi-self.log_psi_shift)).block_until_ready()#._value
 		#self.mod_kets = np.exp(log_psi._value)
 		self.phase_kets[:]= phase_kets#._value
-
 
 
 	#def MPI_allgather(data_local,N_local,data_all,N_all):
 	#	self.MC_sampler.mpi_allgather(data_local,N_local,data_all,N_all)
 
 
-	def check_consistency(self,evaluate_NN,NN_params,symmetrized):
+	def check_consistency(self,evaluate_NN,NN_params):
 
 		# reshape
-		if symmetrized:
-			spinstates_ket=self.spinstates_ket.reshape(-1,self.N_symms,self.N_sites)
-		else:
-			spinstates_ket=self.spinstates_ket.reshape(-1,self.N_sites)
-
+		spinstates_ket=self.spinstates_ket.reshape(-1,self.N_symm,self.N_sites)
+		
 		# combine results from all cores
 		mod_kets_tot=np.zeros((self.comm.Get_size()*self.N_MC_points,),dtype=np.float64)
 		phase_kets_tot=np.zeros((self.comm.Get_size()*self.N_MC_points,),dtype=np.float64)

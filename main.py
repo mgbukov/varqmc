@@ -1,9 +1,9 @@
 import sys,os
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
-#os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
+os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
-quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
+quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
 sys.path.insert(0,quspin_path)
 
 
@@ -21,8 +21,7 @@ rng = random.PRNGKey(seed)
 
 from mpi4py import MPI
 
-symmetrized=True  # False  # 
-#from models.RBM_real_symmetrized import *
+
 from cpp_code import Neural_Net
 from cpp_code import integer_to_spinstate
 
@@ -58,6 +57,7 @@ def reshape_from_gradient_format(NN_params,NN_dims,NN_shapes):
 
 
 
+
 class VMC(object):
 
 	def __init__(self):
@@ -68,7 +68,7 @@ class VMC(object):
 
 		self.L=4 # system size
 		self.mode='MC'  # 'exact' #
-		self.optimizer='RK' #'NG' #  'adam'  #
+		self.optimizer='RK'  #'adam' # 'NG' # 
 
 		self.save=False # True #
 		load_data=False # True #
@@ -95,8 +95,7 @@ class VMC(object):
 		
 		if load_data:
 			model_params=dict(model='RBMcpx',
-							  mode=self.mode, 
-							  symm=int(symmetrized),
+							  mode=self.mode,
 							  L=self.L,
 							  J2=0.5,
 							  opt=self.optimizer,
@@ -110,6 +109,7 @@ class VMC(object):
 		self._create_optimizer()
 		self._create_energy_estimator()
 		self._create_MC_sampler()
+
 		if not load_data:
 			self._create_data_obj()
 		
@@ -193,12 +193,13 @@ class VMC(object):
 
 
 
-		self.N_neurons=2
-		shapes=([self.N_neurons,self.L**2], )
+		N_neurons=2
+		shapes=([N_neurons,self.L**2], )
 		#self.NN_params=create_NN(shape)
 
 		### Neural network
-		self.DNN=Neural_Net(shapes,self.N_MC_chains)
+		NN_type='DNN' #	'CNN' # 
+		self.DNN=Neural_Net(shapes, self.N_MC_chains, NN_type)
 
 		# jit functions
 		self.evaluate_NN=jit(self.DNN.evaluate)
@@ -207,12 +208,6 @@ class VMC(object):
 
 
 	def _create_optimizer(self):
-
-
-		@jit
-		def loss_psi(NN_params,batch,):
-			log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)
-			return jnp.sum(log_psi), jnp.sum(phase_psi)
 
 		@jit
 		def loss_log_psi(NN_params,batch,):
@@ -231,11 +226,11 @@ class VMC(object):
 			# dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
 			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
 
-			dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0) )(NN_params,batch, )
-			dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0) )(NN_params,batch, )
-	
+			dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0,) )(NN_params,batch, )
+			dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
+			
 			N_MC_points=dlog_psi_s[0].shape[0]
-
+						
 			return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
 
 
@@ -290,23 +285,23 @@ class VMC(object):
 
 	def _create_energy_estimator(self):
 		### Energy estimator
-		self.E_est=Energy_estimator(self.comm,self.N_MC_points,self.N_batch,self.L,symmetrized=symmetrized) # contains all of the physics
+		self.E_est=Energy_estimator(self.comm,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type) # contains all of the physics
 		self.E_est.init_global_params()
-		self.N_features=self.E_est.N_sites*self.E_est.N_symms
+		self.N_features=self.DNN.N_sites*self.DNN.N_symm
 
 	def _create_MC_sampler(self):
 		### initialize MC sampler variables
 		build_dict_args=(self.E_est.sign,self.L,self.E_est.J2)
 		self.MC_tool=MC_sampler(self.comm,build_dict_args=build_dict_args)
-		self.MC_tool.init_global_vars(self.L,self.N_batch,self.E_est.N_symms,self.E_est.basis_type)
+		self.MC_tool.init_global_vars(self.L,self.N_batch,self.DNN.N_symm,self.E_est.basis_type)
+		self.input_shape=(-1,self.DNN.N_symm,self.E_est.N_sites)
 
 
 	def _create_data_obj(self,model_params=None):
 		### initialize data class
 		if model_params is None:
 			self.model_params=dict(model='RBMcpx',
-							  mode=self.mode, 
-							  symm=int(symmetrized),
+							  mode=self.mode,
 							  L=self.L,
 							  J2=self.E_est.J2,
 							  opt=self.optimizer,
@@ -324,10 +319,13 @@ class VMC(object):
 
 
 	def train(self):
-
 		if self.mode=='exact':
+
+
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_est.get_exact_kets()
-			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features)
+			#exit()
+			
+			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.DNN.NN_type)
 
 
 		for epoch in range(self.N_epochs): 
@@ -336,17 +334,13 @@ class VMC(object):
 			ti=time.time()
 
 			##### evaluate model
-			#self.get_training_data(self.NN_params)
-			#self.get_Stot_data(self.NN_params)
-
 			self.get_training_data(self.DNN.params)
 			self.get_Stot_data(self.DNN.params)
 
 
 			##### check c++ and python DNN evaluation
 			if epoch==0:
-				#self.MC_tool.check_consistency(self.evaluate_NN,self.NN_params,symmetrized)
-				self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params,symmetrized)
+				#self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
 
 				if self.mode=='exact':
 					np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_est.H.expt_value(self.psi[self.inv_index]))
@@ -408,7 +402,8 @@ class VMC(object):
 		if self.mode=='exact':
 			self.MC_tool.exact(NN_params, evaluate_NN=self.evaluate_NN)
 		elif self.mode=='MC':
-			self.MC_tool.sample(tuple([W._value for W in NN_params]) ,self.N_neurons, self.DNN)
+			self.MC_tool.sample(self.DNN)
+
 
 		##### compute local energies #####
 		self.E_est.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift)
@@ -436,7 +431,7 @@ class VMC(object):
 
 
 		##### total batch
-		self.batch=self.MC_tool.spinstates_ket.reshape(-1,self.E_est.N_symms,self.E_est.N_sites)#.T
+		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)#.T
 
 
 		return self.batch, self.params_dict
@@ -467,10 +462,7 @@ class VMC(object):
 			elif self.optimizer=='adam':
 				
 				# reshape
-				if symmetrized:
-					self.MC_tool.spinstates_ket_tot=self.MC_tool.spinstates_ket_tot.reshape(-1,self.E_est.N_symms,self.E_est.N_sites)
-				else:
-					self.MC_tool.spinstates_ket_tot=self.MC_tool.spinstates_ket_tot.reshape(-1,self.E_est.N_sites)
+				self.MC_tool.spinstates_ket_tot=self.MC_tool.spinstates_ket_tot.reshape(self.input_shape)
 				batch=self.MC_tool.spinstates_ket_tot
 				
 
