@@ -198,7 +198,7 @@ class VMC(object):
 		#self.NN_params=create_NN(shape)
 
 		### Neural network
-		NN_type='DNN' #	'CNN' # 
+		NN_type='CNN' # 'DNN' #	
 		self.DNN=Neural_Net(shapes, self.N_MC_chains, NN_type)
 
 		# jit functions

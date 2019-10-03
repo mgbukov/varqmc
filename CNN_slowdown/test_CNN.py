@@ -1,5 +1,5 @@
 import sys,os
-os.environ['XLA_FLAGS']='--xla_dump_to=/tmp/CNN_logfiles'
+#os.environ['XLA_FLAGS']='--xla_dump_to=/tmp/CNN_logfiles'
 
 
 from jax.config import config
@@ -18,6 +18,7 @@ rng = random.PRNGKey(seed)
 
 from DNN_architectures import *
 
+import time
 
 ####################################################################
 
@@ -101,12 +102,16 @@ batch=np.ones((N_MC_points,N_symm,L,L),dtype=np.float64)
 
 #print(evaluate(params,batch))
 
-	
-# compute gradients
-d_psi = compute_grad_log_psi(params,batch)
 
-print(d_psi[0].shape)
 
+for _ in range (10):
+
+    ti = time.time()
+    
+    d_psi = compute_grad_log_psi(params,batch)
+    #print(d_psi[0].shape)
+
+    print("gradients took {0:.4f} secs.".format(time.time()-ti))
 
 
 
