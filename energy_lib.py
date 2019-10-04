@@ -199,7 +199,7 @@ class Energy_estimator():
 
 	def init_global_params(self):
 
-		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
+		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.float64)
 		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
 		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
@@ -215,13 +215,13 @@ class Energy_estimator():
 
 		if SdotS:
 			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.float64)
-			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symm),dtype=np.int8)
+			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symm),dtype=np.float64)
 			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
 			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms_SdotS,dtype=np.int32)
 		else:
 			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.float64)
-			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.int8)
+			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.float64)
 			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
 			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
@@ -251,7 +251,7 @@ class Energy_estimator():
 		nn=0
 		for j,(opstr,indx,J) in enumerate(static_list_offdiag):
 			
-			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
+			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.float64)
 			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
 
 			indx=np.asarray(indx,dtype=np.int32)
@@ -299,7 +299,8 @@ class Energy_estimator():
 		
 
 		# compute real and imaginary part of local energy
-		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras)
+		self._n_per_term=self._n_per_term[self._n_per_term>0]
+		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term,self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras)
 		#c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],psi_bras,phase_psi_bras)
 		
 		cos_phase_kets=np.cos(phase_kets)/mod_kets

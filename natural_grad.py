@@ -97,7 +97,7 @@ class natural_gradient():
 		if np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm ) > 1E-14: # and np.linalg.norm(self.Fisher-self.Fisher.T.conj()) > 1E-14:
 		
 			print('F : {:.20f}'.format(np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm )) )
-			print('OO: {:.20f}'.format(np.linalg.norm( (OO_expt._value-OO_expt._value.T.conj())/np.linalg.norm(OO_expt) )) )
+			print('OO: {:.20f}'.format(np.linalg.norm( (self.OO_expt._value-self.OO_expt._value.T.conj())/np.linalg.norm(self.OO_expt) )) )
 			print('O2: {:.20f}'.format(np.linalg.norm( (O_expt2._value-O_expt2._value.T.conj())/np.linalg.norm(O_expt2) )) )
 			print('non-hermitian fisher matrix')
 			
@@ -115,7 +115,7 @@ class natural_gradient():
 		if np.any(E <- 1E-14):
 			print('E ', E)
 			print()
-			print('OO',eigh(OO_expt._value/np.linalg.norm(OO_expt._value),eigvals_only=True))
+			print('OO',eigh(self.OO_expt._value/np.linalg.norm(self.OO_expt._value),eigvals_only=True))
 			print()
 			print('O2',eigh(O_expt2._value/np.linalg.norm(O_expt2._value),eigvals_only=True))
 

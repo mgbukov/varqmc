@@ -67,19 +67,21 @@ class VMC(object):
 
 
 		self.L=4 # system size
-		self.mode='MC'  # 'exact' #
-		self.optimizer='RK'  #'adam' # 'NG' # 
+		self.mode='MC'  #'exact' 
+		self.optimizer='RK' # 'NG' #'adam' # 
+		self.NN_type='CNN' #'DNN' # 
+		 
 
 		self.save=False # True #
-		load_data=False # True #
-		self.plot_data=False
+		load_data=False # True # 
+		self.plot_data=False #True # 
 		
 		# training params
 		self.N_epochs=5 #500 
 
 		### MC sampler
 		self.N_MC_points=100 #107 #10000 #
-		self.N_MC_chains = 1 # number of MC chains to run in parallel
+		self.N_MC_chains = 8 # number of MC chains to run in parallel
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
 
 
@@ -90,6 +92,9 @@ class VMC(object):
 				print('only one core allowed for "exact" simulation')
 				exit()
 		else:
+			if self.N_MC_points//self.N_MC_chains != self.N_MC_points/self.N_MC_chains:
+				print('number of MC chains incompatible with the total number of points.')
+				exit()
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 
 		
@@ -117,117 +122,108 @@ class VMC(object):
 
 
 	def _create_NN(self, load_data=False):
-		
-		if load_data:
-			print('exiting...')
-			exit()
-
-			# self.NN_params=jnp.array(
-			# 	[ [0.021258599215, -0.0823963887505,
-			# 	-0.0764654369726, -0.0628942940286,
-			# 	0.00182637347543, -0.00695127347814,
-			# 	-0.00525690483403, 0.0481080176332,
-			# 	0.000980873958246, -0.00692652171121,
-			# 	-0.0169162330746, -0.0106888594278,
-			# 	0.00585653048371, 0.0138074306434,
-			# 	-0.0478208906869, 0.0548194907154,
-			# 	0.00420109717598, -0.0124403232342,
-			# 	0.00567369833488, 0.0371481096711,
-			# 	0.0306937197576, -0.0224021086711,
-			# 	-0.00400841403652, -0.0300551229252,
-			# 	0.0732902932636, 0.0458134104469,
-			# 	-0.0668617051509, -0.0580895073338,
-			# 	0.01761345991, -0.00145492616907,
-			# 	0.0320281652266, 0.0310190200109,
-			# 	0.0100540410205, 0.00611392133309,
-			# 	-0.0253986890351, 0.035396303171,
-			# 	0.0140308059331, 0.000374839619012,
-			# 	-0.0188215528856, 0.01156958282,
-			# 	-0.00130670195036, 0.0498983872269,
-			# 	-0.0330274839124, -0.0123636849822,
-			# 	0.0225649581684, -0.0167168862779,
-			# 	0.0315205951684, -0.0684157061108,
-			# 	-0.0428906561036, 0.0754985501526,
-			# 	-0.0295073373148, -0.0631896535519,
-			# 	-0.09089461634, -0.0290092409887,
-			# 	0.00408861284419, 0.00340387882643,
-			# 	-0.000359464136101, 0.0218156069361,
-			# 	-0.00775859832165, -0.0618378944315,
-			# 	0.0478057783988, -0.0637107169233,
-			# 	0.0398047959674, -0.0134030969116]
-			# 	]
-			# 	)
-
-
-			# self.NN_params=[self.NN_params.reshape(32,2,order='F')[0:32:2,].T,
-			# 			  	self.NN_params.reshape(32,2,order='F')[1:32:2,].T
-			# 			  	]
-		
-			self.NN_params=jnp.array(self.data_structure.load_weights()[0])
-			self.NN_params=[W for W in self.NN_params]
-
-
-
-			'''
-			# Stot=0 eigenstate
-			self.NN_params=[ jnp.array(
-						[[ 0.00580084, -0.07497671, -0.06789109, -0.01204818, -0.01274435, -0.10384455,
-						  -0.10245288, -0.04374218, -0.08915268,  0.00177797, -0.04978558, -0.05587124,
-						   0.07693333, -0.07984009, -0.01530174, -0.12691828],
-						 [-0.21518007, -0.11389974, -0.20263269, -0.12619203, -0.08462431, -0.20707012,
-						  -0.17650112, -0.19922243, -0.16967753, -0.18817129, -0.20458634, -0.08676682,
-						  -0.11785064, -0.03068135, -0.04197004, -0.17183342]]
-
-					  	),
-
-						jnp.array(
-						[[-0.00231961, -0.00895621,  0.06853679,  0.0069357,  -0.02742392,  0.00391063,
-						   0.02143496,  0.07258342,  0.05560984, -0.02823264,  0.02835682, -0.00693428,
-						   0.01221359,  0.05616201, -0.02058408,  0.0281348 ],
-						 [-0.1803375,  -0.12494415, -0.17192932, -0.11660786, -0.12339658, -0.18764674,
-						  -0.12699878, -0.17132069, -0.15470591, -0.13720351, -0.18281736, -0.10516087,
-						  -0.10887956, -0.07979148, -0.12417864, -0.16585421]]
-					  	)
-					 ]
-			'''
-
-
 
 		N_neurons=2
 		shapes=([N_neurons,self.L**2], )
-		#self.NN_params=create_NN(shape)
-
+		
 		### Neural network
-		NN_type='CNN' # 'DNN' #	
-		self.DNN=Neural_Net(shapes, self.N_MC_chains, NN_type)
+		self.DNN=Neural_Net(shapes, self.N_MC_chains, self.NN_type)
+
+		
+		if load_data:
+			#print('exiting...')
+			#exit()
+
+			'''
+			NN_params=jnp.array(
+				[ [0.021258599215, -0.0823963887505,
+				-0.0764654369726, -0.0628942940286,
+				0.00182637347543, -0.00695127347814,
+				-0.00525690483403, 0.0481080176332,
+				0.000980873958246, -0.00692652171121,
+				-0.0169162330746, -0.0106888594278,
+				0.00585653048371, 0.0138074306434,
+				-0.0478208906869, 0.0548194907154,
+				0.00420109717598, -0.0124403232342,
+				0.00567369833488, 0.0371481096711,
+				0.0306937197576, -0.0224021086711,
+				-0.00400841403652, -0.0300551229252,
+				0.0732902932636, 0.0458134104469,
+				-0.0668617051509, -0.0580895073338,
+				0.01761345991, -0.00145492616907,
+				0.0320281652266, 0.0310190200109,
+				0.0100540410205, 0.00611392133309,
+				-0.0253986890351, 0.035396303171,
+				0.0140308059331, 0.000374839619012,
+				-0.0188215528856, 0.01156958282,
+				-0.00130670195036, 0.0498983872269,
+				-0.0330274839124, -0.0123636849822,
+				0.0225649581684, -0.0167168862779,
+				0.0315205951684, -0.0684157061108,
+				-0.0428906561036, 0.0754985501526,
+				-0.0295073373148, -0.0631896535519,
+				-0.09089461634, -0.0290092409887,
+				0.00408861284419, 0.00340387882643,
+				-0.000359464136101, 0.0218156069361,
+				-0.00775859832165, -0.0618378944315,
+				0.0478057783988, -0.0637107169233,
+				0.0398047959674, -0.0134030969116]
+				]
+				)
+
+
+			NN_params=[NN_params.reshape(32,2,order='F')[0:32:2,].T,
+					   NN_params.reshape(32,2,order='F')[1:32:2,].T
+						]
+			'''
+
+			# NN_params=jnp.array(self.data_structure.load_weights()[0])
+			# NN_params=[W for W in self.NN_params]
+
+
+			# CNN
+			NN_params=[
+							jnp.array([ [0.021258599215,-0.0764654369726   ],
+							  			[0.00182637347543,-0.00525690483403]
+										]).reshape(1, 1, 2, 2),
+
+							jnp.array(
+										[ [-0.0823963887505,-0.0628942940286],
+										  [-0.00695127347814,0.0481080176332]
+										]).reshape(1, 1, 2, 2)
+						]
+
+
+			self.DNN.update_params(NN_params)
+		
 
 		# jit functions
 		self.evaluate_NN=jit(self.DNN.evaluate)
 		#self.evaluate_NN=self.DNN.evaluate
 
 
-
 	def _create_optimizer(self):
 
 		@jit
 		def loss_log_psi(NN_params,batch,):
-			log_psi, _ = self.evaluate_NN(NN_params,batch,)
+			log_psi = self.DNN.evaluate_log(NN_params,batch,)
 			return jnp.sum(log_psi)
-
+			
 
 		@jit
 		def loss_phase_psi(NN_params,batch,):
-			_, phase_psi = self.evaluate_NN(NN_params,batch,)	
+			phase_psi = self.DNN.evaluate_phase(NN_params,batch,)	
 			return jnp.sum(phase_psi)
+
 
 		@jit
 		def compute_grad_log_psi(NN_params,batch,):
 
-			# dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
-			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
+			dlog_psi_s   = vmap(partial(jit(grad(loss_log_psi)),   NN_params))(batch, )
+			dphase_psi_s = vmap(partial(jit(grad(loss_phase_psi)), NN_params))(batch, )
 
-			dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0,) )(NN_params,batch, )
-			dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
+			# dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0,) )(NN_params,batch, )
+			# dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
 			
 			N_MC_points=dlog_psi_s[0].shape[0]
 						
@@ -274,7 +270,7 @@ class VMC(object):
 			self.opt_state = self.opt_init(self.DNN.params)
 
 		elif self.optimizer=='RK':
-			step_size=1E-6
+			step_size=1E-4
 			self.NG.init_RK_params(step_size)
 
 		self.step_size=step_size
@@ -340,7 +336,7 @@ class VMC(object):
 
 			##### check c++ and python DNN evaluation
 			if epoch==0:
-				#self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
+				self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
 
 				if self.mode=='exact':
 					np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_est.H.expt_value(self.psi[self.inv_index]))
@@ -355,6 +351,7 @@ class VMC(object):
 				if self.mode=='exact':
 					print('overlap', self.params_dict['overlap'] )
 
+			#exit()
 
 			##### combine results from all cores
 			self.MC_tool.Allgather()	

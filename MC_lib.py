@@ -51,7 +51,7 @@ class MC_sampler():
 		self.mod_kets=np.zeros((N_MC_points,),dtype=np.float64)
 		self.phase_kets=np.zeros((N_MC_points,),dtype=np.float64)
 
-		self.spinstates_ket_tot=np.zeros((self.comm.Get_size()*self.N_MC_points*self.N_features,),dtype=np.int8)
+		self.spinstates_ket_tot=np.zeros((self.comm.Get_size()*self.N_MC_points*self.N_features,),dtype=np.float64)
 		self.mod_kets_tot=np.zeros((self.comm.Get_size()*N_MC_points,),dtype=np.float64)
 		self.phase_kets_tot=np.zeros((self.comm.Get_size()*N_MC_points,),dtype=np.float64)
 
@@ -67,7 +67,7 @@ class MC_sampler():
 		
 
 	def _reset_global_vars(self):
-		self.spinstates_ket=np.zeros((self.N_MC_points*self.N_features,),dtype=np.int8)
+		self.spinstates_ket=np.zeros((self.N_MC_points*self.N_features,),dtype=np.float64)
 		
 
 
@@ -81,7 +81,7 @@ class MC_sampler():
 						self.spinstates_ket,self.ints_ket,self.mod_kets,
 						)
 
-		self.phase_kets[:]=DNN.evaluate_phase(self.spinstates_ket.reshape(self.N_MC_points*self.N_symm,self.N_sites))#._value
+		self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_MC_points*self.N_symm,self.N_sites))#._value
 		
 
 		self.log_psi_shift=0.0 #log_psi[0]
@@ -142,6 +142,7 @@ class MC_sampler():
 		# # print()
 		# print(mod_kets_tot)
 		# print(np.exp(log_psi))
+		# print(mod_kets_tot-np.exp(log_psi))
 		# exit()
 
 		

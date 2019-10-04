@@ -88,19 +88,21 @@ inline T swap_bits(const T b,int i,int j)
 
 
 template<class T>
-inline void _int_to_spinstate(const int N,T state,npy_int8 out[])
-{	npy_int8 n;
+inline void _int_to_spinstate(const int N,T state,npy_float64 out[])
+{	npy_float64 n;
 	T one=1;
 	for(int i=0;i<N;i++){
-		n=(state / (one<<(N-i-1)) ) % 2;
-		//out[i] = (n + 2) % 2; // [0,1] state representation
-		out[i] = 2 * ( (n + 2) % 2 ) - 1; // [-1,+1] state representation
+		//n=(state / (one<<(N-i-1)) ) % 2;
+		//out[i] = 2 * ( (n + 2) % 2 ) - 1; // [-1,+1] state representation
+
+		out[i] = (state & (one<<(N-i-1) )) ? 1 : -1; // [-1,+1] state representation
+
 	}
 }
 
 
 template<class I>
-I rep_int_to_spinstate(const int N,I s,npy_int8 out[])
+I rep_int_to_spinstate(const int N,I s,npy_float64 out[])
 {	
 	
 	I t = s;
@@ -149,7 +151,7 @@ I rep_int_to_spinstate(const int N,I s,npy_int8 out[])
 
 
 template<class I>
-void int_to_spinstate(const int N,I s,npy_int8 out[])
+void int_to_spinstate(const int N,I s,npy_float64 out[])
 {	
 	
 	I t = s;
@@ -183,7 +185,7 @@ void int_to_spinstate(const int N,I s,npy_int8 out[])
 
 
 template<class I>
-I rep_int_to_spinstate_conv(const int N,I s,npy_int8 out[])
+I rep_int_to_spinstate_conv(const int N,I s,npy_float64 out[])
 {	
 	
 	I t = s;
@@ -229,7 +231,7 @@ I rep_int_to_spinstate_conv(const int N,I s,npy_int8 out[])
 
 
 template<class I>
-void int_to_spinstate_conv(const int N,I s,npy_int8 out[])
+void int_to_spinstate_conv(const int N,I s,npy_float64 out[])
 {	
 	
 	I t = s;
@@ -255,282 +257,6 @@ void int_to_spinstate_conv(const int N,I s,npy_int8 out[])
 }
 
 
-///////////////////////////////////////////////////////////
-
-
-
-
-
-/*
-template <class I>
-class Monte_Carlo{
-
-    private:
-        std::random_device rd;
-        std::mt19937 gen;
-
-	public:
-
-		Monte_Carlo() {
-            std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
-        };
-
-		~Monte_Carlo(){};
-  
-  		unsigned int seed;
-		void set_seed(unsigned int u) {
-            gen.seed(u);
-            seed=u; 
-        };
-
-        
-  //       int world_size=0;
-  //       int world_rank=0;
-
-  //       void mpi_init() {
-		//     // Initialize the MPI environment
-		//     MPI_Init(NULL, NULL);
-
-		//     // Get the number of processes
-		//     //int world_size;
-		//     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
-		//     // Get the rank of the process
-		//     //int world_rank;
-		//     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-
-		//     // Get the name of the processor
-		//     char processor_name[MPI_MAX_PROCESSOR_NAME];
-		//     int name_len;
-		//     MPI_Get_processor_name(processor_name, &name_len);
-
-		//     // Print off a hello world message
-		//     printf("initialized processor %s, rank %d/%d\n", processor_name, world_rank, world_size);
-
-		// }
-
-		void mpi_close() {
-			MPI_Finalize();
-		}
-
-		template<class T>
-		void mpi_allgather(T* send_data,int send_count,T* recv_data,int recv_count	
-	    )
-	    {	int size_T = sizeof(T);
-	    	MPI_Allgather(send_data, size_T*send_count, MPI_CHAR, recv_data, size_T*recv_count, MPI_CHAR, MPI_COMM_WORLD);
-	    }
-		
-		
-
-        // Produce a uniform random sample from the open interval (0, 1).
-        double uniform() {
-            std::uniform_real_distribution<double> unif(0,1);
-            return unif(gen);
-        };
-		
-
-
-
-        std::unordered_map<I, double> phase_dict;
-        std::unordered_map<I, double> mod_dict; 
-
-        int build_ED_dicts(int sign, int L, double J2){
-
-        	ifstream infile;
-        	I state;
-        	int sign_1, sign_2;
-        	double norm;
-        	double log_psi;
-        	
-
-
-        	if(J2 > 0.0001){
-        		if(L==4){
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=4_Ly=4_J1=1.0000_J2=0.5000.txt");
-	        	}
-	        	else{
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=6_Ly=6_J1=1.0000_J2=0.5000.txt");
-	        	}
-        	}
-        	else{
-        		if(L==4){
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=4_Ly=4_J1=1.0000_J2=0.0000.txt");
-	        	}
-	        	else{
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=6_Ly=6_J1=1.0000_J2=0.0000.txt");
-	        	}
-        	}
-        	
-		   
-
-		    if(infile.fail()) // checks to see if file opended 
-		    { 
-		    	cout << "error loading file" << endl; 
-		    	return 1; // no point continuing if the file didn't open...
-		    }
-
-		    while(!infile.eof()) // reads file to end of *file*, not line
-			{ 
-				infile >> state; // read first column number
-				infile >> log_psi; // read second column number
-				infile >> norm;
-				infile >> sign_1; // J1 flipped
-				infile >> sign_2; // J1 not flipped
-
-				//cout << state << " , " << norm << " , " << check_state(state) << endl;
-
-				if(sign<0){
-					if(sign_1 > 0){
-						phase_dict[state]=0.0;	
-					}
-					else{
-						phase_dict[state]=M_PI;
-					}
-				}
-				else{
-					if(sign_2 > 0){
-						phase_dict[state]=0.0;	
-					}
-					else{
-						phase_dict[state]=M_PI;
-					}
-				}
-
-				
-				
-				mod_dict[state]=std::exp(log_psi)*std::sqrt(norm/cyclicity_factor);
-
-			} 
-			infile.close();
-
-			cout << "finished creating ED data dicts.\n" << endl;
-
-			return 0;
-        }
-
-
-        void evaluate_mod_dict(I keys[], double values[], int Ns){
-        	for(int j=0; j<Ns; ++j){
-        		values[j]=mod_dict[keys[j]];
-        	}
-        }
-
-        void evaluate_phase_dict(I keys[], double values[], int Ns){
-        	for(int j=0; j<Ns; ++j){
-        		values[j]=phase_dict[keys[j]];
-        	}
-        }
-
-
-
-		int sample_DNN(I s,
-						int N_MC_points,
-						int thermalization_time,
-						int auto_correlation_time,
-						//
-						npy_int8 spin_states[],
-						I ket_states[],
-						double mod_kets[],
-						double phase_kets[],
-						//
-						const double W_fc_real[],
-						const double W_fc_imag[],
-						const int N_fc
-
-			)
-		{			
-			int N_sites=_L*_L;
-
-			I t;
-			double mod_psi_s, mod_psi_t, phase_psi_s;
-
-			npy_uint16 _i,_j;
-			std::uniform_int_distribution<> random_site(0,N_sites-1);
-
-			std::vector<npy_int8> spinstate_s(N_sites*N_symms), spinstate_t(N_sites*N_symms);
-		 
-
-			int_to_spinstate(N_sites,s,&spinstate_s[0]);
-			mod_psi_s=evaluate_mod(&spinstate_s[0],W_fc_real,W_fc_imag,N_sites,N_fc);
-				  		    
-
-		    int j=0;
-		    int k=0;
-		    int accepted=0;
-
-		  
-		    while(k < N_MC_points){
-
-		    	t=s;
-		    	//spinstate_t=spinstate_s;
-
-		    	// propose a new state until a nontrivial configuration is drawn
-		    	while(t==s){
-		    		_i = random_site(gen);
-		    		_j = random_site(gen);
-		    		t = swap_bits(s,_i,_j);
-		    	};
-
-		    	//cout << _i << " , " << _j << " , " << s << " , " << t << endl;
-
-		    	
-		    	// swap spin configuration
-		    	// for(int _k=0;_k<N_symms;_k++){
-		    	// 	spinstate_t[N_sites-1-_i + _k*N_sites] = spinstate_s[N_sites-1-_j + _k*N_sites];
-		    	// 	spinstate_t[N_sites-1-_j + _k*N_sites] = spinstate_s[N_sites-1-_i + _k*N_sites];
-		    	// }
-
-		    	int_to_spinstate(N_sites,t,&spinstate_t[0]);
-		    	
-		    	   	
-		    	// compute amplitude
-		    	mod_psi_t=evaluate_mod(&spinstate_t[0],W_fc_real,W_fc_imag,N_sites,N_fc);
-
-		    	//cout << s << " , " << t << " , " << mod_psi_s << " , " << mod_psi_t << endl;
-		    
-	
-		    	double eps = uniform();
-		    	if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t){ // accept
-					s = t;
-					mod_psi_s = mod_psi_t;
-					spinstate_s = spinstate_t;
-					accepted++;
-				}; 
-				
-
-				if( (j > thermalization_time) && (j % auto_correlation_time) == 0){
-					
-					//cout << j << " , " << thermalization_time << " , " << auto_correlation_time << endl;
-
-					for(int i=0;i<N_sites*N_symms;++i){
-						spin_states[k*N_sites*N_symms + i] = spinstate_s[i];
-					};
-				
-					
-					phase_psi_s=evaluate_phase(&spinstate_s[0],W_fc_real,W_fc_imag,N_sites,N_fc);
-					
-					
-					ket_states[k] = s;
-					phase_kets[k]=phase_psi_s;
-					mod_kets[k]=mod_psi_s;
-
-
-					k++;
-					
-				};	
-
-				j++;
-
-		    };
-
-		    return accepted;
-
-		};
-};
-*/
-
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -548,10 +274,10 @@ int update_offdiag(const int n_op,
 				  const int N_symm,
 				  const	I ket[], // col
 				  		I bra_rep[],
-				  		npy_int8 spin_bra[], // row
+				  		npy_float64 spin_bra[], // row
 				  		npy_int32 ket_index[],
 				  		double M[],
-				  I rep_int_to_spinconfig(const int,I,npy_int8*)
+				  I rep_int_to_spinconfig(const int,I,npy_float64*)
 				  )
 {	
 	int N=_L*_L;

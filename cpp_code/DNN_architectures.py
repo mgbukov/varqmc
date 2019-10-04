@@ -88,7 +88,7 @@ def GeneralConv(dimension_numbers, out_chan, filter_shape,
     def apply_fun(params, inputs, **kwargs):
 
         # move into lax.conv_general_dilated after defining padding='PERIODIC'
-        inputs=periodic_padding(inputs.astype(dtype),filter_shape,strides)
+        inputs=periodic_padding(inputs,filter_shape,strides)
 
         if not ignore_b:
             W, b = params
@@ -126,4 +126,26 @@ def cpx_log_imag(Re, Im,):
 
 
 
+
+@jit
+def logcosh_cpx(Re_Ws, Im_Ws):
+    Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
+    Re_z = cpx_log_real(Re, Im, ) 
+    Im_z = cpx_log_imag(Re, Im, )
+    return Re_z, Im_z
+
+
+@jit
+def logcosh_real(Re_Ws, Im_Ws):
+    Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
+    Re_z = cpx_log_real(Re, Im, )
+    return Re_z
+
+
+@jit
+def logcosh_imag(Re_Ws, Im_Ws):
+    Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
+    Im_z = cpx_log_imag(Re, Im, )
+
+    return Im_z
 
