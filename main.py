@@ -109,7 +109,7 @@ class VMC(object):
 
 	def _create_NN(self, load_data=False):
 
-		N_neurons=4
+		N_neurons=2
 		shapes=([N_neurons,self.L**2], )
 		
 		### Neural network
