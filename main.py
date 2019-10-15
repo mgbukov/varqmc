@@ -3,7 +3,8 @@ import sys,os
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
-quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
+#quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
+quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
 sys.path.insert(0,quspin_path)
 
 
@@ -41,21 +42,6 @@ np.set_printoptions(threshold=np.inf)
 
 
 
-def reshape_to_gradient_format(gradient,NN_dims,NN_shapes):
-	NN_params=[]
-	Ndims=np.insert(np.cumsum(NN_dims), 0, 0)
-	# loop over network architecture
-	for j in range(NN_dims.shape[0]): 
-		NN_params.append( gradient[Ndims[j]:Ndims[j+1]].reshape(NN_shapes[j]) )
-		
-	return NN_params
-	
-
-def reshape_from_gradient_format(NN_params,NN_dims,NN_shapes):
-	return jnp.concatenate([params.ravel() for params in NN_params])
-
-
-
 
 
 class VMC(object):
@@ -67,9 +53,9 @@ class VMC(object):
 
 
 		self.L=4 # system size
-		self.mode='MC'  #'exact' 
+		self.mode='exact'  #'MC'  #
 		self.optimizer='RK' # 'NG' #'adam' # 
-		self.NN_type='CNN' #'DNN' # 
+		self.NN_type='DNN' # 'CNN' #
 		 
 
 		self.save=False # True #
@@ -80,8 +66,8 @@ class VMC(object):
 		self.N_epochs=5 #500 
 
 		### MC sampler
-		self.N_MC_points=100 #107 #10000 #
-		self.N_MC_chains = 8 # number of MC chains to run in parallel
+		self.N_MC_points=107 #10000 #
+		self.N_MC_chains = 1 # number of MC chains to run in parallel
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
 
 
@@ -123,12 +109,11 @@ class VMC(object):
 
 	def _create_NN(self, load_data=False):
 
-		N_neurons=2
+		N_neurons=4
 		shapes=([N_neurons,self.L**2], )
 		
 		### Neural network
 		self.DNN=Neural_Net(shapes, self.N_MC_chains, self.NN_type)
-
 		
 		if load_data:
 			#print('exiting...')
@@ -182,15 +167,28 @@ class VMC(object):
 
 
 			# CNN
-			NN_params=[
-							jnp.array([ [0.021258599215,-0.0764654369726   ],
-							  			[0.00182637347543,-0.00525690483403]
-										]).reshape(1, 1, 2, 2),
+			NN_params=[ ( 
+						    (	jnp.array([ [0.021258599215,-0.0764654369726   ],
+							 	 			[0.00182637347543,-0.00525690483403]
+											]).reshape(1, 1, 2, 2),
+						    ),
 
-							jnp.array(
-										[ [-0.0823963887505,-0.0628942940286],
-										  [-0.00695127347814,0.0481080176332]
-										]).reshape(1, 1, 2, 2)
+							(   jnp.array(
+											[ [-0.0823963887505,-0.0628942940286],
+											  [-0.00695127347814,0.0481080176332]
+											]).reshape(1, 1, 2, 2),
+							),
+						),
+
+
+							# jnp.array([ [0.000980873958246, -0.0169162330746],
+							#   			[0.00585653048371, -0.0478208906869]
+							# 			]).reshape(1, 1, 2, 2),
+
+							# jnp.array(
+							# 			[ [-0.00692652171121, -0.0106888594278],
+							# 			  [0.0138074306434, 0.0548194907154]
+							# 			]).reshape(1, 1, 2, 2),
 						]
 
 
@@ -225,17 +223,24 @@ class VMC(object):
 			# dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0,) )(NN_params,batch, )
 			# dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
 			
-			N_MC_points=dlog_psi_s[0].shape[0]
-						
-			return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
+			
+			N_MC_points=batch.shape[0]
+
+			dlog_psi = []
+			for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
+				for (dlog_psi_vals,dphase_psi_vals) in zip(dlog_psi_layer,dphase_psi_layer): # cpx vs real network
+					for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_vals,dphase_psi_vals): # W, b
+						dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(N_MC_points,-1) )
+
+			return jnp.concatenate(dlog_psi, axis=1 )
+			#return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
 
 
 
 		### self.optimizer params
 		# initiaize natural gradient class
 			
-		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.DNN.N_varl_params,compute_grad_log_psi,
-									reshape_to_gradient_format, reshape_from_gradient_format, self.DNN.dims, self.DNN.shapes)
+		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.DNN.N_varl_params,compute_grad_log_psi, self.DNN.Reshape )
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
@@ -301,7 +306,7 @@ class VMC(object):
 							  L=self.L,
 							  J2=self.E_est.J2,
 							  opt=self.optimizer,
-							  NNstrct=tuple(tuple(shape) for shape in self.DNN.shapes),
+							  NNstrct=tuple(tuple(shape) for shape in self.DNN.Reshape.shapes),
 							  epochs=self.N_epochs,
 							  MCpts=self.N_MC_points,
 							  
@@ -465,7 +470,9 @@ class VMC(object):
 
 				#grads=self.compute_grad(self.NN_params,batch,self.params_dict)
 				grads=self.compute_grad(self.DNN.params,batch,self.params_dict)
-				loss=[jnp.max([jnp.max(grads[j]) for j in range(self.DNN.shapes.shape[0])]).block_until_ready(),0.0]
+				
+				#loss=[np.max([np.max(grads[j]) for j in range(self.DNN.shapes.shape[0])]),0.0]
+				loss=[np.max(grads),0.0]
 
 
 			##### apply gradients

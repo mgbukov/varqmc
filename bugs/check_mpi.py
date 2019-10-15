@@ -47,8 +47,8 @@ z_loc=np.zeros_like(x_loc)
 # for i in range(x_loc.shape[0]):
 # 	z_loc[i]=x_loc[i]*y_loc[i]
 
-for _ in range(400):
-	z_loc[:]=x_loc*y_loc
+#for _ in range(400):
+z_loc[:]=x_loc*y_loc
 
 #tf = time.time()
 ###

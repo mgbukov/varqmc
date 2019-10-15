@@ -102,6 +102,9 @@ class MC_sampler():
 
 		log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_MC_points,self.N_symm,self.N_sites))
 		
+		#print(log_psi)
+		#exit()
+
 		self.log_psi_shift=log_psi[0]._value
 		self.mod_kets[:] = jnp.exp((log_psi-self.log_psi_shift)).block_until_ready()#._value
 		#self.mod_kets = np.exp(log_psi._value)

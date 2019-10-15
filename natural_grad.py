@@ -14,9 +14,8 @@ from scipy.linalg import eigh,eig
 
 class natural_gradient():
 
-	def __init__(self,comm,N_MC_points,N_batch,N_varl_params,compute_grad_log_psi,
-				 reshape_to_gradient_format,reshape_from_gradient_format,NN_dims, NN_shapes):
-
+	def __init__(self,comm,N_MC_points,N_batch,N_varl_params,compute_grad_log_psi, Reshape):
+				 
 		self.comm=comm
 
 		dtype = np.float64
@@ -26,10 +25,7 @@ class natural_gradient():
 		self.N_varl_params=N_varl_params
 		self.compute_grad_log_psi=compute_grad_log_psi
 
-		self.reshape_from_gradient_format=reshape_from_gradient_format
-		self.reshape_to_gradient_format=reshape_to_gradient_format
-		self.NN_dims=NN_dims
-		self.NN_shapes=NN_shapes
+		self.Reshape=Reshape
 
 		# preallocate memory
 		
@@ -97,7 +93,7 @@ class natural_gradient():
 		if np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm ) > 1E-14: # and np.linalg.norm(self.Fisher-self.Fisher.T.conj()) > 1E-14:
 		
 			print('F : {:.20f}'.format(np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm )) )
-			print('OO: {:.20f}'.format(np.linalg.norm( (self.OO_expt._value-self.OO_expt._value.T.conj())/np.linalg.norm(self.OO_expt) )) )
+			print('OO: {:.20f}'.format(np.linalg.norm( (self.OO_expt-self.OO_expt.T.conj())/np.linalg.norm(self.OO_expt) )) )
 			print('O2: {:.20f}'.format(np.linalg.norm( (O_expt2._value-O_expt2._value.T.conj())/np.linalg.norm(O_expt2) )) )
 			print('non-hermitian fisher matrix')
 			
@@ -181,7 +177,7 @@ class natural_gradient():
 			self.nat_grad /= jnp.sqrt(jnp.dot(self.grad.conj(),self.nat_grad).real).block_until_ready()
 		
 			
-			return self.reshape_to_gradient_format(self.nat_grad, self.NN_dims, self.NN_shapes)
+			return self.Reshape.to_gradient_format(self.nat_grad,)
 		else:
 			return self.nat_grad
 		
@@ -236,7 +232,7 @@ class natural_gradient():
 	def Runge_Kutta(self,NN_params,batch,params_dict,mode,get_training_data):
 
 		# flatten weights
-		params=self.reshape_from_gradient_format(NN_params,self.NN_dims,self.NN_shapes)
+		params=self.Reshape.from_gradient_format(NN_params,)
 		
 		max_param=jnp.max(jnp.abs(params)).block_until_ready()
 		#max_param=jnp.max(np.abs(params[:32]+1j*params[32:]))
@@ -253,7 +249,7 @@ class natural_gradient():
 			self.k1[:]=-self.RK_step_size*initial_grad
 			
 			### RK step 2
-			NN_params_shifted=self.reshape_to_gradient_format(params+self.k1,self.NN_dims,self.NN_shapes)
+			NN_params_shifted=self.Reshape.to_gradient_format(params+self.k1)
 			batch, params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k1/self.RK_step_size
 			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
@@ -265,7 +261,7 @@ class natural_gradient():
 			self.k3[:]=-0.5*self.RK_step_size*initial_grad # 0.5*k1
 			
 			### RK step 2
-			NN_params_shifted=self.reshape_to_gradient_format(params+self.k3,self.NN_dims,self.NN_shapes)
+			NN_params_shifted=self.Reshape.to_gradient_format(params+self.k3)
 			batch, params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k3/(0.5*self.RK_step_size)
 			self.k4[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
@@ -274,13 +270,13 @@ class natural_gradient():
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
 			
 			### RK step 1
-			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star,self.NN_dims,self.NN_shapes)
+			NN_params_shifted=self.Reshape.to_gradient_format(params+self.dy_star)
 			batch, params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k4/(0.5*self.RK_step_size)
 			self.k5[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
 
 			### RK step 2
-			NN_params_shifted=self.reshape_to_gradient_format(params+self.dy_star+self.k5,self.NN_dims,self.NN_shapes)
+			NN_params_shifted=self.Reshape.to_gradient_format(params+self.dy_star+self.k5)
 			batch, params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k5/(0.5*self.RK_step_size)
 			self.k6[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
@@ -313,5 +309,5 @@ class natural_gradient():
 		
 		print('steps={0:d}-step_size={1:0.12f}-time={2:0.4f}-delta={3:0.10f}-RK_grad_norm-{4:0.12f}-cg_tol-{5:0.12f}'.format(self.counter, self.RK_step_size, self.RK_time, self.delta, self.RK_step_size*np.linalg.norm(params + self.dy), self.tol) )
 	
-		return self.reshape_to_gradient_format(params + self.dy_star - 1.0/6.0*(self.dy-self.dy_star), self.NN_dims, self.NN_shapes)
+		return self.Reshape.to_gradient_format(params + self.dy_star - 1.0/6.0*(self.dy-self.dy_star), )
 

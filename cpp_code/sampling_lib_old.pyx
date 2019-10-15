@@ -29,9 +29,7 @@ np.random.RandomState(seed)
 rng = random.PRNGKey(seed)
 
 
-from DNN_architectures_cpx import *
-from reshape_class import Reshape
-from functools import partial   
+from DNN_architectures import *
 
 
 
@@ -172,21 +170,16 @@ def c_offdiag_sum(
 ###########################
 
 
-
-
-
-
-
 @cython.boundscheck(False)
 cdef class Neural_Net:
 
-    cdef object Reshape
     cdef object apply_layer
     cdef object W_real, W_imag
     cdef object params
     cdef object input_shape, reduce_shape, output_shape, out_chan, strides, filter_shape 
-    cdef object NN_type, NN_dtype
+    cdef object NN_type
 
+    cdef np.ndarray shapes, dims 
     cdef int N_varl_params, N_symm, N_sites
 
     cdef object evaluate_phase, evaluate_log
@@ -198,7 +191,7 @@ cdef class Neural_Net:
     
     cdef vector[np.uint16_t] sites
 
-    cdef int N_MC_chains, N_spinconfigelmts, N_layers
+    cdef int N_MC_chains, N_spinconfigelmts
 
     cdef vector[unsigned int] thread_seeds
 
@@ -226,75 +219,50 @@ cdef class Neural_Net:
 
         if NN_type=='DNN':
             self.N_symm=L*L*2*2*2 # no Z symmetry
-          
+            init_params, self.apply_layer = GeneralDeep(W_shape, ignore_b=True)
+            input_shape=None
 
-            #W_shape_1=(4,self.N_sites)
-            W_shape_2=(2,4)
-
-            input_shape=(1,self.N_sites)
-           
-
-            # define DNN
-            init_params, self.apply_layer = serial(
-                                                    GeneralDeep_cpx(W_shape, ignore_b=True), #LogCosh_cpx,
-                                                #    GeneralDeep_cpx(W_shape_2, ignore_b=False), #LogCosh_cpx,     
-                                                )
-            
-            output_shape, self.params = init_params(rng,input_shape)
-
-            
             # tuple to reshape output before symmetrization
             self.input_shape = (-1,self.N_sites)
-            self.reduce_shape = (-1,self.N_symm,output_shape[1]) 
-            self.output_shape = (-1,) + output_shape[1:]
-           
-
-            self.Reshape = Reshape(self.params)
-            self.N_varl_params=self.Reshape.dims.sum() 
-
-
+            self.reduce_shape = (-1,self.N_symm,W_shape[0]) 
+            self.output_shape = (-1,W_shape[0]) 
 
         elif NN_type=='CNN':
-            
             self.N_symm=2*2*2 # no Z, Tx, Ty symmetry
 
             dimension_numbers=('NCHW', 'OIHW', 'NCHW') # default
-            out_chan=1
-            filter_shape=(2,2)
-            strides=(1,1)
+            self.out_chan=1
+            self.filter_shape=(2,2)
+            self.strides=(1,1)
 
             input_shape=np.array((1,1,L,L),dtype=np.int) # NCHW input format
-            
-            # define DNN
-            init_value_W = 1E-3
-            init_value_b = 1E-1
-            W_init = partial(random.uniform, minval=-init_value_W, maxval=+init_value_W )
-            b_init = partial(random.uniform, minval=-init_value_b, maxval=+init_value_b )
+            # add padding dimensions
+            input_shape+=np.array((0,0)+self.strides)
 
-            init_params, self.apply_layer = serial(
-                                                    GeneralConv_cpx(dimension_numbers, out_chan, filter_shape, strides=strides, padding='PERIODIC', ignore_b=True, W_init=W_init, b_init=b_init), 
-                                                #   LogCosh_cpx,
-                                                #   GeneralConv_cpx(dimension_numbers, out_chan, filter_shape, strides=strides, padding='PERIODIC', ignore_b=False, W_init=W_init, b_init=b_init), 
-                                                #   LogCosh_cpx,     
-                                                )
-            
-            output_shape, self.params = init_params(rng,input_shape)
-
-            
+            init_params, self.apply_layer = GeneralConv(dimension_numbers, self.out_chan, self.filter_shape, strides=self.strides, padding='VALID', ignore_b=True)
+                
             # tuple to reshape output before symmetrization
             self.input_shape = (-1,1,L,L)
-            self.reduce_shape = (-1,self.N_symm,out_chan,L,L)
-            self.output_shape = (-1,out_chan*L*L)
-           
-
-            self.Reshape = Reshape(self.params)
-            self.N_varl_params=self.Reshape.dims.sum() 
-
-
+            self.reduce_shape = (-1,self.N_symm,self.out_chan,L,L)
+            self.output_shape = (-1,self.out_chan*L*L)
         else:
             raise ValueError("unsupported string for variable NN_type.") 
         
- 
+
+        # initialize parameters
+        W_real, = init_params(rng,input_shape)[1]
+        W_imag, = init_params(rng,input_shape)[1]
+
+        # W_real2, = init_params(rng,input_shape)[1]
+        # W_imag2, = init_params(rng,input_shape)[1]
+
+        self.params=[W_real, W_imag, ]
+        #self.params=[W_real, W_imag, W_real2, W_imag2, ]
+
+
+        self.shapes=np.array([W.shape for W in self.params])
+        self.dims=np.array([np.prod(shape) for shape in self.shapes])
+        self.N_varl_params=self.dims.sum()
 
         
 
@@ -355,10 +323,14 @@ cdef class Neural_Net:
         def __get__(self):
             return self.NN_type
 
-    property Reshape:
+    property shapes:
         def __get__(self):
-            return self.Reshape
-    
+            return self.shapes
+
+    property dims:
+        def __get__(self):
+            return self.dims
+
     property N_varl_params:
         def __get__(self):
             return self.N_varl_params 
@@ -382,6 +354,20 @@ cdef class Neural_Net:
         self.params=params
 
 
+
+    @cython.boundscheck(False)
+    def complex_inputlayer(self, params, batch):
+        # apply dense layer
+        Re_Ws = self.apply_layer(params[0], batch)
+        Im_Ws = self.apply_layer(params[1], batch)
+        return Re_Ws, Im_Ws
+
+    @cython.boundscheck(False)
+    def complex_deeplayer(self, params, Re_z, Im_z):
+        # apply dense layer
+        Re_Ws = self.apply_layer(params[0], Re_z) - self.apply_layer(params[1], Im_z)
+        Im_Ws = self.apply_layer(params[1], Re_z) + self.apply_layer(params[0], Im_z)
+        return Re_Ws, Im_Ws
         
 
     
@@ -392,9 +378,15 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
         # apply logcosh nonlinearity
-        Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_deeplayer(params[2:4],Re_z,Im_z)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
 
         # symmetrize
         log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -413,10 +405,21 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
         # apply logcosh nonlinearity
-        Re_z = logcosh_real((Re_Ws, Im_Ws))
+        Re_z = logcosh_real(Re_Ws, Im_Ws)
 
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_deeplayer(params[2:4],Re_z,Im_z)
+        # # apply logcosh nonlinearity
+        # Re_z = logcosh_real(Re_Ws, Im_Ws) 
+        
 
         # symmetrize
         log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -433,9 +436,20 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
         # apply logcosh nonlinearity
-        Im_z = logcosh_imag((Re_Ws, Im_Ws))
+        Im_z = logcosh_imag(Re_Ws, Im_Ws)
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_deeplayer(params[2:4],Re_z,Im_z)
+        # # apply logcosh nonlinearity
+        # Im_z = logcosh_imag(Re_Ws, Im_Ws)  
  
 
         # symmetrize
