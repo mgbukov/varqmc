@@ -205,7 +205,7 @@ cdef class Neural_Net:
     cdef func_type spin_config
         
 
-    def __init__(self,shapes,N_MC_chains,NN_type='DNN',seed=0):
+    def __init__(self,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
 
         W_shape=shapes[0]
         self.N_sites=L*L
@@ -214,15 +214,16 @@ cdef class Neural_Net:
         srand(seed)
 
         # order important
-        self._init_NN(W_shape,NN_type)
+        self._init_NN(W_shape,NN_type,NN_dtype)
         self._init_evaluate()
         self._init_variables(N_MC_chains)
 
     
 
-    def _init_NN(self,W_shape,NN_type):
+    def _init_NN(self,W_shape,NN_type,NN_dtype):
 
         self.NN_type=NN_type
+        self.NN_dtype=NN_dtype
 
         if NN_type=='DNN':
             self.N_symm=L*L*2*2*2 # no Z symmetry

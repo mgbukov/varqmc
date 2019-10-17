@@ -60,7 +60,10 @@ class MC_sampler():
 
 	def Allgather(self):
 
-		self.comm.Allgather([self.spinstates_ket,  MPI.INT], [self.spinstates_ket_tot, MPI.INT])
+		self.mod_kets_tot*=0.0
+
+		#self.comm.Barrier()
+		self.comm.Allgather([self.spinstates_ket,  MPI.DOUBLE], [self.spinstates_ket_tot, MPI.DOUBLE])
 		self.comm.Allgather([self.mod_kets,  MPI.DOUBLE], [self.mod_kets_tot, MPI.DOUBLE])
 		self.comm.Allgather([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_tot, MPI.DOUBLE])
 
@@ -86,8 +89,7 @@ class MC_sampler():
 
 		self.log_psi_shift=0.0 #log_psi[0]
 		
-		#print("cpp sampling took {0:.4f} sec with acceptance ratio {1:.4f}".format(time.time()-ti, N_accepted/self.N_MC_points))
-
+		return N_accepted
 
 	def GS_data(self,ints_ket):
 

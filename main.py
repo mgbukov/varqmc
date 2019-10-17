@@ -46,27 +46,28 @@ np.set_printoptions(threshold=np.inf)
 
 class VMC(object):
 
-	def __init__(self):
+	def __init__(self,start=0):
 
 		# initialize communicator
 		self.comm=MPI.COMM_WORLD
 
 
 		self.L=4 # system size
-		self.mode='exact'  #'MC'  #
-		self.optimizer='RK' # 'NG' #'adam' # 
+		self.mode='MC'  #'exact'  #
+		self.optimizer='NG' #'adam' #  'RK' # 
 		self.NN_type='DNN' # 'CNN' #
+		self.NN_dtype='cpx' # 'real' #
 		 
 
-		self.save=False # True #
-		load_data=False # True # 
-		self.plot_data=False #True # 
+		self.save_data=False # True # 
+		self.load_data=False # True # 
+		self.plot_data=False # True # 
 		
 		# training params
-		self.N_epochs=5 #500 
+		self.N_epochs=5 #200 
 
 		### MC sampler
-		self.N_MC_points=107 #10000 #
+		self.N_MC_points=100 #107 #10000 #
 		self.N_MC_chains = 1 # number of MC chains to run in parallel
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
 
@@ -78,14 +79,15 @@ class VMC(object):
 				print('only one core allowed for "exact" simulation')
 				exit()
 		else:
-			if self.N_MC_points//self.N_MC_chains != self.N_MC_points/self.N_MC_chains:
+			self.N_batch=self.N_MC_points//self.comm.Get_size()
+			if self.N_batch//self.N_MC_chains != self.N_batch/self.N_MC_chains:
 				print('number of MC chains incompatible with the total number of points.')
 				exit()
-			self.N_batch=self.N_MC_points//self.comm.Get_size()
+			
 
 		
-		if load_data:
-			model_params=dict(model='RBMcpx',
+		if self.load_data:
+			model_params=dict(model=self.NN_type+self.NN_dtype,
 							  mode=self.mode,
 							  L=self.L,
 							  J2=0.5,
@@ -96,13 +98,20 @@ class VMC(object):
 							)
 			self._create_data_obj(model_params)
 		
-		self._create_NN(load_data=load_data)
+		self._create_NN(load_data=self.load_data)
 		self._create_optimizer()
 		self._create_energy_estimator()
 		self._create_MC_sampler()
 
-		if not load_data:
+		if not self.load_data:
 			self._create_data_obj()
+
+		# create log file and directory
+		self._create_logs()
+
+
+		# train net
+		self.train(start)
 		
 		
 
@@ -113,11 +122,9 @@ class VMC(object):
 		shapes=([N_neurons,self.L**2], )
 		
 		### Neural network
-		self.DNN=Neural_Net(shapes, self.N_MC_chains, self.NN_type)
+		self.DNN=Neural_Net(shapes, self.N_MC_chains, self.NN_type, self.NN_dtype)
 		
 		if load_data:
-			#print('exiting...')
-			#exit()
 
 			'''
 			NN_params=jnp.array(
@@ -166,32 +173,32 @@ class VMC(object):
 			# NN_params=[W for W in self.NN_params]
 
 
-			# CNN
-			NN_params=[ ( 
-						    (	jnp.array([ [0.021258599215,-0.0764654369726   ],
-							 	 			[0.00182637347543,-0.00525690483403]
-											]).reshape(1, 1, 2, 2),
-						    ),
+			# # CNN
+			# NN_params=[ ( 
+			# 			    (	jnp.array([ [0.021258599215,-0.0764654369726   ],
+			# 				 	 			[0.00182637347543,-0.00525690483403]
+			# 								]).reshape(1, 1, 2, 2),
+			# 			    ),
 
-							(   jnp.array(
-											[ [-0.0823963887505,-0.0628942940286],
-											  [-0.00695127347814,0.0481080176332]
-											]).reshape(1, 1, 2, 2),
-							),
-						),
-
-
-							# jnp.array([ [0.000980873958246, -0.0169162330746],
-							#   			[0.00585653048371, -0.0478208906869]
-							# 			]).reshape(1, 1, 2, 2),
-
-							# jnp.array(
-							# 			[ [-0.00692652171121, -0.0106888594278],
-							# 			  [0.0138074306434, 0.0548194907154]
-							# 			]).reshape(1, 1, 2, 2),
-						]
+			# 				(   jnp.array(
+			# 								[ [-0.0823963887505,-0.0628942940286],
+			# 								  [-0.00695127347814,0.0481080176332]
+			# 								]).reshape(1, 1, 2, 2),
+			# 				),
+			# 			),
 
 
+			# 				# jnp.array([ [0.000980873958246, -0.0169162330746],
+			# 				#   			[0.00585653048371, -0.0478208906869]
+			# 				# 			]).reshape(1, 1, 2, 2),
+
+			# 				# jnp.array(
+			# 				# 			[ [-0.00692652171121, -0.0106888594278],
+			# 				# 			  [0.0138074306434, 0.0548194907154]
+			# 				# 			]).reshape(1, 1, 2, 2),
+			# 			]
+
+			NN_params=self.data_structure.load_weights()
 			self.DNN.update_params(NN_params)
 		
 
@@ -301,7 +308,7 @@ class VMC(object):
 	def _create_data_obj(self,model_params=None):
 		### initialize data class
 		if model_params is None:
-			self.model_params=dict(model='RBMcpx',
+			self.model_params=dict(model=self.NN_type+self.NN_dtype,
 							  mode=self.mode,
 							  L=self.L,
 							  J2=self.E_est.J2,
@@ -315,13 +322,39 @@ class VMC(object):
 			self.model_params=model_params
 
 		extra_label=''#'-unique_configs'
-		self.data_structure=data(self.model_params,self.N_MC_points,self.N_epochs,extra_label=extra_label)
+		self.data_structure=data(os.getcwd(),self.model_params,self.N_MC_points,self.N_epochs,extra_label=extra_label)
 
 
+	def _create_logs(self):
 
-	def train(self):
+		self.logfile_dir=os.getcwd()+'/log_files/'
+		if not os.path.exists(self.logfile_dir):
+		    os.makedirs(self.logfile_dir)
+		
+		# logfile name
+		self.logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.data_structure.file_name + '.txt'
+
+
+	def train(self, start=0):
+
+		# set timer
+		t_start=time.time()
+
+		
+		# open log_file
+		if os.path.exists(self.logfile_dir+self.logfile_name):
+			if self.load_data:
+			    append_write = 'a' # append if already exists
+			else:
+				append_write = 'w' # make a new file if not
+		else:
+			append_write = 'w+' # append if already exists
+
+		logfile = open(self.logfile_dir+self.logfile_name, append_write)
+		
+
+
 		if self.mode=='exact':
-
 
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_est.get_exact_kets()
 			#exit()
@@ -329,15 +362,20 @@ class VMC(object):
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.DNN.NN_type)
 
 
-		for epoch in range(self.N_epochs): 
+		for epoch in range(start,self.N_epochs, 1): 
 
 			
+			#self.comm.Barrier()
 			ti=time.time()
+
+			logfile.write("epoch {0:d}, process_rank {1:d}:\n".format(epoch, self.comm.Get_rank()))
+
 
 			##### evaluate model
 			self.get_training_data(self.DNN.params)
 			self.get_Stot_data(self.DNN.params)
 
+			#logfile.write("Elocal took {0:.4f} secs.\n".format(time.time()-ti))
 
 			##### check c++ and python DNN evaluation
 			if epoch==0:
@@ -346,29 +384,42 @@ class VMC(object):
 				if self.mode=='exact':
 					np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_est.H.expt_value(self.psi[self.inv_index]))
 
+				# if self.comm.Get_rank()==0:
+				# 	print('NN consistency check passed!\n')
+
+				# logfile.write('\nNN consistency check passed!\n\n') 
+
+
+			if self.mode is 'MC':
+				logfile.write("MC acceptance ratio={0:.4f}: took {0:.4f} secs.\n".format(self.acceptance_ratio,time.time()-ti))
 				if self.comm.Get_rank()==0:
-					print('cpp/python consistency check passed!\n')
+					print("MC acceptance ratio={0:.4f}: took {0:.4f} secs.\n".format(self.acceptance_ratio,time.time()-ti))
+				
 
 			#####		
 			if self.comm.Get_rank()==0:
 				print("epoch {0:d}:".format(epoch))
 				print("E={0:0.14f} and SS={1:0.14f}.".format(self.Eloc_mean_g.real, self.SdotSloc_mean.real ), self.E_MC_std 	)
-				if self.mode=='exact':
-					print('overlap', self.params_dict['overlap'] )
+				
+			logfile.write("E={0:0.14f}, E_std={1:0.14f}, and SS={1:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std, self.SdotSloc_mean.real ) 	)
+
+			if self.mode=='exact':
+				# print('overlap', self.params_dict['overlap'] )
+				logfile.write('overlap = {0:0.4f}.\n\n'.format(self.params_dict['overlap']) )
 
 			#exit()
 
 			##### combine results from all cores
 			self.MC_tool.Allgather()	
-
-
 			#### update model parameters
 			if epoch<self.N_epochs-1:
 				loss, r2 = self.update_NN_params(epoch)
 
 
-			print("process_rank {0:d} calculation took {1:0.4f}secs.\n".format(self.comm.Get_rank(),time.time()-ti) )
-
+			logfile.write("iteration {0:d}: calculation took {1:0.4f} secs.\n\n".format(epoch, time.time()-ti) )
+			print("iteration {0:d}, process_rank {1:d} calculation took {2:0.4f}secs.\n".format(epoch, self.comm.Get_rank(),time.time()-ti) )
+			logfile.flush()
+			os.fsync(logfile.fileno())
 
 			##### store data
 			if self.comm.Get_rank()==0:
@@ -383,12 +434,10 @@ class VMC(object):
 
 
 
-		if self.comm.Get_rank()==0:
 
-	
+		if self.comm.Get_rank()==0:
 			# save data
-			if self.save:
-				#self.data_structure.save(NN_params=self.NN_params)
+			if self.save_data:
 				self.data_structure.save(NN_params=self.DNN.params)
 				
 			# plot data
@@ -396,7 +445,13 @@ class VMC(object):
 				self.data_structure.compute_phase_hist()
 				self.data_structure.plot(save=0)
 
-	
+		
+		print('\nprocess_rank {0:d}, total calculation time: {1:0.4f} secs.\n'.format(self.comm.Get_rank(),time.time()-t_start))
+
+		logfile.write('\nprocess_rank {0:d}, total calculation time: {1:0.4f} secs.\n'.format(self.comm.Get_rank(),time.time()-t_start) )
+		logfile.close()
+
+		
 
 	def get_training_data(self,NN_params):
 
@@ -404,7 +459,8 @@ class VMC(object):
 		if self.mode=='exact':
 			self.MC_tool.exact(NN_params, evaluate_NN=self.evaluate_NN)
 		elif self.mode=='MC':
-			self.MC_tool.sample(self.DNN)
+			N_accepted=self.MC_tool.sample(self.DNN)
+			self.acceptance_ratio=N_accepted/self.N_batch
 
 
 		##### compute local energies #####
@@ -425,11 +481,16 @@ class VMC(object):
 		self.Eloc_mean_g, self.Eloc_var_g, E_diff_real, E_diff_imag = self.E_est.process_local_energies(mode=self.mode,params_dict=self.params_dict)
 		self.Eloc_std=np.sqrt(self.Eloc_var_g)
 		self.E_MC_std=self.Eloc_std/np.sqrt(self.N_MC_points)
-		self.params_dict['E_diff']=E_diff_real+1j*E_diff_imag
+		if self.optimizer=='adam':
+			# gather all processes
+			self.comm.Allgather([E_diff_real,  MPI.DOUBLE], [self.E_est.E_diff_real_tot, MPI.DOUBLE])
+			self.comm.Allgather([E_diff_imag,  MPI.DOUBLE], [self.E_est.E_diff_imag_tot, MPI.DOUBLE])
+			#
+			self.params_dict['E_diff']=self.E_est.E_diff_real_tot+1j*self.E_est.E_diff_imag_tot
+		else:
+			self.params_dict['E_diff']=E_diff_real+1j*E_diff_imag
 		self.params_dict['Eloc_mean']=self.Eloc_mean_g
 		self.params_dict['Eloc_var']=self.Eloc_var_g
-
-
 
 
 		##### total batch
@@ -488,8 +549,10 @@ class VMC(object):
 
 
 
+
+
 DNN_psi=VMC()
-DNN_psi.train()
+
 
 
 

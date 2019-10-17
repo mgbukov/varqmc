@@ -1,0 +1,27 @@
+epoch 0, process_rank 0:
+MC acceptance ratio=0.9825: took 0.9825 secs.
+E=-4.68170040555852, E_std=0.08920232125661, and SS=0.08920232125661.
+iteration 0: calculation took 4.1949 secs.
+
+epoch 1, process_rank 0:
+MC acceptance ratio=0.9900: took 0.9900 secs.
+E=-4.80241978047552, E_std=0.09015785633172, and SS=0.09015785633172.
+iteration 1: calculation took 1.8064 secs.
+
+epoch 2, process_rank 0:
+MC acceptance ratio=0.9788: took 0.9788 secs.
+E=-5.33995184465335, E_std=0.08331684905112, and SS=0.08331684905112.
+iteration 2: calculation took 1.8100 secs.
+
+epoch 3, process_rank 0:
+MC acceptance ratio=0.9712: took 0.9712 secs.
+E=-5.33341259846598, E_std=0.09474974340070, and SS=0.09474974340070.
+iteration 3: calculation took 1.9669 secs.
+
+epoch 4, process_rank 0:
+MC acceptance ratio=0.9550: took 0.9550 secs.
+E=-5.24462033574695, E_std=0.09109520082088, and SS=0.09109520082088.
+iteration 4: calculation took 2.0550 secs.
+
+
+process_rank 0, total calculation time: 11.8361 secs.

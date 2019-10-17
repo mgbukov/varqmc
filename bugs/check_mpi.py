@@ -11,7 +11,7 @@ np.random.seed(seed)
 
 #########################################
 
-N=4000000
+N=10000000
 
 
 x=np.random.uniform(size=N)
