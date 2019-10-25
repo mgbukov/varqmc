@@ -10,6 +10,7 @@ using namespace std;
 #include <unordered_map>
 //#include <mpi.h>
 #include <omp.h>
+#include <stdlib.h>     /* srand, rand */
 
 
 
@@ -87,9 +88,42 @@ inline T swap_bits(const T b,int i,int j)
 }
 
 
+inline int choose_n_k(int n, int k) {
+    double res = 1;
+    for (int i = 1; i <= k; ++i)
+        res = res * (n - k + i) / i;
+    return (int)(res + 0.01);
+}
+
+
+template<class T>
+inline T magnetized_int(int m, int N, T ordinal)
+{
+	// https://cs.stackexchange.com/questions/67664/prng-for-generating-numbers-with-n-set-bits-exactly
+
+	T one = 1;
+	
+	//cout << ordinal << endl;
+
+    T s0 = 0; // output integer
+    for (int bit = N; m > 0; --bit)
+    {
+        T nCk = choose_n_k(bit, m);
+        if (ordinal >= nCk)
+        {
+            ordinal -= nCk;
+            s0 |= (one << bit);
+            --m;
+        }
+    }
+    return s0;
+}
+
+
 template<class T>
 inline void _int_to_spinstate(const int N,T state,npy_float64 out[])
-{	npy_float64 n;
+{	
+	//npy_float64 n;
 	T one=1;
 	for(int i=0;i<N;i++){
 		//n=(state / (one<<(N-i-1)) ) % 2;
@@ -406,7 +440,7 @@ void offdiag_sum(int Ns,
 				double Eloc_sin[],
 				npy_uint32 ket_ind[],
 				double MEs[],
-				const double psi_bras[],
+				const double log_psi_bras[],
 				const double phase_psi_bras[]
 	)
 {
@@ -422,8 +456,8 @@ void offdiag_sum(int Ns,
 			
 			//cout << l << " , "<< i << " , "<< n << " , "<<j<< " , " << Eloc_cos[ket_ind[j]] << " , " << ket_ind[j] << " , " << psi_bras[j] << " , " << std::cos(phase_psi_bras[j]) << endl;
 			 
-			Eloc_cos[ket_ind[j]] += MEs[j] * std::exp(psi_bras[j]) * std::cos(phase_psi_bras[j]);
-			Eloc_sin[ket_ind[j]] += MEs[j] * std::exp(psi_bras[j]) * std::sin(phase_psi_bras[j]);
+			Eloc_cos[ket_ind[j]] += MEs[j] * std::exp(log_psi_bras[j]) * std::cos(phase_psi_bras[j]);
+			Eloc_sin[ket_ind[j]] += MEs[j] * std::exp(log_psi_bras[j]) * std::sin(phase_psi_bras[j]);
 		}
 
 		n_cum+=n;

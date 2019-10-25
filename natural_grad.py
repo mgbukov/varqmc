@@ -39,20 +39,22 @@ class natural_gradient():
 		self.O_expt=np.zeros(N_varl_params,dtype=np.complex128)
 		self.OO_expt=np.zeros([N_varl_params,N_varl_params],dtype=np.float64)
 
+		self.E_diff_weighted=np.zeros(self.N_batch,dtype=np.complex128)
+
 		
 		# CG params
 		self.RK_on=False
 		self.tol=1E-7 # CG tolerance
-		self.delta=50.0
+		self.delta=5E-5 #50.0
 		self.epoch=0
 		self.r2_cost=0.0
 		self.max_grads=0.0
 	
 	
-	def compute_fisher_metric(self,mode='MC',params_dict=None):
+	def compute_fisher_metric(self,mode='MC',Eloc_params_dict=None):
 		
 		if mode=='exact':
-			abs_psi_2=params_dict['abs_psi_2']#.copy()
+			abs_psi_2=Eloc_params_dict['abs_psi_2']#.copy()
 
 			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi).block_until_ready() 
 
@@ -71,18 +73,23 @@ class natural_gradient():
 			self.O_expt/=self.N_MC_points
 
 
-
-			self.comm.Allreduce( ( jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real) \
-				                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)   ).block_until_ready()._value, \
-								self.OO_expt, op=MPI.SUM
+			self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
+				                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()    )._value, \
+								self.OO_expt[:], op=MPI.SUM
 								)
+
 			self.OO_expt/=self.N_MC_points
 
 
-		O_expt2=jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()
+		O_expt2 =  jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
+				 + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()
 
 		self.Fisher[:] = (self.OO_expt - O_expt2)#._value		
 		
+
+
+
+		# TESTS
 		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
 
 		#print(self.dlog_psi)
@@ -111,7 +118,7 @@ class natural_gradient():
 		if np.any(E <- 1E-14):
 			print('E ', E)
 			print()
-			print('OO',eigh(self.OO_expt._value/np.linalg.norm(self.OO_expt._value),eigvals_only=True))
+			print('OO',eigh(self.OO_expt/np.linalg.norm(self.OO_expt),eigvals_only=True))
 			print()
 			print('O2',eigh(O_expt2._value/np.linalg.norm(O_expt2._value),eigvals_only=True))
 
@@ -120,41 +127,40 @@ class natural_gradient():
 
 			exit()
 			
-	def compute_gradients(self,mode='MC',params_dict=None):
 
-		E_diff=params_dict['E_diff'].copy()
-				
-	
+
+	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
+
+		self.E_diff_weighted[:]=Eloc_params_dict['E_diff'].copy()
+
 		if mode=='exact':
-			abs_psi_2=params_dict['abs_psi_2'].copy()
-			E_diff*=abs_psi_2
-			self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real).block_until_ready() + jnp.dot(E_diff.imag,self.dlog_psi.imag).block_until_ready()
+			abs_psi_2=Eloc_params_dict['abs_psi_2'].copy()
+			self.E_diff_weighted*=abs_psi_2
+			self.grad[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
+						 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
 
 		elif mode=='MC':
-			# self.grad[:] = jnp.dot(E_diff.real,self.dlog_psi.real)/self.N_MC_points \
-			#              + jnp.dot(E_diff.imag,self.dlog_psi.imag)/self.N_MC_points
+			# self.grad[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real)/self.N_MC_points \
+			#              + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag)/self.N_MC_points
 
-			self.comm.Allreduce((  jnp.dot(E_diff.real,self.dlog_psi.real) \
-			             		 + jnp.dot(E_diff.imag,self.dlog_psi.imag) ).block_until_ready()._value, \
+			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
+			             		 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()   )._value, \
 								self.grad[:], op=MPI.SUM
 								)
 			self.grad/=self.N_MC_points
 
 
-	def _compute_r2_cost(self,params_dict):
-		Eloc_var=params_dict['Eloc_var']
-		return (jnp.dot(self.nat_grad.conj(), jnp.dot(self.Fisher,self.nat_grad)).block_until_ready() - 2.0*jnp.dot(self.grad.conj(),self.nat_grad).block_until_ready().real + Eloc_var )/Eloc_var 
+	def _compute_r2_cost(self,Eloc_params_dict):
+		Eloc_var=Eloc_params_dict['Eloc_var']
+		return (np.dot(self.nat_grad.conj(), np.dot(self.Fisher,self.nat_grad)) - 2.0*np.dot(self.grad.conj(),self.nat_grad).real + Eloc_var )/Eloc_var 
 
 
-	def compute(self,NN_params,batch,params_dict,mode='MC',):
+	def compute(self,NN_params,batch,Eloc_params_dict,mode='MC',):
 		
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
-		
-		self.compute_fisher_metric(params_dict=params_dict,mode=mode)
-		self.compute_gradients(params_dict=params_dict,mode=mode)
 
-		#print(self.grad)
-		
+		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
+		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
 
 		### compute natural_gradients using cg
 		# regularize Fisher metric
@@ -172,10 +178,13 @@ class natural_gradient():
 
 		# normalize gradients
 		if not self.RK_on:
-			self.r2_cost=self._compute_r2_cost(params_dict)
-			self.max_grads=[jnp.max(jnp.abs(self.grad.real)).block_until_ready(), jnp.max(jnp.abs(self.nat_grad.real)).block_until_ready()]
-			self.nat_grad /= jnp.sqrt(jnp.dot(self.grad.conj(),self.nat_grad).real).block_until_ready()
-		
+			self.r2_cost=self._compute_r2_cost(Eloc_params_dict)
+			self.max_grads=[np.max(jnp.abs(self.grad.real)), np.max(jnp.abs(self.nat_grad.real))]
+
+
+			#self.nat_grad /= np.sqrt(jnp.dot(self.grad.conj(),self.nat_grad).real)
+
+
 			
 			return self.Reshape.to_gradient_format(self.nat_grad,)
 		else:
@@ -184,11 +193,13 @@ class natural_gradient():
 
 	def update_params(self,self_time=1.0):
 
-		if self.delta>5E-5:
-			#self.delta *= np.exp(-0.075*self_time)
-			self.delta *= np.exp(-0.075)
-		else:
-			self.delta=0.0
+		self.delta *= np.exp(-0.075*self_time)
+
+		# if self.delta>5E-5:
+		# 	self.delta *= np.exp(-0.075*self_time)
+		# 	#self.delta *= np.exp(-0.075)
+		# else:
+		# 	self.delta=0.0
 
 		# if self.tol>1E-7:
 		# 	 self.tol *= 0.95 #np.exp(-0.05*self_time)
@@ -198,12 +209,6 @@ class natural_gradient():
 		#print('delta={0:0.4f}'.format(self.delta))
 
 		self.epoch+=1
-
-
-
-	def _apply_gradients(self,params,learning_rate):
-
-		return params[0] - learning_rate*self.nat_grads_tuple[0],   params[1] - learning_rate*self.nat_grads_tuple[1]
 
 
 	def init_RK_params(self,learning_rate):
@@ -229,7 +234,7 @@ class natural_gradient():
 
 
 
-	def Runge_Kutta(self,NN_params,batch,params_dict,mode,get_training_data):
+	def Runge_Kutta(self,NN_params,batch,Eloc_params_dict,mode,get_training_data):
 
 		# flatten weights
 		params=self.Reshape.from_gradient_format(NN_params,)
@@ -237,10 +242,10 @@ class natural_gradient():
 		max_param=jnp.max(jnp.abs(params)).block_until_ready()
 		#max_param=jnp.max(np.abs(params[:32]+1j*params[32:]))
 
-		initial_grad=self.compute(NN_params,batch,params_dict,mode=mode)
+		initial_grad=self.compute(NN_params,batch,Eloc_params_dict,mode=mode)
 		# cost and loss
 		self.max_grads=[jnp.max(jnp.abs(self.grad.real)).block_until_ready(), jnp.max(jnp.abs(self.nat_grad.real)).block_until_ready()]	
-		self.r2_cost=self._compute_r2_cost(params_dict)
+		self.r2_cost=self._compute_r2_cost(Eloc_params_dict)
 	
 		error_ratio=0.0
 		while error_ratio<1.0:
@@ -250,9 +255,9 @@ class natural_gradient():
 			
 			### RK step 2
 			NN_params_shifted=self.Reshape.to_gradient_format(params+self.k1)
-			batch, params_dict=get_training_data(NN_params_shifted)
+			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k1/self.RK_step_size
-			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
+			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
 			self.dy[:]=0.5*self.k1 + 0.5*self.k2
 
 
@@ -262,24 +267,24 @@ class natural_gradient():
 			
 			### RK step 2
 			NN_params_shifted=self.Reshape.to_gradient_format(params+self.k3)
-			batch, params_dict=get_training_data(NN_params_shifted)
+			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k3/(0.5*self.RK_step_size)
-			self.k4[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
+			self.k4[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
 
 			# first half-step solution difference
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
 			
 			### RK step 1
 			NN_params_shifted=self.Reshape.to_gradient_format(params+self.dy_star)
-			batch, params_dict=get_training_data(NN_params_shifted)
+			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k4/(0.5*self.RK_step_size)
-			self.k5[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
+			self.k5[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
 
 			### RK step 2
 			NN_params_shifted=self.Reshape.to_gradient_format(params+self.dy_star+self.k5)
-			batch, params_dict=get_training_data(NN_params_shifted)
+			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k5/(0.5*self.RK_step_size)
-			self.k6[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,params_dict,mode=mode)
+			self.k6[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
 
 			# second half-step solution difference
 			self.dy_star[:]+=0.5*self.k5 + 0.5*self.k6
@@ -303,7 +308,7 @@ class natural_gradient():
 
 			
 		# update NG params
-		self.update_params(self.RK_time)
+		self.update_params(self_time=self.RK_time)
 		self.RK_time+=self.RK_step_size
 		
 		

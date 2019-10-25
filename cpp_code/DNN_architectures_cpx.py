@@ -39,11 +39,11 @@ def GeneralDeep_cpx(W_shape, ignore_b=False):
 
     def init_fun(rng,input_shape):
 
-        init_value_W=1E-2 #1E-1
+        init_value_W=1E-3 #1E-1
 
         rng_real, rng_imag = random.split(rng)
         
-        output_shape=(input_shape[0],W_shape[0])
+        output_shape=(input_shape[0],W_shape[1])
 
         W_real = random.uniform(rng_real,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
         W_imag = random.uniform(rng_imag,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
@@ -55,8 +55,8 @@ def GeneralDeep_cpx(W_shape, ignore_b=False):
             rng_real, k1 = random.split(rng_real)
             rng_imag, k2 = random.split(rng_imag)
 
-            b_real = random.uniform(k1,shape=(W_shape[0],), minval=-init_value_b, maxval=+init_value_b)
-            b_imag = random.uniform(k2,shape=(W_shape[0],), minval=-init_value_b, maxval=+init_value_b)
+            b_real = random.uniform(k1,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
+            b_imag = random.uniform(k2,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
             
             params=((W_real,b_real),(W_imag,b_imag))
         
@@ -78,13 +78,13 @@ def GeneralDeep_cpx(W_shape, ignore_b=False):
             inputs_real = inputs
             inputs_imag = None
 
-        z_real = jnp.dot(inputs_real,W_real.T) 
-        z_imag = jnp.dot(inputs_real,W_imag.T)
+        z_real = jnp.dot(inputs_real,W_real) 
+        z_imag = jnp.dot(inputs_real,W_imag)
 
 
         if inputs_imag is not None:
-            z_real -= jnp.dot(inputs_imag,W_imag.T)
-            z_imag += jnp.dot(inputs_imag,W_real.T)
+            z_real -= jnp.dot(inputs_imag,W_imag)
+            z_imag += jnp.dot(inputs_imag,W_real)
 
         if not ignore_b:
             # read-off params

@@ -1,4 +1,4 @@
-MPI, osx: https://stackoverflow.com/questions/54811518/mpi-gather-call-hangs-for-large-ish-arrays
+1. MPI, osx: https://stackoverflow.com/questions/54811518/mpi-gather-call-hangs-for-large-ish-arrays
 
 $ brew unlink open-mpi
 $ brew install mpich
@@ -11,3 +11,9 @@ Then, I had to edit /etc/hosts and add the line
 
 import socket
 print(socket.gethostname()) # mycomputername
+
+
+2. yaml: 
+
+conda install yaml
+pip install pyyaml

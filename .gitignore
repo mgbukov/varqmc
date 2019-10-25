@@ -6,6 +6,8 @@ __pycache__/
 # data
 *.pkl
 *.pdf
+*.txt
+*.dat
 
 # C extensions
 *.so

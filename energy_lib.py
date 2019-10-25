@@ -15,7 +15,7 @@ import jax.numpy as jnp
 
 class Energy_estimator():
 
-	def __init__(self,comm,N_MC_points,N_batch,L,N_symm,NN_type):
+	def __init__(self,comm,J2,N_MC_points,N_batch,L,N_symm,NN_type):
 
 		# MPI commuicator
 		self.comm=comm
@@ -45,7 +45,7 @@ class Energy_estimator():
 
 		###### setting up hamiltonian ######
 		J1=1.0 # spin=spin interaction
-		J2=0.5 # magnetic field strength
+		J2=J2 # magnetic field strength
 		sign=-1.0
 		
 		self.N_sites=N_sites
@@ -258,11 +258,6 @@ class Energy_estimator():
 			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J,self.N_symm,self.NN_type)
 			
 
-			# self._MEs[nn:nn+n]=self._MEs_holder[:n]
-			# self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[:n]
-			# self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[:n]
-			# self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
-
 			self._MEs[nn:nn+n]=self._MEs_holder[self._ints_ket_ind_holder[:n]]
 			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[self._ints_ket_ind_holder[:n]]
 			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[self._ints_ket_ind_holder[:n]]
@@ -301,8 +296,8 @@ class Energy_estimator():
 		# compute real and imaginary part of local energy
 		self._n_per_term=self._n_per_term[self._n_per_term>0]
 		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term,self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras)
-		#c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term[self._n_per_term>0],self._ints_ket_ind[:nn],self._MEs[:nn],psi_bras,phase_psi_bras)
 		
+
 		cos_phase_kets=np.cos(phase_kets)/mod_kets
 		sin_phase_kets=np.sin(phase_kets)/mod_kets
 
@@ -323,7 +318,9 @@ class Energy_estimator():
 
 			self.SdotS_imag=2.0*self.Eloc_imag # double off-diagonal contribution
 
-	def process_local_energies(self,mode='MC',params_dict=None,SdotS=False):
+
+
+	def process_local_energies(self,mode='MC',Eloc_params_dict=None,SdotS=False):
 
 		if SdotS:
 			loc=self.SdotS_real+1j*self.SdotS_imag
@@ -342,6 +339,7 @@ class Energy_estimator():
 
 			self.comm.Allreduce(np.sum(       loc    ), Eloc_mean_g, op=MPI.SUM)
 			Eloc_mean_g/=self.N_MC_points
+
 			
 			self.comm.Allreduce(np.sum(np.abs(loc)**2), Eloc_var_g,  op=MPI.SUM)
 			Eloc_var_g/=self.N_MC_points
@@ -352,7 +350,7 @@ class Energy_estimator():
 
 
 		elif mode=='exact':
-			abs_psi_2=params_dict['abs_psi_2']
+			abs_psi_2=Eloc_params_dict['abs_psi_2']
 			Eloc_mean_g=np.sum(loc*abs_psi_2).real
 			Eloc_var_g=np.sum(abs_psi_2*np.abs(loc)**2) - Eloc_mean_g**2
 			

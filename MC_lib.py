@@ -20,17 +20,33 @@ import time
 
 
 
+
+
 class MC_sampler():
 
-	def __init__(self,comm,build_dict_args=None):
+	def __init__(self,comm, N_MC_chains, build_dict_args=None):
 
 		
 		self.comm=comm
+		self.N_MC_chains=N_MC_chains
 
-		# seed_vec=seed_vec=[3,7,19,117]
-		# self.MC_sampler=cpp_Monte_Carlo()
-		# self.MC_sampler.set_seed(seed_vec[self.comm.Get_rank()])
-		# self.MC_sampler.build_ED_dicts(*build_dict_args)
+		self.N_accepted=np.zeros(1, dtype=np.int)
+		self.N_MC_proposals=np.zeros(1, dtype=np.int)
+		self.acceptance_ratio=np.array([0.4])
+
+
+	def compute_acceptance_ratio(self,N_accepted,N_MC_proposals,mode='MC'):
+
+		if mode=='exact':
+			self.acceptance_ratio[0]=-1.0
+
+		elif mode=='MC':
+			# sum up MC metaata over the MPI processes
+			self.comm.Allreduce(np.array(N_accepted,dtype=np.int), self.N_accepted,  op=MPI.SUM)
+			self.comm.Allreduce(np.array(N_MC_proposals,dtype=np.int), self.N_MC_proposals,  op=MPI.SUM)
+			self.acceptance_ratio[0]=N_accepted/N_MC_proposals 
+
+
 
 	def init_global_vars(self,L,N_MC_points,N_symm,basis_type):
 
@@ -42,7 +58,7 @@ class MC_sampler():
 		
 
 		self.thermalization_time=10*self.N_sites
-		self.auto_correlation_time=self.N_sites
+		#self.auto_correlation_time=self.N_sites  # min(0.05, 0.4/acc_ratio * N_site_
 
 
 	
@@ -55,6 +71,11 @@ class MC_sampler():
 		self.mod_kets_tot=np.zeros((self.comm.Get_size()*N_MC_points,),dtype=np.float64)
 		self.phase_kets_tot=np.zeros((self.comm.Get_size()*N_MC_points,),dtype=np.float64)
 
+		
+		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
+		self.s0_tot=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
+
+
 		self._reset_global_vars()
 		
 
@@ -62,11 +83,14 @@ class MC_sampler():
 
 		self.mod_kets_tot*=0.0
 
-		#self.comm.Barrier()
-		self.comm.Allgather([self.spinstates_ket,  MPI.DOUBLE], [self.spinstates_ket_tot, MPI.DOUBLE])
+		#self.comm.Allgather([self.spinstates_ket,  MPI.DOUBLE], [self.spinstates_ket_tot, MPI.DOUBLE])
 		self.comm.Allgather([self.mod_kets,  MPI.DOUBLE], [self.mod_kets_tot, MPI.DOUBLE])
 		self.comm.Allgather([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_tot, MPI.DOUBLE])
 
+		if self.comm.Get_size()*self.N_MC_chains > 1:
+			self.comm.Allgather([self.s0,  MPI.INT], [self.s0_tot, MPI.INT])
+		else:
+			self.s0_tot=self.s0.copy()
 		
 
 	def _reset_global_vars(self):
@@ -79,24 +103,27 @@ class MC_sampler():
 		self._reset_global_vars()
 		assert(self.spinstates_ket.max()==0)
 		
-		#ti = time.time()
-		N_accepted=DNN.sample(self.N_MC_points,self.thermalization_time,self.auto_correlation_time,
-						self.spinstates_ket,self.ints_ket,self.mod_kets,
-						)
+		N_accepted, N_MC_proposals = DNN.sample(self.N_MC_points,self.thermalization_time,self.acceptance_ratio,
+												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
+												)
+
+		
+		# N_accepted, N_MC_proposals = sample(self.N_MC_points,self.thermalization_time,self.acceptance_ratio,
+		# 									self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
+		# 									DNN)
+
 
 		self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_MC_points*self.N_symm,self.N_sites))#._value
 		
+		self.log_psi_shift=0.0 
 
-		self.log_psi_shift=0.0 #log_psi[0]
+
+		self.compute_acceptance_ratio(N_accepted,N_MC_proposals,mode='MC')
+			
 		
-		return N_accepted
+		return self.acceptance_ratio
 
-	def GS_data(self,ints_ket):
 
-		self.ints_ket=ints_ket
-
-		self.MC_sampler.evaluate_mod_dict(ints_ket, self.mod_kets, self.N_MC_points)
-		self.MC_sampler.evaluate_phase_dict(ints_ket, self.phase_kets, self.N_MC_points)
 
 
 
@@ -112,9 +139,8 @@ class MC_sampler():
 		#self.mod_kets = np.exp(log_psi._value)
 		self.phase_kets[:]= phase_kets#._value
 
+		self.compute_acceptance_ratio(0,0,mode='exact')
 
-	#def MPI_allgather(data_local,N_local,data_all,N_all):
-	#	self.MC_sampler.mpi_allgather(data_local,N_local,data_all,N_all)
 
 
 	def check_consistency(self,evaluate_NN,NN_params):
