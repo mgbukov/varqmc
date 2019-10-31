@@ -1,12 +1,9 @@
 import sys,os
-#os.environ['XLA_FLAGS']='--xla_dump_to=/tmp/CNN_logfiles'
-
 
 from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
-from jax import jit, grad, random, device_put, vmap, ops, partial
-
+from jax import jit, grad, random, vmap
 
 import numpy as np
 from functools import partial
@@ -23,21 +20,16 @@ from jax.nn.initializers import glorot_normal
 import time
 
 ####################################################################
+os.environ['XLA_FLAGS']='--xla_dump_to=/tmp/foo'
 
-
-
-@jit
-def log_cosh(a):
-    return jnp.log(jnp.cosh(a))
 
 
 
 L=4
-dtype=jnp.float64 #jnp.complex128
-N_sites=L*L
+dtype=jnp.float64 
+N_symm=2*2*2 # 
 
 
-N_symm=2*2*2 # no Z, Tx, Ty symemtry
 
 dimension_numbers=('NCHW', 'OIHW', 'NCHW') # default
 out_chan=1
@@ -55,7 +47,7 @@ init_params, apply_layer = GeneralConv(dimension_numbers, out_chan, filter_shape
        
 
 # initialize parameters
-params = init_params(rng,input_shape)[1]
+_,params = init_params(rng,input_shape)
 
 
 
@@ -63,15 +55,15 @@ params = init_params(rng,input_shape)[1]
 @jit
 def evaluate(params, batch):
     # reshaping required inside evaluate func because of per-sample gradients
-    batch=jnp.reshape(batch,(-1,1,L,L))
+    batch=batch.reshape(-1,1,L,L)
 
     # apply dense layer
-    Ws = apply_layer(params, batch)
-    
-    # apply logcosh nonlinearity
-    z = log_cosh(Ws)
-    #z = relu(Ws) 
+    a = apply_layer(params, batch)
 
+    # apply logcosh nonlinearity
+    z=jnp.log(jnp.cosh(a))
+    #z=relu(a) 
+    
     return jnp.sum(z)
 
 
@@ -85,28 +77,19 @@ def compute_grad_log_psi(params,batch,):
 
 ###########################
 
-N_MC_points=100 # number of points
 
 # define data
-batch=np.ones((N_MC_points,N_symm,L,L),dtype=dtype)
-
-
-#print(evaluate(params,batch))
+N_points=300 
+batch=np.ones((N_points,N_symm,L,L),dtype=dtype)
 
 	
-# compute gradients
-
-
-
 for _ in range (10):
 
     ti = time.time()
-    
     d_psi = compute_grad_log_psi(params,batch)
-    #print(d_psi[0][0].shape,d_psi[0][1].shape,d_psi[1][0].shape,d_psi[1][1].shape)
-
-    print("gradients took {0:.4f} secs.".format(time.time()-ti))
-
+    tf = time.time()
+    
+    print("gradients took {0:.4f} secs.".format(tf-ti))
 
 
 

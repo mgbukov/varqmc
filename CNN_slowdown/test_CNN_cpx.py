@@ -5,7 +5,7 @@ import sys,os
 from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
-from jax import jit, grad, random, device_put, vmap, ops, partial
+from jax import jit, grad, random, vmap
 
 
 import numpy as np
@@ -28,32 +28,29 @@ import time
 
 @jit
 def cpx_cosh(Re_a,Im_a):
-    # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
-        
-    Re = jnp.cos(Im_a)*jnp.cosh(Re_a)
-    Im = jnp.sin(Im_a)*jnp.sinh(Re_a)
-
-    return Re, Im
+	# Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]	
+	Re = jnp.cos(Im_a)*jnp.cosh(Re_a)
+	Im = jnp.sin(Im_a)*jnp.sinh(Re_a)
+	return Re, Im
 
 @jit
 def cpx_log_real(Re, Im,):
-    #a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
-    return 0.5*jnp.log(Re**2+Im**2)
+	#a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
+	return 0.5*jnp.log(Re**2+Im**2)
 
 
 
 
 L=4
+N_symm=2*2*2 #s
 dtype=jnp.float64 #jnp.complex128
-N_sites=L*L
 
-
-N_symm=2*2*2 # no Z, Tx, Ty symemtry
 
 dimension_numbers=('NCHW', 'OIHW', 'NCHW') # default
 out_chan=1
 filter_shape=(2,2)
 strides=(1,1)
+
 
 input_shape=np.array((1,1,L,L),dtype=np.int) # NCHW input format
 
@@ -63,11 +60,13 @@ W_init=glorot_normal(rhs_spec.index('I'), rhs_spec.index('O'))
 
 W_init = partial(W_init, dtype=dtype)
 init_params, apply_layer = GeneralConv(dimension_numbers, out_chan, filter_shape, strides=strides, padding='VALID', W_init=W_init)
-       
+	   
 
 # initialize parameters
-params_real = init_params(rng,input_shape)[1]
-params_imag = init_params(rng,input_shape)[1]
+rng_1, rng_2 = random.split(rng)
+_, params_real = init_params(rng_1,input_shape)
+_, params_imag = init_params(rng_2,input_shape)
+
 
 params=[params_real,params_imag,]
 
@@ -76,20 +75,18 @@ params=[params_real,params_imag,]
 
 #@jit
 def evaluate(params, batch):
-    # reshaping required inside evaluate func because of per-sample gradients
-    batch=batch.reshape(-1,1,L,L)
+	# reshaping required inside evaluate func because of per-sample gradients
+	batch=batch.reshape(-1,1,L,L)
 
-    # apply dense layer
-    Re_Ws = apply_layer(params[0], batch)
-    Im_Ws = apply_layer(params[1], batch) 
+	# apply dense layer
+	Re_Ws = apply_layer(params[0], batch)
+	Im_Ws = apply_layer(params[1], batch) 
 
-    # apply logcosh nonlinearity
-    Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
-    Re_z = cpx_log_real(Re, Im, ) 
-
-    #Re_z_fc = relu(Re_Ws**2 + Im_Ws**2) 
-    
-    return jnp.sum(Re_z)
+	# apply logcosh nonlinearity
+	Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
+	Re_z = cpx_log_real(Re, Im, ) 
+	
+	return jnp.sum(Re_z)
 
 
 #@jit
@@ -102,23 +99,19 @@ def compute_grad_log_psi(params,batch,):
 
 ###########################
 
-N_MC_points=100 # number of points
+N_points=500
 
 # define data
-batch=np.ones((N_MC_points,N_symm,L,L),dtype=dtype)
-
-
-#print(evaluate(params,batch))
+batch=np.ones((N_points,N_symm,L,L),dtype=dtype)
 
 	
 for _ in range (10):
 
-    ti = time.time()
+	ti = time.time()
+	d_psi = compute_grad_log_psi(params,batch)
+	tf = time.time()
     
-    d_psi = compute_grad_log_psi(params,batch)
-    #print(d_psi[0][0].shape,d_psi[0][1].shape,d_psi[1][0].shape,d_psi[1][1].shape)
-
-    print("gradients took {0:.4f} secs.".format(time.time()-ti))
+    print("gradients took {0:.4f} secs.".format(tf-ti))
 
 
 

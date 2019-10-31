@@ -81,7 +81,7 @@ class VMC(object):
 
 			self.N_batch=self.N_MC_points#
 			if self.comm.Get_size()>1:
-				print('only one core allowed for "exact" simulation.')
+				print('only one MPI process allowed for "exact" simulation.')
 				exit()
 		else:
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
