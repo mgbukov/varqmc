@@ -68,16 +68,16 @@ cdef extern from "<stdlib.h>" nogil:
 
 
 cdef extern from "<random>" namespace "std":
-    cdef cppclass mt19937:
+    cdef cppclass mt19937 nogil:
         mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
         mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
 
-    cdef cppclass uniform_real_distribution[T]:
+    cdef cppclass uniform_real_distribution[T] nogil:
         uniform_real_distribution() nogil
         uniform_real_distribution(T a, T b) nogil
         T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
 
-    cdef cppclass uniform_int_distribution[T]:
+    cdef cppclass uniform_int_distribution[T] nogil:
         uniform_int_distribution() nogil
         uniform_int_distribution(T a, T b) nogil
         T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
@@ -232,7 +232,7 @@ cdef class Neural_Net:
     cdef func_type spin_config
 
 
-    cdef uniform_real_distribution[double] random_uniform
+    cdef uniform_real_distribution[double] random_float
     cdef uniform_int_distribution[int] random_int, rand_int_ordinal
     cdef vector[mt19937] RNGs # hold a C++ instance
         
@@ -372,14 +372,18 @@ cdef class Neural_Net:
         self.sites=np.arange(self.N_sites,dtype=np.uint16)
 
 
-        self.random_uniform = uniform_real_distribution[double](0.0,1.0)
+        self.random_float = uniform_real_distribution[double](0.0,1.0)
         self.random_int = uniform_int_distribution[int](0,self.N_sites-1)
         self.rand_int_ordinal = uniform_int_distribution[int](0,choose_n_k(self.N_sites, self.N_sites//2))
+
 
         self.thread_seeds=np.zeros(self.N_MC_chains,dtype=np.uint)
         for i in range(self.N_MC_chains):
             self.thread_seeds[i]=self.seed + 3333*self.MPI_rank + 7777*i   #(rand()%RAND_MAX)
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
+
+        print('test rng', self.random_int(self.RNGs[0]))
+        exit()
 
 
     property input_shape:
@@ -584,10 +588,6 @@ cdef class Neural_Net:
 
 
         cdef basis_type s=(1<<(self.N_sites//2))-1;
-
-        with gil:
-            print(thread_id, s, self.thread_seeds[0])
-
         cdef int l;
         for l in range(self.N_sites):
             t=s;
@@ -646,7 +646,7 @@ cdef class Neural_Net:
 
 
             # MC accept/reject step
-            eps = self.random_uniform(rng);
+            eps = self.random_float(rng);
             if(eps*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] <= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n]): # accept
                 s = t;
                 self.mod_psi_s[chain_n] = self.mod_psi_t[chain_n];
