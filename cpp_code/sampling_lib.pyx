@@ -275,6 +275,8 @@ cdef class Neural_Net:
             input_shape=(1,self.N_sites)
             output_shape, self.params = init_params(rng,input_shape)
 
+            print(self.params)
+
 
             self.input_shape = (-1,self.N_sites) # reshape input data batch
             self.reduce_shape = (-1,self.N_symm,output_shape[1]) # tuple to reshape output before symmetrization

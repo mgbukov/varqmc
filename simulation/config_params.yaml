@@ -1,12 +1,12 @@
 J2: 0.5
 L: 4
 NN_dtype: cpx
-NN_shape_str: 16--6
+NN_shape_str: 16--2
 NN_type: DNN
 N_MC_chains: 1
 N_MC_points: 200
 N_batch: 200
-N_iterations: 5
+N_iterations: 1
 load_data: false
 mode: MC
 optimizer: NG
