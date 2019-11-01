@@ -67,7 +67,8 @@ cdef extern from "<stdlib.h>" nogil:
     int rand_r(unsigned int *seed) nogil;
 
 
-cdef extern from "<random>" namespace "std":
+#cdef extern from "<random>" namespace "std":
+cdef extern from "<boost/random/mersenne_twister.hpp>" nogil:
     cdef cppclass mt19937 nogil:
         mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
         mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
