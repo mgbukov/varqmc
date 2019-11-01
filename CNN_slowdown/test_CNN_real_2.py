@@ -79,7 +79,7 @@ def compute_grad_log_psi(params,batch,):
 
 
 # define data
-N_points=300 
+N_points=10000 
 batch=np.ones((N_points,N_symm,L,L),dtype=dtype)
 
 	

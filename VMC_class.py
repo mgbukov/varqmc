@@ -3,6 +3,8 @@ import sys,os
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
+
 #quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
 quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
 sys.path.insert(0,quspin_path)
@@ -13,6 +15,11 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 from jax.experimental import optimizers
 import jax.numpy as jnp
+
+import jax
+print(jax.devices(), jax.local_device_count(), jax.host_id(), jax.local_devices() )
+#exit()
+
 import numpy as np
 
 import yaml
@@ -154,8 +161,8 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			shapes=dict(layer_1 = [self.L**2, 4], 
-					#	layer_2 = [4,2], 
+			shapes=dict(layer_1 = [self.L**2, 2], 
+					#	layer_2 = [4,12], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in shapes.values() )
 
@@ -487,7 +494,8 @@ class VMC(object):
 		ti=time.time()
 		self.E_estimator.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift)
 		self.logfile.write("total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti))
-
+		if self.comm.Get_rank()==0:
+			print("total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti))
 
 		if self.mode=='exact':
 			#print(self.MC_tool.mod_kets)

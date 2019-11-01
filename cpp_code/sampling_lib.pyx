@@ -331,8 +331,8 @@ cdef class Neural_Net:
 
     def _init_evaluate(self):
 
-        # self.evaluate_mod  =self._evaluate_mod
-        # self.evaluate_phase=self._evaluate_phase
+        #self.evaluate_log  =self._evaluate_log
+        #self.evaluate_phase=self._evaluate_phase
 
         # define network evaluation on GPU
         self.evaluate_log  =jit(self._evaluate_log)
