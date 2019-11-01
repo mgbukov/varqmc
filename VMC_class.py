@@ -178,7 +178,7 @@ class VMC(object):
 
 		
 		### create Neural network
-		self.DNN=Neural_Net(self.comm.Get_rank(), shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed+self.comm.Get_rank() )
+		self.DNN=Neural_Net(self.comm.Get_rank(), shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
 
 		#exit()
 		

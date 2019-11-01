@@ -244,11 +244,11 @@ cdef class Neural_Net:
  
         # fix seed
         self.seed=seed
-        np.random.seed(self.seed)
-        np.random.RandomState(self.seed)
-        rng = random.PRNGKey(self.seed)
-        srand(self.seed)
-
+        np.random.seed(self.seed+self.MPI_rank)
+        np.random.RandomState(self.seed+self.MPI_rank)
+        srand(self.seed+self.MPI_rank)
+        rng = random.PRNGKey(self.seed) # same seed for all MPI processes to keep NN params the same
+        
         # order important
         self._init_NN(rng,shapes,NN_type,NN_dtype)
         self._init_evaluate()
@@ -378,7 +378,7 @@ cdef class Neural_Net:
 
         self.thread_seeds=np.zeros(self.N_MC_chains,dtype=np.uint)
         for i in range(self.N_MC_chains):
-            self.thread_seeds[i]=self.seed + 10000 + i  #(rand()%RAND_MAX)
+            self.thread_seeds[i]=self.seed + 3333*self.MPI_rank + 7777*i   #(rand()%RAND_MAX)
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
 
 
@@ -540,9 +540,12 @@ cdef class Neural_Net:
                                            self.RNGs[chain_n]
                                         )
 
-        # print(np.array(ket_states))
+        print(self.MPI_rank, np.array(ket_states))
         # print(N_MC_proposals,N_accepted, ket_states.shape)
         # exit()
+
+        print('thread seeds', self.MPI_rank, self.thread_seeds)
+
 
         return N_accepted, np.sum(N_MC_proposals);
    
