@@ -67,7 +67,7 @@ cdef extern from "<stdlib.h>" nogil:
     int rand_r(unsigned int *seed) nogil;
 
 
-#cdef extern from "<random>" namespace "std":
+## cdef extern from "<random>" namespace "std":
 cdef extern from "<boost/random/mersenne_twister.hpp>" nogil:
     cdef cppclass mt19937 nogil:
         mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
@@ -277,7 +277,7 @@ cdef class Neural_Net:
             input_shape=(1,self.N_sites)
             output_shape, self.params = init_params(rng,input_shape)
 
-            print(self.params)
+            #print(self.params)
 
 
             self.input_shape = (-1,self.N_sites) # reshape input data batch
@@ -385,10 +385,10 @@ cdef class Neural_Net:
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
 
 
-        self.rr=mt19937(self.thread_seeds[0])
-        self.rrr=mt19937(0)
-        print('test rng', self.random_int(self.RNGs[0]), self.random_int(self.rr), self.random_int(self.rrr) )
-        exit()
+        # self.rr=mt19937()
+        # self.rrr=mt19937(0)
+        # print('test rng', self.random_int(self.RNGs[0]), self.random_int(self.rr), self.random_int(self.rrr) )
+        # exit()
 
 
     property input_shape:
@@ -603,10 +603,6 @@ cdef class Neural_Net:
             s=t;
 
        
-        with gil:
-            print(thread_id, s, _i, _j, l)
-            exit()
-
         # store initial state
         s0_vec[chain_n] = s;
 
