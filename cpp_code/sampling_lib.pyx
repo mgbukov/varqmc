@@ -235,6 +235,7 @@ cdef class Neural_Net:
     cdef uniform_real_distribution[double] random_float
     cdef uniform_int_distribution[int] random_int, rand_int_ordinal
     cdef vector[mt19937] RNGs # hold a C++ instance
+    cdef mt19937 rr,rrr
         
 
     def __init__(self,MPI_rank,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
@@ -382,7 +383,10 @@ cdef class Neural_Net:
             self.thread_seeds[i]=self.seed + 3333*self.MPI_rank + 7777*i   #(rand()%RAND_MAX)
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
 
-        print('test rng', self.random_int(self.RNGs[0]))
+
+        self.rr=mt19937(self.thread_seeds[0])
+        self.rrr=mt19937(0)
+        print('test rng', self.random_int(self.RNGs[0]), self.random_int(self.rr), self.random_int(self.rrr) )
         exit()
 
 
