@@ -81,13 +81,16 @@ class natural_gradient():
 			self.OO_expt/=self.N_MC_points
 
 
-		O_expt2 =  jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
-				 + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()
+		#O_expt2 =  jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
+		#		 + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()
+
+		O_expt2 =  np.einsum('k,l->kl',self.O_expt.real,self.O_expt.real) \
+				 + np.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag)
 
 		self.Fisher[:] = (self.OO_expt - O_expt2)#._value		
 	
 
-		'''
+		
 		# TESTS
 		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
 
@@ -125,8 +128,7 @@ class natural_gradient():
 
 
 			exit()
-		'''			
-
+		
 
 	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
 
