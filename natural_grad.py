@@ -87,9 +87,9 @@ class natural_gradient():
 				  		     + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
 		
-		self.Fisher[:] = (self.OO_expt - self.O_expt2)#._value		
+		self.Fisher[:] = (self.OO_expt - self.O_expt2)	
 		
-		
+		'''
 		# TESTS
 		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
 
@@ -98,7 +98,7 @@ class natural_gradient():
 		
 			print('F : {:.20f}'.format(np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm )) )
 			print('OO: {:.20f}'.format(np.linalg.norm( (self.OO_expt-self.OO_expt.T.conj())/np.linalg.norm(self.OO_expt) )) )
-			print('O2: {:.20f}'.format(np.linalg.norm( (self.O_expt2._value-self.O_expt2._value.T.conj())/np.linalg.norm(self.O_expt2) )) )
+			print('O2: {:.20f}'.format(np.linalg.norm( (self.O_expt2-self.O_expt2.T.conj())/np.linalg.norm(self.O_expt2) )) )
 			print('non-hermitian fisher matrix')
 			
 			np.testing.assert_allclose(self.Fisher/norm,self.Fisher.T.conj()/norm, rtol=1E-14, atol=1E-14)
@@ -113,13 +113,13 @@ class natural_gradient():
 			print()
 			print('OO',eigh(self.OO_expt/np.linalg.norm(self.OO_expt),eigvals_only=True))
 			print()
-			print('O2',eigh(self.O_expt2._value/np.linalg.norm(self.O_expt2._value),eigvals_only=True))
+			print('O2',eigh(self.O_expt2/np.linalg.norm(self.O_expt2),eigvals_only=True))
 
 			print('negative eigenvalues')
 
 
 			exit()
-		
+		'''		
 
 	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
 
