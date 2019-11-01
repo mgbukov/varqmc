@@ -38,6 +38,7 @@ class natural_gradient():
 
 		self.O_expt=np.zeros(N_varl_params,dtype=np.complex128)
 		self.OO_expt=np.zeros([N_varl_params,N_varl_params],dtype=np.float64)
+		self.O_expt2=np.zeros_like(self.OO_expt)
 
 		self.E_diff_weighted=np.zeros(self.N_batch,dtype=np.complex128)
 
@@ -81,29 +82,23 @@ class natural_gradient():
 			self.OO_expt/=self.N_MC_points
 
 
-		#O_expt2 =  jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
-		#		 + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()
 
-		O_expt2 =  np.einsum('k,l->kl',self.O_expt.real,self.O_expt.real) \
-				 + np.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag)
+		self.O_expt2[:] = (   jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
+				  		     + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
-		self.Fisher[:] = (self.OO_expt - O_expt2)#._value		
-	
-
+		
+		self.Fisher[:] = (self.OO_expt - self.O_expt2)#._value		
+		
 		
 		# TESTS
 		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
 
-		#print(self.dlog_psi)
-		#print(np.linalg.norm(abs_psi_2), np.linalg.norm(OO_expt), np.linalg.norm(O_expt2))
-
-		#print(np.linalg.norm(self.dlog_psi), norm, np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm ), np.linalg.norm(self.Fisher-self.Fisher.T.conj()) )
-	
+		
 		if np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm ) > 1E-14: # and np.linalg.norm(self.Fisher-self.Fisher.T.conj()) > 1E-14:
 		
 			print('F : {:.20f}'.format(np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm )) )
 			print('OO: {:.20f}'.format(np.linalg.norm( (self.OO_expt-self.OO_expt.T.conj())/np.linalg.norm(self.OO_expt) )) )
-			print('O2: {:.20f}'.format(np.linalg.norm( (O_expt2._value-O_expt2._value.T.conj())/np.linalg.norm(O_expt2) )) )
+			print('O2: {:.20f}'.format(np.linalg.norm( (self.O_expt2._value-self.O_expt2._value.T.conj())/np.linalg.norm(self.O_expt2) )) )
 			print('non-hermitian fisher matrix')
 			
 			np.testing.assert_allclose(self.Fisher/norm,self.Fisher.T.conj()/norm, rtol=1E-14, atol=1E-14)
@@ -111,18 +106,14 @@ class natural_gradient():
 			exit()
 		
 		E = eigh(self.Fisher/norm,eigvals_only=True)
-		#E2 = eigh(self.Fisher/norm,eigvals_only=True)
-		#E2 = E2/(np.abs(E2).max()-np.abs(E2).min())
 		
-		# E,_ = eig(self.Fisher/np.linalg.norm(self.Fisher))
-		# E=np.sort(E)
-		
+
 		if np.any(E <- 1E-14):
 			print('E ', E)
 			print()
 			print('OO',eigh(self.OO_expt/np.linalg.norm(self.OO_expt),eigvals_only=True))
 			print()
-			print('O2',eigh(O_expt2._value/np.linalg.norm(O_expt2._value),eigvals_only=True))
+			print('O2',eigh(self.O_expt2._value/np.linalg.norm(self.O_expt2._value),eigvals_only=True))
 
 			print('negative eigenvalues')
 
