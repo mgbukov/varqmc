@@ -6,11 +6,11 @@ NN_type: DNN
 N_MC_chains: 4
 N_MC_points: 4000
 N_batch: 4000
-N_iterations: 5
+N_iterations: 50
 load_data: false
 mode: MC
 optimizer: NG
 save_data: true
 seed: 1
 start_iter: 0
-stop_iter: 2
+stop_iter: 49

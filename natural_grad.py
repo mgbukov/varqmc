@@ -87,9 +87,9 @@ class natural_gradient():
 				  		     + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
 		
-		self.Fisher[:] = (self.OO_expt - self.O_expt2)	
+		self.Fisher[:] = self.OO_expt - self.O_expt2
 		
-		'''
+		
 		# TESTS
 		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
 
@@ -119,7 +119,7 @@ class natural_gradient():
 
 
 			exit()
-		'''		
+		
 
 	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
 
@@ -150,6 +150,9 @@ class natural_gradient():
 	def compute(self,NN_params,batch,Eloc_params_dict,mode='MC',):
 		
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
+
+		print(self.dlog_psi)
+		exit()
 
 		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
