@@ -91,14 +91,12 @@ cdef extern from "boost/random/mersenne_twister.hpp" namespace "boost::random" n
         mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
 
 cdef extern from "boost/random/uniform_int_distribution.hpp" namespace "boost::random" nogil:
-##cdef extern from "<random>" namespace "std":
     cdef cppclass uniform_int_distribution[T] nogil:
         uniform_int_distribution() nogil
         uniform_int_distribution(T a, T b) nogil
         T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
 
 cdef extern from "boost/random/uniform_real_distribution.hpp" namespace "boost::random" nogil:
-## cdef extern from "<random>" namespace "std":
     cdef cppclass uniform_real_distribution[T] nogil:
         uniform_real_distribution() nogil
         uniform_real_distribution(T a, T b) nogil
@@ -257,7 +255,6 @@ cdef class Neural_Net:
     cdef uniform_real_distribution[double] random_float
     cdef uniform_int_distribution[int] random_int, rand_int_ordinal
     cdef vector[mt19937] RNGs # hold a C++ instance
-    cdef mt19937 rr,rrr
         
 
     def __init__(self,MPI_rank,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
@@ -405,11 +402,6 @@ cdef class Neural_Net:
             self.thread_seeds[i]=self.seed + 3333*self.MPI_rank + 7777*i   #(rand()%RAND_MAX)
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
 
-
-        self.rr=mt19937()
-        self.rrr=mt19937(0)
-        print('test rng', self.random_int(self.RNGs[0]), self.random_int(self.rr), self.random_int(self.rrr) )
-        exit()
 
 
     property input_shape:
@@ -570,11 +562,11 @@ cdef class Neural_Net:
                                            self.RNGs[chain_n]
                                         )
 
-        #print(self.MPI_rank, np.array(ket_states))
+        print(self.MPI_rank, np.array(ket_states))
         # print(N_MC_proposals,N_accepted, ket_states.shape)
         # exit()
 
-        #print('thread seeds', self.MPI_rank, self.thread_seeds)
+        print('thread seeds', self.MPI_rank, self.thread_seeds)
 
 
         return N_accepted, np.sum(N_MC_proposals);
