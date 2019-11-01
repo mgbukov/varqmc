@@ -66,9 +66,9 @@ cdef extern from *:
 cdef extern from "<stdlib.h>" nogil:
     int rand_r(unsigned int *seed) nogil;
 
-
-## cdef extern from "<random>" namespace "std":
-cdef extern from "<boost/random/mersenne_twister.hpp>" nogil:
+'''
+## cpp mt19937: different in linux and osx 
+cdef extern from "<random>" namespace "std":
     cdef cppclass mt19937 nogil:
         mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
         mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
@@ -81,6 +81,26 @@ cdef extern from "<boost/random/mersenne_twister.hpp>" nogil:
     cdef cppclass uniform_int_distribution[T] nogil:
         uniform_int_distribution() nogil
         uniform_int_distribution(T a, T b) nogil
+        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
+'''
+
+
+cdef extern from "<boost/random/mersenne_twister.hpp>":
+    cdef cppclass mt19937 nogil:
+        mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
+        mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
+
+cdef extern from "<boost/random/uniform_int_distribution.hpp>":
+##cdef extern from "<random>" namespace "std":
+    cdef cppclass uniform_int_distribution[T] nogil:
+        uniform_int_distribution() nogil
+        uniform_int_distribution(T a, T b) nogil
+        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
+
+cdef extern from "<random>" namespace "std":
+    cdef cppclass uniform_real_distribution[T] nogil:
+        uniform_real_distribution() nogil
+        uniform_real_distribution(T a, T b) nogil
         T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
 
 
@@ -385,10 +405,10 @@ cdef class Neural_Net:
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
 
 
-        # self.rr=mt19937()
-        # self.rrr=mt19937(0)
-        # print('test rng', self.random_int(self.RNGs[0]), self.random_int(self.rr), self.random_int(self.rrr) )
-        # exit()
+        self.rr=mt19937()
+        self.rrr=mt19937(0)
+        print('test rng', self.random_int(self.RNGs[0]), self.random_int(self.rr), self.random_int(self.rrr) )
+        exit()
 
 
     property input_shape:
