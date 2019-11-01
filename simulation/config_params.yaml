@@ -3,9 +3,9 @@ L: 4
 NN_dtype: cpx
 NN_shape_str: 16--2
 NN_type: DNN
-N_MC_chains: 4
+N_MC_chains: 1
 N_MC_points: 200
-N_batch: 100
+N_batch: 200
 N_iterations: 1
 load_data: false
 mode: MC

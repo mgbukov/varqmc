@@ -540,11 +540,11 @@ cdef class Neural_Net:
                                            self.RNGs[chain_n]
                                         )
 
-        print(self.MPI_rank, np.array(ket_states))
+        #print(self.MPI_rank, np.array(ket_states))
         # print(N_MC_proposals,N_accepted, ket_states.shape)
         # exit()
 
-        print('thread seeds', self.MPI_rank, self.thread_seeds)
+        #print('thread seeds', self.MPI_rank, self.thread_seeds)
 
 
         return N_accepted, np.sum(N_MC_proposals);
@@ -594,8 +594,9 @@ cdef class Neural_Net:
             s=t;
 
        
-        # with gil:
-        #     print(thread_id, s, thread_seed[0])
+        with gil:
+            print(thread_id, s, self.thread_seeds[0])
+            exit()
 
         # store initial state
         s0_vec[chain_n] = s;
