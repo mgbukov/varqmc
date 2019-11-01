@@ -85,10 +85,9 @@ class natural_gradient():
 				 + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()
 
 		self.Fisher[:] = (self.OO_expt - O_expt2)#._value		
-		
+	
 
-
-
+		'''
 		# TESTS
 		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
 
@@ -109,8 +108,8 @@ class natural_gradient():
 			exit()
 		
 		E = eigh(self.Fisher/norm,eigvals_only=True)
-		# E2 = eigh(self.Fisher/norm,eigvals_only=True)
-		# E2 = E2/(E2.max()-E2.min())
+		#E2 = eigh(self.Fisher/norm,eigvals_only=True)
+		#E2 = E2/(np.abs(E2).max()-np.abs(E2).min())
 		
 		# E,_ = eig(self.Fisher/np.linalg.norm(self.Fisher))
 		# E=np.sort(E)
@@ -126,7 +125,7 @@ class natural_gradient():
 
 
 			exit()
-			
+		'''			
 
 
 	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
