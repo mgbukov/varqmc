@@ -10,23 +10,16 @@ os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
 sys.path.insert(0,quspin_path)
 
+import jax
+print('local devices:', jax.local_devices() )
+
 
 from jax import jit, grad, vmap, random, ops, partial
 from jax.config import config
 config.update("jax_enable_x64", True)
 from jax.experimental import optimizers
+
 import jax.numpy as jnp
-
-import jax
-print(jax.devices(), jax.local_device_count(), jax.host_id(), )
-
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
-
-#print(jax.devices(), jax.local_device_count(), jax.host_id(), )
-
-#exit()
-
 import numpy as np
 
 import yaml
@@ -51,8 +44,8 @@ from energy_lib import Energy_estimator
 import time
 np.set_printoptions(threshold=np.inf)
 
-
-from MC_weights import *
+# import weights
+#from MC_weights import *
 
 
 
@@ -85,7 +78,11 @@ class VMC(object):
 		### MC sampler
 		self.N_MC_points=params_dict['N_MC_points']
 		self.N_MC_chains = params_dict['N_MC_chains'] # number of MC chains to run in parallel
+
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
+		os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0" # memory per process, interferes with mpi
+		os.environ["CUDA_VISIBLE_DEVICES"]="0" # device number
+
 
 
 		# number of processors must fix MC sampling ratio
@@ -187,12 +184,10 @@ class VMC(object):
 		
 		if load_data:
 
-			#print(NN_params)
-			#exit()
-
-			# file_name='NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
-			# with open(self.load_dir+file_name+'.pkl', 'rb') as handle:
-			# 	NN_params = pickle.load(handle)
+			
+			file_name='NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
+			with open(self.load_dir+file_name+'.pkl', 'rb') as handle:
+				NN_params = pickle.load(handle)
 
 			self.DNN.update_params(NN_params)
 		

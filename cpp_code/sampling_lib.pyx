@@ -376,7 +376,7 @@ cdef class Neural_Net:
 
         self.thread_seeds=np.zeros(self.N_MC_chains,dtype=np.uint)
         for i in range(self.N_MC_chains):
-            self.thread_seeds[i]=(rand()%RAND_MAX)
+            self.thread_seeds[i]=self.seed + 10000 + i  #(rand()%RAND_MAX)
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
 
 

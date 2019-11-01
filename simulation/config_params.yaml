@@ -4,13 +4,13 @@ NN_dtype: cpx
 NN_shape_str: 16--6
 NN_type: DNN
 N_MC_chains: 1
-N_MC_points: 10000
-N_batch: 10000
+N_MC_points: 200
+N_batch: 200
 N_iterations: 5
 load_data: false
 mode: MC
 optimizer: NG
 save_data: true
-seed: 0
+seed: 1
 start_iter: 0
 stop_iter: 4
