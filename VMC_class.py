@@ -3,7 +3,8 @@ import sys,os
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
+#os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
+#os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 #quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
 quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
@@ -17,7 +18,13 @@ from jax.experimental import optimizers
 import jax.numpy as jnp
 
 import jax
-print(jax.devices(), jax.local_device_count(), jax.host_id(), jax.local_devices() )
+print(jax.devices(), jax.local_device_count(), jax.host_id(), )
+
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
+#print(jax.devices(), jax.local_device_count(), jax.host_id(), )
+
 #exit()
 
 import numpy as np
@@ -161,7 +168,7 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			shapes=dict(layer_1 = [self.L**2, 2], 
+			shapes=dict(layer_1 = [self.L**2, 6], 
 					#	layer_2 = [4,12], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in shapes.values() )
