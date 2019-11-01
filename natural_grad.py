@@ -88,6 +88,13 @@ class natural_gradient():
 
 		
 		self.Fisher[:] = self.OO_expt - self.O_expt2
+
+		print(self.OO_expt)
+		print()
+		print(self.O_expt2)
+		print()
+		print(self.FIsher)
+		exit()
 		
 		
 		# TESTS
@@ -150,9 +157,6 @@ class natural_gradient():
 	def compute(self,NN_params,batch,Eloc_params_dict,mode='MC',):
 		
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
-
-		print(self.dlog_psi)
-		exit()
 
 		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
