@@ -584,6 +584,10 @@ cdef class Neural_Net:
 
 
         cdef basis_type s=(1<<(self.N_sites//2))-1;
+
+        with gil:
+            print(thread_id, s, self.thread_seeds[0])
+
         cdef int l;
         for l in range(self.N_sites):
             t=s;
@@ -595,7 +599,7 @@ cdef class Neural_Net:
 
        
         with gil:
-            print(thread_id, s, self.thread_seeds[0])
+            print(thread_id, s, _i, _j, l)
             exit()
 
         # store initial state
