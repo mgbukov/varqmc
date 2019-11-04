@@ -5,7 +5,7 @@ from jax import jit
 
 from mpi4py import MPI
 import numpy as np
-from scipy.sparse.linalg import cg,cgs,minres,qmr
+from scipy.sparse.linalg import cg
 from scipy.linalg import eigh,eig
 
 
@@ -172,16 +172,14 @@ class natural_gradient():
 
 		
 		# apply conjugate gradient
-		self.tol=1E-15
 		self.nat_grad, info = cg(self.Fisher,self.grad,x0=self.nat_grad_guess,maxiter=1E4,atol=self.tol,tol=self.tol)
-		#self.nat_grad, info = qmr(self.Fisher,self.grad,x0=self.nat_grad_guess,maxiter=1E4,tol=self.tol)
 		if info>0:
 			print('cg failed to converge in {0:d} iterations'.format(info))
 			exit()
 
-		print(np.linalg.cond(self.Fisher))
-		print(self.grad[0],self.Fisher[-1,-1], self.nat_grad_guess[0], self.nat_grad[0])
-		exit()
+		# print(np.linalg.cond(self.Fisher))
+		# print(self.grad[0],self.Fisher[-1,-1], self.nat_grad_guess[0], self.nat_grad[0])
+		# exit()
 	
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
