@@ -9,7 +9,7 @@ N_batch: 107
 N_iterations: 2
 load_data: false
 mode: exact
-optimizer: NG
+optimizer: adam
 save_data: true
 seed: 1
 start_iter: 0
