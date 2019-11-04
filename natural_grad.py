@@ -34,6 +34,7 @@ class natural_gradient():
 		self.nat_grad=np.zeros_like(self.grad)
 		self.current_grad_guess=np.zeros_like(self.grad)
 		self.Fisher=np.zeros(2*self.grad.shape,dtype=dtype)
+		self.Fisher_reg=1E-15*np.eye(self.grad.shape[0])
 		self.nat_grad_guess=np.zeros_like(self.grad)
 
 		self.O_expt=np.zeros(N_varl_params,dtype=np.complex128)
@@ -46,7 +47,7 @@ class natural_gradient():
 		# CG params
 		self.RK_on=False
 		self.tol=1E-7 # CG tolerance
-		self.delta=50.0 #5E-5 #50.0
+		self.delta=5E-5 #50.0
 		self.epoch=0
 		self.r2_cost=0.0
 		self.max_grads=0.0
@@ -87,7 +88,7 @@ class natural_gradient():
 				  		     + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
 		
-		self.Fisher[:] = self.OO_expt - self.O_expt2
+		self.Fisher[:] = self.OO_expt - self.O_expt2 + self.Fisher_reg
 
 
 		# import pickle
@@ -168,7 +169,8 @@ class natural_gradient():
 		
 		### compute natural_gradients using cg
 		# regularize Fisher metric
-		self.Fisher += self.delta*np.diag(np.diag(self.Fisher)) #np.eye(self.Fisher.shape[0])
+		#self.Fisher += self.delta*np.diag(np.diag(self.Fisher))
+		self.Fisher += self.delta*np.eye(self.Fisher.shape[0])
 
 		
 		# apply conjugate gradient
