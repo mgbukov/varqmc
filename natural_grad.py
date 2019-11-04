@@ -89,13 +89,13 @@ class natural_gradient():
 		
 		self.Fisher[:] = self.OO_expt - self.O_expt2
 
-		print(self.OO_expt)
-		print()
-		print(self.O_expt2)
-		print()
-		print(self.FIsher)
-		exit()
-		
+
+		import pickle
+		file_name='./bug'
+		with open(file_name+'.pkl', 'wb') as handle:
+			pickle.dump([self.dlog_psi, self.OO_expt, self.O_expt2, self.O_expt, self.Fisher, self.grad], handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 		
 		# TESTS
 		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
@@ -128,6 +128,10 @@ class natural_gradient():
 			exit()
 		
 
+
+		exit()
+
+
 	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
 
 		self.E_diff_weighted[:]=Eloc_params_dict['E_diff'].copy()
@@ -158,9 +162,10 @@ class natural_gradient():
 		
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
 
-		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
+		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 
+		
 		### compute natural_gradients using cg
 		# regularize Fisher metric
 		self.Fisher += self.delta*np.diag(np.diag(self.Fisher)) #np.eye(self.Fisher.shape[0])
