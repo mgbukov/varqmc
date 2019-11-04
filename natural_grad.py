@@ -90,10 +90,10 @@ class natural_gradient():
 		self.Fisher[:] = self.OO_expt - self.O_expt2
 
 
-		import pickle
-		file_name='./bug'
-		with open(file_name+'.pkl', 'wb') as handle:
-			pickle.dump([self.dlog_psi, self.OO_expt, self.O_expt2, self.O_expt, self.Fisher, self.grad], handle, protocol=pickle.HIGHEST_PROTOCOL)
+		# import pickle
+		# file_name='./bug'
+		# with open(file_name+'.pkl', 'wb') as handle:
+		# 	pickle.dump([self.dlog_psi, self.OO_expt, self.O_expt2, self.O_expt, self.Fisher, self.grad], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 		
