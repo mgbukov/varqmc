@@ -1,6 +1,7 @@
 import pickle
 import numpy as np 
 from scipy.linalg import eigh,eig
+from scipy.sparse.linalg import cg
 
 
 
@@ -45,8 +46,11 @@ print(np.linalg.cond(Fisher_osx), np.linalg.cond(Fisher_osx/norm_osx))
 print()
 
 
-print(E_linux2)
+tol=1E-7
+nat_grad_osx, _   = cg(Fisher_osx,   grad_osx,   maxiter=1E4, atol=tol, tol=tol)
+nat_grad_linux, _ = cg(Fisher_linux, grad_linux, maxiter=1E4, atol=tol, tol=tol)
 
 
+print(nat_grad_linux[0], nat_grad_osx[0], nat_grad_linux[0] - nat_grad_osx[0])
 
 

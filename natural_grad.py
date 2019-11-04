@@ -46,7 +46,7 @@ class natural_gradient():
 		# CG params
 		self.RK_on=False
 		self.tol=1E-7 # CG tolerance
-		self.delta=5E-5 #50.0
+		self.delta=50.0 #5E-5 #50.0
 		self.epoch=0
 		self.r2_cost=0.0
 		self.max_grads=0.0
@@ -177,9 +177,9 @@ class natural_gradient():
 			print('cg failed to converge in {0:d} iterations'.format(info))
 			exit()
 
-		# print(np.linalg.cond(self.Fisher))
-		# print(self.grad[0],self.Fisher[-1,-1], self.nat_grad_guess[0], self.nat_grad[0])
-		# exit()
+		print(np.linalg.cond(self.Fisher), self.delta)
+		print(self.grad[0],self.Fisher[-1,-1], self.nat_grad_guess[0], self.nat_grad[0])
+		#exit()
 	
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
