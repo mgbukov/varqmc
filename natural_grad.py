@@ -6,6 +6,7 @@ from jax import jit
 from mpi4py import MPI
 import numpy as np
 from scipy.sparse.linalg import cg
+#from cg import cg
 from scipy.linalg import eigh,eig
 
 
@@ -30,12 +31,12 @@ class natural_gradient():
 		# preallocate memory
 		
 		self.dlog_psi=np.zeros([self.N_batch,N_varl_params],dtype=np.complex128)
-		self.grad=np.zeros(N_varl_params,dtype=dtype)
-		self.nat_grad=np.zeros_like(self.grad)
-		self.current_grad_guess=np.zeros_like(self.grad)
-		self.Fisher=np.zeros(2*self.grad.shape,dtype=dtype)
-		self.Fisher_reg=1E-15*np.eye(self.grad.shape[0])
-		self.nat_grad_guess=np.zeros_like(self.grad)
+		self.F_vector=np.zeros(N_varl_params,dtype=dtype)
+		self.nat_grad=np.zeros_like(self.F_vector)
+		self.current_grad_guess=np.zeros_like(self.F_vector)
+		self.S_matrix=np.zeros(2*self.F_vector.shape,dtype=dtype)
+		self.S_matrix_reg=1E-15*np.eye(self.F_vector.shape[0])
+		self.nat_grad_guess=np.zeros_like(self.F_vector)
 
 		self.O_expt=np.zeros(N_varl_params,dtype=np.complex128)
 		self.OO_expt=np.zeros([N_varl_params,N_varl_params],dtype=np.float64)
@@ -46,11 +47,15 @@ class natural_gradient():
 		
 		# CG params
 		self.RK_on=False
+
+		self.cg_maxiter=1E4
 		self.tol=1E-7 # CG tolerance
 		self.delta=5E-5 #50.0
+
 		self.epoch=0
 		self.r2_cost=0.0
 		self.max_grads=0.0
+		self.check_on=True
 	
 	
 	def compute_fisher_metric(self,mode='MC',Eloc_params_dict=None):
@@ -88,32 +93,64 @@ class natural_gradient():
 				  		     + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
 		
-		self.Fisher[:] = self.OO_expt - self.O_expt2 + self.Fisher_reg
+		self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
 
+		# check for symmetry and positivity
+		if self.check_on:
+			self._S_matrix_checks()
+
+
+	
+
+	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
+
+		self.E_diff_weighted[:]=Eloc_params_dict['E_diff'].copy()
+
+		if mode=='exact':
+			abs_psi_2=Eloc_params_dict['abs_psi_2'].copy()
+			self.E_diff_weighted*=abs_psi_2
+			self.F_vector[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
+						 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
+
+		elif mode=='MC':
+			# self.F_vector[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real)/self.N_MC_points \
+			#              + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag)/self.N_MC_points
+
+			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
+			             		 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()   )._value, \
+								self.F_vector[:], op=MPI.SUM
+								)
+			self.F_vector/=self.N_MC_points
+
+
+	def _compute_r2_cost(self,Eloc_params_dict):
+		Eloc_var=Eloc_params_dict['Eloc_var']
+		return (np.dot(self.nat_grad.conj(), np.dot(self.S_matrix,self.nat_grad)) - 2.0*np.dot(self.F_vector.conj(),self.nat_grad).real + Eloc_var )/Eloc_var 
+
+	def _S_matrix_checks(self):
 
 		# import pickle
 		# file_name='./bug'
 		# with open(file_name+'.pkl', 'wb') as handle:
-		# 	pickle.dump([self.dlog_psi, self.OO_expt, self.O_expt2, self.O_expt, self.Fisher, self.grad], handle, protocol=pickle.HIGHEST_PROTOCOL)
+		# 	pickle.dump([self.dlog_psi, self.OO_expt, self.O_expt2, self.O_expt, self.S_matrix, self.F_vector], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 		
-		# TESTS
-		norm=jnp.linalg.norm(self.Fisher).block_until_ready()
+		norm=jnp.linalg.norm(self.S_matrix).block_until_ready()
 
 		
-		if np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm ) > 1E-14: # and np.linalg.norm(self.Fisher-self.Fisher.T.conj()) > 1E-14:
+		if np.linalg.norm((self.S_matrix-self.S_matrix.T.conj())/norm ) > 1E-14: # and np.linalg.norm(self.S_matrix-self.S_matrix.T.conj()) > 1E-14:
 		
-			print('F : {:.20f}'.format(np.linalg.norm((self.Fisher-self.Fisher.T.conj())/norm )) )
+			print('F : {:.20f}'.format(np.linalg.norm((self.S_matrix-self.S_matrix.T.conj())/norm )) )
 			print('OO: {:.20f}'.format(np.linalg.norm( (self.OO_expt-self.OO_expt.T.conj())/np.linalg.norm(self.OO_expt) )) )
 			print('O2: {:.20f}'.format(np.linalg.norm( (self.O_expt2-self.O_expt2.T.conj())/np.linalg.norm(self.O_expt2) )) )
 			print('non-hermitian fisher matrix')
 			
-			np.testing.assert_allclose(self.Fisher/norm,self.Fisher.T.conj()/norm, rtol=1E-14, atol=1E-14)
+			np.testing.assert_allclose(self.S_matrix/norm,self.S_matrix.T.conj()/norm, rtol=1E-14, atol=1E-14)
 
 			exit()
 		
-		E = eigh(self.Fisher/norm,eigvals_only=True)
+		E = eigh(self.S_matrix/norm,eigvals_only=True)
 		
 
 		if np.any(E <- 1E-14):
@@ -126,37 +163,14 @@ class natural_gradient():
 			print('negative eigenvalues')
 
 
+			np.linalg.cholesky(self.S_matrix/norm)
+
+
 			exit()
 		
 
 
 		#exit()
-
-
-	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
-
-		self.E_diff_weighted[:]=Eloc_params_dict['E_diff'].copy()
-
-		if mode=='exact':
-			abs_psi_2=Eloc_params_dict['abs_psi_2'].copy()
-			self.E_diff_weighted*=abs_psi_2
-			self.grad[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
-						 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
-
-		elif mode=='MC':
-			# self.grad[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real)/self.N_MC_points \
-			#              + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag)/self.N_MC_points
-
-			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
-			             		 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()   )._value, \
-								self.grad[:], op=MPI.SUM
-								)
-			self.grad/=self.N_MC_points
-
-
-	def _compute_r2_cost(self,Eloc_params_dict):
-		Eloc_var=Eloc_params_dict['Eloc_var']
-		return (np.dot(self.nat_grad.conj(), np.dot(self.Fisher,self.nat_grad)) - 2.0*np.dot(self.grad.conj(),self.nat_grad).real + Eloc_var )/Eloc_var 
 
 
 	def compute(self,NN_params,batch,Eloc_params_dict,mode='MC',):
@@ -169,19 +183,25 @@ class natural_gradient():
 		
 		### compute natural_gradients using cg
 		# regularize Fisher metric
-		#self.Fisher += self.delta*np.diag(np.diag(self.Fisher))
-		self.Fisher += self.delta*np.eye(self.Fisher.shape[0])
+		#self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
+		self.S_matrix += self.delta*np.eye(self.S_matrix.shape[0]) # better regularization properties
 
 		
-		# apply conjugate gradient
-		self.nat_grad, info = cg(self.Fisher,self.grad,x0=self.nat_grad_guess,maxiter=1E4,atol=self.tol,tol=self.tol)
-		if info>0:
-			print('cg failed to converge in {0:d} iterations'.format(info))
-			exit()
-
-		print(np.linalg.cond(self.Fisher), self.delta)
-		print(self.grad[0],self.Fisher[-1,-1], self.nat_grad_guess[0], self.nat_grad[0])
-		#exit()
+		# apply conjugate gradient a few times
+		#print(self.cg_maxiter)
+		info=1
+		while info>0 and self.cg_maxiter<1E5:
+			# apply cg
+			#self.nat_grad, info, iter_ = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
+			self.nat_grad, info = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
+			# 
+			if info>0:
+				self.cg_maxiter*=2
+				print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.atol,self.cg_maxiter))
+				
+		# print(np.linalg.cond(self.S_matrix), self.delta)
+		# print(self.F_vector[0],self.S_matrix[-1,-1], self.nat_grad_guess[0], self.nat_grad[0])
+		# exit()
 	
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
@@ -189,10 +209,10 @@ class natural_gradient():
 		# normalize gradients
 		if not self.RK_on:
 			self.r2_cost=self._compute_r2_cost(Eloc_params_dict)
-			self.max_grads=[np.max(jnp.abs(self.grad.real)), np.max(jnp.abs(self.nat_grad.real))]
+			self.max_grads=[np.max(jnp.abs(self.F_vector.real)), np.max(jnp.abs(self.nat_grad.real))]
 
 
-			#self.nat_grad /= np.sqrt(jnp.dot(self.grad.conj(),self.nat_grad).real)
+			#self.nat_grad /= np.sqrt(jnp.dot(self.F_vector.conj(),self.nat_grad).real)
 
 
 			
@@ -254,7 +274,7 @@ class natural_gradient():
 
 		initial_grad=self.compute(NN_params,batch,Eloc_params_dict,mode=mode)
 		# cost and loss
-		self.max_grads=[jnp.max(jnp.abs(self.grad.real)).block_until_ready(), jnp.max(jnp.abs(self.nat_grad.real)).block_until_ready()]	
+		self.max_grads=[jnp.max(jnp.abs(self.F_vector.real)).block_until_ready(), jnp.max(jnp.abs(self.nat_grad.real)).block_until_ready()]	
 		self.r2_cost=self._compute_r2_cost(Eloc_params_dict)
 	
 		error_ratio=0.0
