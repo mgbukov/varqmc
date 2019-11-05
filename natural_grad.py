@@ -48,15 +48,16 @@ class natural_gradient():
 		# CG params
 		self.RK_on=False
 
+		self.check_on=True # toggles S-matrix checks
+	
 		self.cg_maxiter=1E4
 		self.tol=1E-7 # CG tolerance
-		self.delta=5E-5 #50.0
+		self.delta=5E-5 #50.0 # S-matrix regularizer
 
 		self.epoch=0
 		self.r2_cost=0.0
 		self.max_grads=0.0
-		self.check_on=True
-	
+		
 	
 	def compute_fisher_metric(self,mode='MC',Eloc_params_dict=None):
 		

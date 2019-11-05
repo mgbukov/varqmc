@@ -288,8 +288,8 @@ cdef class Neural_Net:
             # define DNN
             init_params, self.apply_layer = serial(
                                                     GeneralDeep_cpx(shapes['layer_1'], ignore_b=True), 
-                                                    #LogCosh_cpx,
-                                                    #GeneralDeep_cpx(shapes['layer_2'], ignore_b=False), 
+                                                    LogCosh_cpx,
+                                                    GeneralDeep_cpx(shapes['layer_2'], ignore_b=False), 
                                                 )
            
             input_shape=(1,self.N_sites)

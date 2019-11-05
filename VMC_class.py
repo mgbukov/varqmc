@@ -165,8 +165,8 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			shapes=dict(layer_1 = [self.L**2, 4], 
-					#	layer_2 = [4,12], 
+			shapes=dict(layer_1 = [self.L**2, 12], 
+						layer_2 = [12,4], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in shapes.values() )
 
@@ -558,10 +558,10 @@ class VMC(object):
 				# sum up MPI processes
 				grads=np.zeros_like(grads_MPI)
 				self.comm.Allreduce(grads_MPI._value, grads,  op=MPI.SUM) 
+				loss=[np.max(grads),0.0]
 				grads = self.DNN.Reshape.to_gradient_format( grads )
 
-				loss=[np.max(grads),0.0]
-
+				
 
 			##### apply gradients
 			self.opt_state = self.opt_update(iteration, grads, self.opt_state) 
