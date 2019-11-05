@@ -13,4 +13,4 @@ optimizer: NG
 save_data: true
 seed: 1
 start_iter: 0
-stop_iter: 9
+stop_iter: 3

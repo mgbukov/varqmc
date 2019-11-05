@@ -311,7 +311,8 @@ int update_offdiag(const int n_op,
 				  		npy_float64 spin_bra[], // row
 				  		npy_int32 ket_index[],
 				  		double M[],
-				  I rep_int_to_spinconfig(const int,I,npy_float64*)
+				  //I rep_int_to_spinconfig(const int,I,npy_float64*)
+				  void rep_int_to_spinconfig(const int,I,npy_float64*)
 				  )
 {	
 	int N=_L*_L;
@@ -363,17 +364,10 @@ int update_offdiag(const int n_op,
 			//cout << pcon_bool << " , " << m << endl;
 
 			if(m!=0.0){ // r state in same particle-number sector
-
-				// bra_rep[l] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symm*l]);
-				// M[l] = m;
-				// ket_index[l]=j;
-				// l++;
-				
-				// bra_rep[j] = ref_state(r);
-				// int_to_spinstate(N,r,&spin_bra[N*N_symm*j]);
-				
-				//bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symm*j]);
-				bra_rep[j] = rep_int_to_spinconfig(N,r,&spin_bra[N*N_symm*j]);
+	
+				//bra_rep[j] = rep_int_to_spinconfig(N,r,&spin_bra[N*N_symm*j]);
+				rep_int_to_spinconfig(N,r,&spin_bra[N*N_symm*j]);
+				bra_rep[j] = r;
 				M[j] = m;
 				ket_index[j]=j;
 

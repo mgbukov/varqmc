@@ -112,8 +112,10 @@ cdef extern from "sample_4x4.h":
     T swap_bits[T](const T, int, int) nogil
     T magnetized_int[T](int, int, T) nogil
 
-    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.float64_t [], np.int32_t[], double[], I (*)(const int,I,np.float64_t*) ) nogil  
+    #int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.float64_t [], np.int32_t[], double[], I (*)(const int,I,np.float64_t*) ) nogil  
+    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.float64_t [], np.int32_t[], double[], void (*)(const int,I,np.float64_t*) ) nogil  
     
+
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
     void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[]) nogil
@@ -178,16 +180,19 @@ def update_offdiag_ME(np.ndarray ket,basis_type[:] bra, np.float64_t[:,:] spin_b
     cdef void * ket_ptr = np.PyArray_GETPTR1(ket,0)
 
     cdef rep_func_type rep_spin_config
+    cdef func_type spin_config
 
     if NN_type=='DNN':
         rep_spin_config=<rep_func_type>rep_int_to_spinstate
+        spin_config=<func_type>int_to_spinstate
     elif NN_type=='CNN':
         rep_spin_config=<rep_func_type>rep_int_to_spinstate_conv
     else:
         raise ValueError("unsupported string for variable NN_type.") 
 
     with nogil:
-        l=update_offdiag(n_op,&c_opstr[0],&indx[0],J,Ns,N_symm,<basis_type*>ket_ptr,&bra[0],&spin_bra[0,0],&ket_indx[0],&M[0],rep_spin_config)
+        #l=update_offdiag(n_op,&c_opstr[0],&indx[0],J,Ns,N_symm,<basis_type*>ket_ptr,&bra[0],&spin_bra[0,0],&ket_indx[0],&M[0],rep_spin_config)
+        l=update_offdiag(n_op,&c_opstr[0],&indx[0],J,Ns,N_symm,<basis_type*>ket_ptr,&bra[0],&spin_bra[0,0],&ket_indx[0],&M[0],spin_config)
 
     return l
 
