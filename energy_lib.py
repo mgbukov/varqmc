@@ -197,7 +197,7 @@ class Energy_estimator():
 
 
 
-	def init_global_params(self):
+	def init_global_params(self,SdotS=False):
 
 		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.float64)
 		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
@@ -212,29 +212,6 @@ class Energy_estimator():
 
 
 		#######
-
-		if SdotS:
-			self._MEs=np.zeros_like(self._MEs)
-			self._spinstates_bra=np.zeros_like(self._spinstates_bra)
-			self._ints_bra_rep=np.zeros_like(self._ints_bra_rep)
-			self._ints_ket_ind=np.zeros_like(self._ints_ket_ind)
-			self._n_per_term=np.zeros_like(self._n_per_term)
-		else:
-			self._MEs=np.zeros_like(self._MEs)
-			self._spinstates_bra=np.zeros_like(self._spinstates_bra)
-			self._ints_bra_rep=np.zeros_like(self._ints_bra_rep)
-			self._ints_ket_ind=np.zeros_like(self._ints_ket_ind)
-			self._n_per_term=np.zeros_like(self._n_per_term)
-
-
-		self._Eloc_cos=np.zeros_like(self._Eloc_cos)
-		self._Eloc_sin=np.zeros_like(self._Eloc_sin)
-
-		self.Eloc_real=np.zeros_like(self._Eloc_cos)
-		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
-
-
-	def _reset_locenergy_params(self,SdotS=False):
 
 		if SdotS:
 			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.float64)
@@ -255,6 +232,30 @@ class Energy_estimator():
 
 		self.Eloc_real=np.zeros_like(self._Eloc_cos)
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
+
+
+
+	def _reset_locenergy_params(self,SdotS=False):
+
+		if SdotS:
+			self._MEs=np.zeros_like(self._MEs)
+			self._spinstates_bra=np.zeros_like(self._spinstates_bra)
+			self._ints_bra_rep=np.zeros_like(self._ints_bra_rep)
+			self._ints_ket_ind=np.zeros_like(self._ints_ket_ind)
+			self._n_per_term=np.zeros_like(self._n_per_term)
+		else:
+			self._MEs=np.zeros_like(self._MEs)
+			self._spinstates_bra=np.zeros_like(self._spinstates_bra)
+			self._ints_bra_rep=np.zeros_like(self._ints_bra_rep)
+			self._ints_ket_ind=np.zeros_like(self._ints_ket_ind)
+			self._n_per_term=np.zeros_like(self._n_per_term)
+
+
+		self._Eloc_cos=np.zeros_like(self._Eloc_cos)
+		self._Eloc_sin=np.zeros_like(self._Eloc_sin)
+
+		self.Eloc_real=np.zeros_like(self._Eloc_cos)
+		self.Eloc_imag=np.zeros_like(self._Eloc_cos)		
 
 
 	def compute_local_energy(self,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,log_psi_shift,SdotS=False):
