@@ -211,6 +211,29 @@ class Energy_estimator():
 		self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
 
 
+		#######
+
+		if SdotS:
+			self._MEs=np.zeros_like(self._MEs)
+			self._spinstates_bra=np.zeros_like(self._spinstates_bra)
+			self._ints_bra_rep=np.zeros_like(self._ints_bra_rep)
+			self._ints_ket_ind=np.zeros_like(self._ints_ket_ind)
+			self._n_per_term=np.zeros_like(self._n_per_term)
+		else:
+			self._MEs=np.zeros_like(self._MEs)
+			self._spinstates_bra=np.zeros_like(self._spinstates_bra)
+			self._ints_bra_rep=np.zeros_like(self._ints_bra_rep)
+			self._ints_ket_ind=np.zeros_like(self._ints_ket_ind)
+			self._n_per_term=np.zeros_like(self._n_per_term)
+
+
+		self._Eloc_cos=np.zeros_like(self._Eloc_cos)
+		self._Eloc_sin=np.zeros_like(self._Eloc_sin)
+
+		self.Eloc_real=np.zeros_like(self._Eloc_cos)
+		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
+
+
 	def _reset_locenergy_params(self,SdotS=False):
 
 		if SdotS:
@@ -225,7 +248,6 @@ class Energy_estimator():
 			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
 			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 			self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
-
 
 
 		self._Eloc_cos=np.zeros(self.N_batch, dtype=np.float64)
