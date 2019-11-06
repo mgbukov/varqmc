@@ -53,8 +53,8 @@ IF _L==6:
 
 
 N_sites=_L*_L
-ctypedef basis_type (*rep_func_type)(const int,basis_type,np.float64_t*) nogil;
-ctypedef void (*func_type)(const int,basis_type,np.float64_t*) nogil;
+ctypedef basis_type (*rep_func_type)(const int,basis_type,np.int8_t*) nogil;
+ctypedef void (*func_type)(const int,basis_type,np.int8_t*) nogil;
 
 
 ### enables OMP pragmas in cython
@@ -121,17 +121,17 @@ cdef extern from "sample.h":
     T swap_bits[T](const T, int, int) nogil
     T magnetized_int[T](int, int, T) nogil
 
-    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.float64_t [], np.int32_t[], double[], I (*)(const int,I,np.float64_t*) ) nogil  
+    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.int8_t [], np.int32_t[], double[], I (*)(const int,I,np.int8_t*) ) nogil  
     
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
     void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[]) nogil
 
-    void int_to_spinstate[T](const int,T ,np.float64_t []) nogil
-    void int_to_spinstate_conv[T](const int,T ,np.float64_t []) nogil
+    void int_to_spinstate[T,J](const int,T ,J []) nogil
+    void int_to_spinstate_conv[T,J](const int,T ,J []) nogil
 
-    T rep_int_to_spinstate[T](const int,T ,np.float64_t []) nogil
-    T rep_int_to_spinstate_conv[T](const int,T ,np.float64_t []) nogil
+    T rep_int_to_spinstate[T,J](const int,T ,J []) nogil
+    T rep_int_to_spinstate_conv[T,J](const int,T ,J []) nogil
 
 
 
@@ -146,7 +146,7 @@ def swap_spins(basis_type s, int i, int j):
 
 
 @cython.boundscheck(False)
-def integer_to_spinstate(basis_type[:] states,np.float64_t[::1] out, int N_features, object NN_type='DNN'):
+def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features, object NN_type='DNN'):
     cdef int i;
     cdef int Ns=states.shape[0]
     cdef int Nsites=N_sites
@@ -179,7 +179,7 @@ def update_diag_ME(np.ndarray ket,double[::1] M,object opstr,int[::1] indx,doubl
 
 
 @cython.boundscheck(False)
-def update_offdiag_ME(np.ndarray ket,basis_type[:] bra, np.float64_t[:,:] spin_bra,np.int32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J,int N_symm, object NN_type='DNN'):
+def update_offdiag_ME(np.ndarray ket, basis_type[:] bra, np.int8_t[:,:] spin_bra,np.int32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J,int N_symm, object NN_type='DNN'):
     cdef char[::1] c_opstr = bytearray(opstr,"utf-8")
     cdef int n_op = indx.shape[0]
     cdef int Ns = ket.shape[0]
@@ -248,7 +248,7 @@ cdef class Neural_Net:
 
     cdef object evaluate_phase, evaluate_log
 
-    cdef np.float64_t[::1] spinstate_s, spinstate_t
+    cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
 
     cdef vector[double] mod_psi_s, mod_psi_t
@@ -381,8 +381,8 @@ cdef class Neural_Net:
         self.N_MC_chains=N_MC_chains
         self.N_spinconfigelmts=self.N_symm*self.N_sites
 
-        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.float64)
-        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.float64)
+        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
+        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
 
         # access data in device array; transfer memory from numpy to jax
         if self.NN_type=='DNN':
@@ -534,7 +534,7 @@ cdef class Neural_Net:
                     int thermalization_time,
                     double acceptance_ratio,
                     #
-                    np.float64_t[::1] spin_states,
+                    np.int8_t[::1] spin_states,
                     basis_type[::1] ket_states,
                     np.float64_t[::1] mod_kets,
                     #
@@ -586,13 +586,13 @@ cdef class Neural_Net:
                             int thermalization_time,
                             int auto_correlation_time,
                             #
-                            np.float64_t * spin_states,
+                            np.int8_t * spin_states,
                             basis_type * ket_states,
                             double * mod_kets,
                             basis_type[] s0_vec,
                             #
-                            np.float64_t * spinstate_s,
-                            np.float64_t * spinstate_t,
+                            np.int8_t * spinstate_s,
+                            np.int8_t * spinstate_t,
                             #
                             int chain_n,
                             mt19937& rng

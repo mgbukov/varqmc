@@ -120,8 +120,10 @@ inline T magnetized_int(int m, int N, T ordinal)
 }
 
 
-template<class T>
-inline void _int_to_spinstate(const int N,T state,npy_float64 out[])
+
+
+template<class T, class J>
+inline void _int_to_spinstate(const int N,T state,J out[])
 {	
 	//npy_float64 n;
 	T one=1;
@@ -135,8 +137,8 @@ inline void _int_to_spinstate(const int N,T state,npy_float64 out[])
 }
 
 
-template<class I>
-I rep_int_to_spinstate(const int N,I s,npy_float64 out[])
+template<class I, class J>
+I rep_int_to_spinstate(const int N,I s,J out[])
 {	
 	
 	I t = s;
@@ -184,8 +186,8 @@ I rep_int_to_spinstate(const int N,I s,npy_float64 out[])
 
 
 
-template<class I>
-void int_to_spinstate(const int N,I s,npy_float64 out[])
+template<class I, class J>
+void int_to_spinstate(const int N,I s,J out[])
 {	
 	
 	I t = s;
@@ -217,8 +219,8 @@ void int_to_spinstate(const int N,I s,npy_float64 out[])
 
 
 
-template<class I>
-I rep_int_to_spinstate_conv(const int N,I s,npy_float64 out[])
+template<class I, class J>
+I rep_int_to_spinstate_conv(const int N,I s,J out[])
 {	
 	
 	I t = s;
@@ -263,8 +265,8 @@ I rep_int_to_spinstate_conv(const int N,I s,npy_float64 out[])
 
 
 
-template<class I>
-void int_to_spinstate_conv(const int N,I s,npy_float64 out[])
+template<class I, class J>
+void int_to_spinstate_conv(const int N,I s,J out[])
 {	
 	
 	I t = s;
@@ -307,10 +309,10 @@ int update_offdiag(const int n_op,
 				  const int N_symm,
 				  const	I ket[], // col
 				  		I bra_rep[],
-				  		npy_float64 spin_bra[], // row
+				  		npy_int8 spin_bra[], // row
 				  		npy_int32 ket_index[],
 				  		double M[],
-				  I rep_int_to_spinconfig(const int,I,npy_float64*)
+				  I rep_int_to_spinconfig(const int,I,npy_int8*)
 				  )
 {	
 	int N=_L*_L;
