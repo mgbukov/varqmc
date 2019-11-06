@@ -165,8 +165,8 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			shapes=dict(layer_1 = [self.L**2, 12], 
-						layer_2 = [12,4], 
+			shapes=dict(layer_1 = [self.L**2, 6], 
+						#layer_2 = [12,4], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in shapes.values() )
 
@@ -241,7 +241,8 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			step_size=5E-3
+			#step_size=5E-3
+			step_size=1E-5
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=step_size)
 			#self.opt_state = self.opt_init(self.NN_params)
 			self.opt_state = self.opt_init(self.DNN.params)

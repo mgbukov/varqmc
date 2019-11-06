@@ -102,12 +102,13 @@ class MC_sampler():
 
 		self._reset_global_vars()
 		assert(self.spinstates_ket.max()==0)
-		
+
+
 		N_accepted, N_MC_proposals = DNN.sample(self.N_MC_points,self.thermalization_time,self.acceptance_ratio,
 												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
 												)
 
-		
+			
 		# N_accepted, N_MC_proposals = sample(self.N_MC_points,self.thermalization_time,self.acceptance_ratio,
 		# 									self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
 		# 									DNN)

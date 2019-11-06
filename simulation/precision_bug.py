@@ -41,6 +41,9 @@ E_linux = eigh(Fisher_linux/norm_linux,eigvals_only=True)
 E_linux2, _ = eig(Fisher_linux/norm_linux)
 E_linux2=np.sort(E_linux2.real)
 
+#print(E_osx)
+#exit()
+
 
 E_linux = eigh(Fisher_linux/norm_linux +1E-15*np.eye(Fisher_osx.shape[0])/norm_linux,eigvals_only=True)
 #print(E_linux)
@@ -51,15 +54,15 @@ np.linalg.cholesky(Fisher_osx+1E-15*np.eye(Fisher_osx.shape[0]))
 
 
 
-tol=1E-7
-delta=1E-5	
+tol=1E-5
+delta=1E-7	
 nat_grad_guess=np.zeros_like(grad_osx)
 
-Fisher_osx_r   = Fisher_osx   + delta**np.diag(np.diag(Fisher_osx))
-Fisher_linux_r = Fisher_linux + delta**np.diag(np.diag(Fisher_linux))
+# Fisher_osx_r   = Fisher_osx   + delta**np.diag(np.diag(Fisher_osx))
+# Fisher_linux_r = Fisher_linux + delta**np.diag(np.diag(Fisher_linux))
 
-#Fisher_osx_r   = Fisher_osx   + delta*np.eye(Fisher_osx.shape[0]) 
-#Fisher_linux_r = Fisher_linux + delta*np.eye(Fisher_linux.shape[0]) 
+Fisher_osx_r   = Fisher_osx   + delta*np.eye(Fisher_osx.shape[0]) 
+Fisher_linux_r = Fisher_linux + delta*np.eye(Fisher_linux.shape[0]) 
 
 norm_osx_r=np.linalg.norm(Fisher_osx_r)
 norm_linux_r=np.linalg.norm(Fisher_linux_r)

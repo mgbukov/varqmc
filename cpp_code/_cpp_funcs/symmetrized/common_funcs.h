@@ -213,7 +213,6 @@ void int_to_spinstate(const int N,I s,npy_float64 out[])
 		t = flip_d(t);
 	}
 		
-		
 }
 
 

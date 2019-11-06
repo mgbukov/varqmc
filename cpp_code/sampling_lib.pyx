@@ -3,7 +3,7 @@
 #cython: boundscheck=False
 #cython: wraparound=False
 #cython: cdivision=True
-#cython: profile=True
+#cython: profile=False
 
 from jax.config import config
 config.update("jax_enable_x64", True)
@@ -34,20 +34,30 @@ from functools import partial
 ##############################################
 
 
-L=4
-ctypedef np.uint16_t basis_type
+DEF _L=6
+cdef extern from *:
+    """
+    #define _L 6
+    """
+    pass
 
-#L=6    
-#ctypedef np.uint64_t basis_type
+
+##############################################
 
 
 
-N_sites=L*L
+IF _L==4:
+    ctypedef np.uint16_t basis_type
+IF _L==6:
+    ctypedef np.uint64_t basis_type
+
+
+N_sites=_L*_L
 ctypedef basis_type (*rep_func_type)(const int,basis_type,np.float64_t*) nogil;
 ctypedef void (*func_type)(const int,basis_type,np.float64_t*) nogil;
 
 
-
+### enables OMP pragmas in cython
 cdef extern from *:
     """
     #define START_OMP_PARALLEL_PRAGMA() _Pragma("omp parallel") {
@@ -67,7 +77,7 @@ cdef extern from "<stdlib.h>" nogil:
     int rand_r(unsigned int *seed) nogil;
 
 '''
-## cpp mt19937: different in linux and osx 
+## cpp mt19937: different on linux and osx 
 cdef extern from "<random>" namespace "std":
     cdef cppclass mt19937 nogil:
         mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
@@ -104,9 +114,8 @@ cdef extern from "boost/random/uniform_real_distribution.hpp" namespace "boost::
 
 
 
-
-cdef extern from "sample_4x4.h":
-    
+cdef extern from "sample.h":
+        
     int choose_n_k(int, int) nogil
     
     T swap_bits[T](const T, int, int) nogil
@@ -123,6 +132,7 @@ cdef extern from "sample_4x4.h":
 
     T rep_int_to_spinstate[T](const int,T ,np.float64_t []) nogil
     T rep_int_to_spinstate_conv[T](const int,T ,np.float64_t []) nogil
+
 
 
 @cython.boundscheck(False)
@@ -259,7 +269,7 @@ cdef class Neural_Net:
 
     def __init__(self,MPI_rank,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
 
-        self.N_sites=L*L
+        self.N_sites=_L*_L
         self.MPI_rank=MPI_rank
  
         # fix seed
@@ -283,13 +293,13 @@ cdef class Neural_Net:
 
         if NN_type=='DNN':
            
-            self.N_symm=L*L*2*2*2 # no Z symmetry
+            self.N_symm=_L*_L*2*2*2 # no Z symmetry
           
             # define DNN
             init_params, self.apply_layer = serial(
                                                     GeneralDeep_cpx(shapes['layer_1'], ignore_b=True), 
-                                                    LogCosh_cpx,
-                                                    GeneralDeep_cpx(shapes['layer_2'], ignore_b=False), 
+                                                    #LogCosh_cpx,
+                                                    #GeneralDeep_cpx(shapes['layer_2'], ignore_b=False), 
                                                 )
            
             input_shape=(1,self.N_sites)
@@ -331,13 +341,13 @@ cdef class Neural_Net:
                                             
                                                 )
             
-            input_shape=np.array((1,1,L,L),dtype=np.int) # NCHW input format
+            input_shape=np.array((1,1,_L,_L),dtype=np.int) # NCHW input format
             output_shape, self.params = init_params(rng,input_shape)
 
             
-            self.input_shape = (-1,1,L,L) # reshape input data batch
-            self.reduce_shape = (-1,self.N_symm,)+output_shape[1:] #(-1,self.N_symm,out_chan,L,L) # tuple to reshape output before symmetrization
-            self.output_shape = (-1,np.prod(output_shape[1:]) ) #(-1,out_chan*L*L)
+            self.input_shape = (-1,1,_L,_L) # reshape input data batch
+            self.reduce_shape = (-1,self.N_symm,)+output_shape[1:] #(-1,self.N_symm,out_chan,_L,_L) # tuple to reshape output before symmetrization
+            self.output_shape = (-1,np.prod(output_shape[1:]) ) #(-1,out_chan*_L*_L)
            
 
             self.Reshape = Reshape(self.params)
@@ -359,8 +369,6 @@ cdef class Neural_Net:
         # define network evaluation on GPU
         self.evaluate_log  =jit(self._evaluate_log)
         self.evaluate_phase=jit(self._evaluate_phase)
-
-
         
         if self.NN_type=='DNN':
             self.spin_config=<func_type>int_to_spinstate
@@ -380,7 +388,7 @@ cdef class Neural_Net:
         if self.NN_type=='DNN':
             spinstate_shape=[self.N_MC_chains*self.N_symm,self.N_sites]
         elif self.NN_type=='CNN':
-            spinstate_shape=[self.N_MC_chains*self.N_symm,1,L,L]
+            spinstate_shape=[self.N_MC_chains*self.N_symm,1,_L,_L]
         self.spinstate_s_py=np.asarray(self.spinstate_s).reshape(spinstate_shape)
         self.spinstate_t_py=np.asarray(self.spinstate_t).reshape(spinstate_shape)
 
@@ -622,6 +630,7 @@ cdef class Neural_Net:
         
         # compute initial spin config and its amplitude value
         self.spin_config(self.N_sites,s,&spinstate_s[0]);
+
 
 
         # set omp barrier

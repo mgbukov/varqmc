@@ -52,7 +52,7 @@ class natural_gradient():
 	
 		self.cg_maxiter=1E4
 		self.tol=1E-7 # CG tolerance
-		self.delta=5E-5 #50.0 # S-matrix regularizer
+		self.delta=10.0 #50.0 # S-matrix regularizer
 
 		self.epoch=0
 		self.r2_cost=0.0
@@ -224,11 +224,11 @@ class natural_gradient():
 
 	def update_params(self,self_time=1.0):
 
-		self.delta *= np.exp(-0.075*self_time)
+		#self.delta *= np.exp(-0.075*self_time)
 
-		# if self.delta>5E-5:
-		# 	self.delta *= np.exp(-0.075*self_time)
-		# 	#self.delta *= np.exp(-0.075)
+		if self.delta>self.tol:
+			self.delta *= np.exp(-0.075*self_time)
+			#self.delta *= np.exp(-0.075)
 		# else:
 		# 	self.delta=0.0
 
