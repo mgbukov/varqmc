@@ -57,6 +57,10 @@ N_samples=73882
 
 spinstates=np.ones((N_samples,N_symm,N_sites), dtype=np.int8)
 
+from sys import getsizeof
+print(getsizeof(spinstates), spinstates.nbytes)
+exit()
+
 ######
 
 
@@ -109,7 +113,7 @@ output_shape=(-1,N_neurons)
 
 
 @jit
-def evaluate_2(params, batch):
+def evaluate(params, batch):
 
     # reshaping required inside evaluate func because of per-sample gradients
     batch=batch.reshape(input_shape)
@@ -132,7 +136,7 @@ def evaluate_2(params, batch):
 
 
 ti=time.time()
-log_psi, phase_psi = evaluate_2(DNN.params, spinstates)
+log_psi, phase_psi = evaluate(DNN.params, spinstates)
 tf=time.time()
 
 print('DNN time 2: {0:0.4f}'.format(tf-ti))

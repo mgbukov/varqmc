@@ -35,7 +35,7 @@ def periodic_padding(inputs,filter_shape,strides):
 
 
 
-def GeneralDeep_cpx(W_shape, ignore_b=False):
+def GeneralDense_cpx(W_shape, ignore_b=False):
 
     def init_fun(rng,input_shape):
 
@@ -87,12 +87,9 @@ def GeneralDeep_cpx(W_shape, ignore_b=False):
             z_imag += jnp.dot(inputs_imag,W_real)
 
         if not ignore_b:
-            # read-off params
-            b_real=params[0][1]
-            b_imag=params[1][1]
-
-            z_real += b_real
-            z_imag += b_imag
+            # add bias
+            z_real += params[0][1]
+            z_imag += params[1][1]
        
         return z_real, z_imag
 

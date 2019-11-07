@@ -285,14 +285,7 @@ class Energy_estimator():
 		#print(_ints_bra_uq.shape)
 		
 		# evaluate network on unique representatives only
-		#print(self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites).shape, self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites).nbytes)
-		#exit()
-
-		ti=time.time()
 		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
-		tf=time.time()
-		print('DNN time: {0:0.4f}'.format(tf-ti))
-		exit()
 		log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
 		phase_psi_bras=phase_psi_bras[inv_index]._value
 

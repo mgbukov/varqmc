@@ -297,9 +297,9 @@ cdef class Neural_Net:
           
             # define DNN
             init_params, self.apply_layer = serial(
-                                                    GeneralDeep_cpx(shapes['layer_1'], ignore_b=True), 
+                                                    GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
                                                     #LogCosh_cpx,
-                                                    #GeneralDeep_cpx(shapes['layer_2'], ignore_b=False), 
+                                                    #GeneralDense_cpx(shapes['layer_2'], ignore_b=False), 
                                                 )
            
             input_shape=(1,self.N_sites)
@@ -323,10 +323,6 @@ cdef class Neural_Net:
             self.N_symm=2*2*2 # no Z, Tx, Ty symmetry
 
             dim_nums=('NCHW', 'OIHW', 'NCHW') # default
-            out_chan=1
-            filter_shape=(2,2)
-            strides=(1,1)
-
             
             # define CNN
             init_value_W = 1E-3
