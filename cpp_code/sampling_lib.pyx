@@ -452,6 +452,10 @@ cdef class Neural_Net:
         def __get__(self):
             return self.evaluate_log
 
+    property apply_layer:
+        def __get__(self):
+            return self.apply_layer
+
 
 
     @cython.boundscheck(False)

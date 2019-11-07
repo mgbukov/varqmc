@@ -162,14 +162,14 @@ def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
             inputs_imag = None
 
         # move into lax.conv_general_dilated after defining padding='PERIODIC'
-        inputs_real=periodic_padding(inputs_real,filter_shape,strides)
+        inputs_real=periodic_padding(inputs_real.astype(W_real.dtype),filter_shape,strides)
         
         z_real = lax.conv_general_dilated(inputs_real, W_real, strides, padding, one, one, dimension_numbers)
         z_imag = lax.conv_general_dilated(inputs_real, W_imag, strides, padding, one, one, dimension_numbers)
 
         if inputs_imag is not None:
             # move into lax.conv_general_dilated after defining padding='PERIODIC'
-            inputs_imag=periodic_padding(inputs_imag,filter_shape,strides)
+            inputs_imag=periodic_padding(inputs_imag.astype(W_imag.dtype),filter_shape,strides)
 
             z_real -= lax.conv_general_dilated(inputs_imag, W_imag, strides, padding, one, one, dimension_numbers)
             z_imag += lax.conv_general_dilated(inputs_imag, W_real, strides, padding, one, one, dimension_numbers)
