@@ -25,10 +25,6 @@ import numpy as np
 import yaml
 import pickle
 
-seed=1
-np.random.seed(seed)
-np.random.RandomState(seed)
-rng = random.PRNGKey(seed)
 
 from mpi4py import MPI
 
@@ -57,6 +53,10 @@ class VMC(object):
 		# initialize communicator
 		self.comm=MPI.COMM_WORLD
 		self.seed = params_dict['seed']
+
+		np.random.seed(self.seed)
+		np.random.RandomState(self.seed)
+		rng = random.PRNGKey(self.seed)
 
 
 		self.L=params_dict['L'] # system size
