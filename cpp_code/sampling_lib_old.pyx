@@ -3,7 +3,7 @@
 #cython: boundscheck=False
 #cython: wraparound=False
 #cython: cdivision=True
-#cython: profile=False
+#cython: profile=True
 
 from jax.config import config
 config.update("jax_enable_x64", True)
@@ -23,41 +23,33 @@ from libc.stdlib cimport rand, srand, RAND_MAX
 from cython.parallel cimport prange, threadid, parallel
 cimport openmp
 
+seed=1
+np.random.seed(seed)
+np.random.RandomState(seed)
+rng = random.PRNGKey(seed)
 
 
-from DNN_architectures_cpx import *
-from reshape_class import Reshape
-from functools import partial   
+from DNN_architectures import *
 
 
 
 ##############################################
 
 
-DEF _L=6
-cdef extern from *:
-    """
-    #define _L 6
-    """
-    pass
+L=4
+ctypedef np.uint16_t basis_type
 
-
-##############################################
+#L=6    
+#ctypedef np.uint64_t basis_type
 
 
 
-IF _L==4:
-    ctypedef np.uint16_t basis_type
-IF _L==6:
-    ctypedef np.uint64_t basis_type
+N_sites=L*L
+ctypedef basis_type (*rep_func_type)(const int,basis_type,np.float64_t*) nogil;
+ctypedef void (*func_type)(const int,basis_type,np.float64_t*) nogil;
 
 
-N_sites=_L*_L
-ctypedef basis_type (*rep_func_type)(const int,basis_type,np.int8_t*) nogil;
-ctypedef void (*func_type)(const int,basis_type,np.int8_t*) nogil;
 
-
-### enables OMP pragmas in cython
 cdef extern from *:
     """
     #define START_OMP_PARALLEL_PRAGMA() _Pragma("omp parallel") {
@@ -76,77 +68,27 @@ cdef extern from *:
 cdef extern from "<stdlib.h>" nogil:
     int rand_r(unsigned int *seed) nogil;
 
-'''
-## cpp mt19937: different on linux and osx 
-cdef extern from "<random>" namespace "std":
-    cdef cppclass mt19937 nogil:
-        mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
-        mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
 
-    cdef cppclass uniform_real_distribution[T] nogil:
-        uniform_real_distribution() nogil
-        uniform_real_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-
-    cdef cppclass uniform_int_distribution[T] nogil:
-        uniform_int_distribution() nogil
-        uniform_int_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-'''
-
-
-cdef extern from "boost/random/mersenne_twister.hpp" namespace "boost::random" nogil:
-    cdef cppclass mt19937 nogil:
-        mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
-        mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
-
-cdef extern from "boost/random/uniform_int_distribution.hpp" namespace "boost::random" nogil:
-    cdef cppclass uniform_int_distribution[T] nogil:
-        uniform_int_distribution() nogil
-        uniform_int_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-
-cdef extern from "boost/random/uniform_real_distribution.hpp" namespace "boost::random" nogil:
-    cdef cppclass uniform_real_distribution[T] nogil:
-        uniform_real_distribution() nogil
-        uniform_real_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-
-
-
-cdef extern from "sample.h":
-        
-    int choose_n_k(int, int) nogil
+cdef extern from "sample_4x4.h":
     
     T swap_bits[T](const T, int, int) nogil
-    T magnetized_int[T](int, int, T) nogil
-
-    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.int8_t [], np.int32_t[], double[], I (*)(const int,I,np.int8_t*) ) nogil  
+    
+    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.float64_t [], np.int32_t[], double[], I (*)(const int,I,np.float64_t*) ) nogil  
     
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
     void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[]) nogil
 
-    void int_to_spinstate[T,J](const int,T ,J []) nogil
-    void int_to_spinstate_conv[T,J](const int,T ,J []) nogil
+    void int_to_spinstate[T](const int,T ,np.float64_t []) nogil
+    void int_to_spinstate_conv[T](const int,T ,np.float64_t []) nogil
 
-    T rep_int_to_spinstate[T,J](const int,T ,J []) nogil
-    T rep_int_to_spinstate_conv[T,J](const int,T ,J []) nogil
+    T rep_int_to_spinstate[T](const int,T ,np.float64_t []) nogil
+    T rep_int_to_spinstate_conv[T](const int,T ,np.float64_t []) nogil
 
-
-
-@cython.boundscheck(False)
-def swap_spins(basis_type s, int i, int j):
-    cdef basis_type t;
-
-    with nogil:
-        t = swap_bits(s,i,j)
-
-    return t
 
 
 @cython.boundscheck(False)
-def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features, object NN_type='DNN'):
+def integer_to_spinstate(basis_type[:] states,np.float64_t[::1] out, int N_features, object NN_type='DNN'):
     cdef int i;
     cdef int Ns=states.shape[0]
     cdef int Nsites=N_sites
@@ -179,7 +121,7 @@ def update_diag_ME(np.ndarray ket,double[::1] M,object opstr,int[::1] indx,doubl
 
 
 @cython.boundscheck(False)
-def update_offdiag_ME(np.ndarray ket, basis_type[:] bra, np.int8_t[:,:] spin_bra,np.int32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J,int N_symm, object NN_type='DNN'):
+def update_offdiag_ME(np.ndarray ket,basis_type[:] bra, np.float64_t[:,:] spin_bra,np.int32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J,int N_symm, object NN_type='DNN'):
     cdef char[::1] c_opstr = bytearray(opstr,"utf-8")
     cdef int n_op = indx.shape[0]
     cdef int Ns = ket.shape[0]
@@ -228,143 +170,112 @@ def c_offdiag_sum(
 ###########################
 
 
-
-
-
-
-
 @cython.boundscheck(False)
 cdef class Neural_Net:
 
-    cdef object Reshape
     cdef object apply_layer
     cdef object W_real, W_imag
     cdef object params
     cdef object input_shape, reduce_shape, output_shape, out_chan, strides, filter_shape 
-    cdef object NN_type, NN_dtype
+    cdef object NN_type
 
-    cdef int MPI_rank, seed
+    cdef np.ndarray shapes, dims 
     cdef int N_varl_params, N_symm, N_sites
 
     cdef object evaluate_phase, evaluate_log
 
-    cdef np.int8_t[::1] spinstate_s, spinstate_t
+    cdef np.float64_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
 
     cdef vector[double] mod_psi_s, mod_psi_t
     
     cdef vector[np.uint16_t] sites
 
-    cdef int N_MC_chains, N_spinconfigelmts, N_layers
+    cdef int N_MC_chains, N_spinconfigelmts
 
     cdef vector[unsigned int] thread_seeds
 
     cdef func_type spin_config
-
-
-    cdef uniform_real_distribution[double] random_float
-    cdef uniform_int_distribution[int] random_int, rand_int_ordinal
-    cdef vector[mt19937] RNGs # hold a C++ instance
         
 
-    def __init__(self,MPI_rank,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
+    def __init__(self,shapes,N_MC_chains,NN_type='DNN',seed=0):
 
-        self.N_sites=_L*_L
-        self.MPI_rank=MPI_rank
+        W_shape=shapes[0]
+        self.N_sites=L*L
  
         # fix seed
-        self.seed=seed
-        np.random.seed(self.seed+self.MPI_rank)
-        np.random.RandomState(self.seed+self.MPI_rank)
-        srand(self.seed+self.MPI_rank)
-        rng = random.PRNGKey(self.seed) # same seed for all MPI processes to keep NN params the same
-        
+        srand(seed)
+
         # order important
-        self._init_NN(rng,shapes,NN_type,NN_dtype)
+        self._init_NN(W_shape,NN_type)
         self._init_evaluate()
         self._init_variables(N_MC_chains)
 
+    
 
-
-    def _init_NN(self,rng,shapes,NN_type,NN_dtype):
+    def _init_NN(self,W_shape,NN_type):
 
         self.NN_type=NN_type
-        self.NN_dtype=NN_dtype
 
         if NN_type=='DNN':
-           
-            self.N_symm=_L*_L*2*2*2 # no Z symmetry
-          
-            # define DNN
-            init_params, self.apply_layer = serial(
-                                                    GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                                    #LogCosh_cpx,
-                                                    #GeneralDense_cpx(shapes['layer_2'], ignore_b=False), 
-                                                )
-           
-            input_shape=(1,self.N_sites)
-            output_shape, self.params = init_params(rng,input_shape)
+            self.N_symm=L*L*2*2*2 # no Z symmetry
+            init_params, self.apply_layer = GeneralDeep(W_shape, ignore_b=True)
+            input_shape=None
 
-            #print(self.params)
-
-
-            self.input_shape = (-1,self.N_sites) # reshape input data batch
-            self.reduce_shape = (-1,self.N_symm,output_shape[1]) # tuple to reshape output before symmetrization
-            self.output_shape = (-1,) + output_shape[1:]
-           
-
-            self.Reshape = Reshape(self.params)
-            self.N_varl_params=self.Reshape.dims.sum() 
-
-
+            # tuple to reshape output before symmetrization
+            self.input_shape = (-1,self.N_sites)
+            self.reduce_shape = (-1,self.N_symm,W_shape[0]) 
+            self.output_shape = (-1,W_shape[0]) 
 
         elif NN_type=='CNN':
-            
             self.N_symm=2*2*2 # no Z, Tx, Ty symmetry
 
-            dim_nums=('NCHW', 'OIHW', 'NCHW') # default
-            
-            # define CNN
-            init_value_W = 1E-3
-            init_value_b = 1E-1
-            W_init = partial(random.uniform, minval=-init_value_W, maxval=+init_value_W )
-            b_init = partial(random.uniform, minval=-init_value_b, maxval=+init_value_b )
+            dimension_numbers=('NCHW', 'OIHW', 'NCHW') # default
+            self.out_chan=1
+            self.filter_shape=(2,2)
+            self.strides=(1,1)
 
-            init_params, self.apply_layer = serial(
-                                                    GeneralConv_cpx(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], strides=shapes['layer_1']['strides'], padding='PERIODIC', ignore_b=True, W_init=W_init, b_init=b_init), 
-                                                    #LogCosh_cpx,
-                                                    #GeneralConv_cpx(dim_nums, shapes['layer_2']['out_chan'], shapes['layer_2']['filter_shape'], strides=shapes['layer_2']['strides'], padding='PERIODIC', ignore_b=False, W_init=W_init, b_init=b_init), 
-                                            
-                                                )
-            
-            input_shape=np.array((1,1,_L,_L),dtype=np.int) # NCHW input format
-            output_shape, self.params = init_params(rng,input_shape)
+            input_shape=np.array((1,1,L,L),dtype=np.int) # NCHW input format
+            # add padding dimensions
+            input_shape+=np.array((0,0)+self.strides)
 
-            
-            self.input_shape = (-1,1,_L,_L) # reshape input data batch
-            self.reduce_shape = (-1,self.N_symm,)+output_shape[1:] #(-1,self.N_symm,out_chan,_L,_L) # tuple to reshape output before symmetrization
-            self.output_shape = (-1,np.prod(output_shape[1:]) ) #(-1,out_chan*_L*_L)
-           
-
-            self.Reshape = Reshape(self.params)
-            self.N_varl_params=self.Reshape.dims.sum() 
-
-
+            init_params, self.apply_layer = GeneralConv(dimension_numbers, self.out_chan, self.filter_shape, strides=self.strides, padding='VALID', ignore_b=True)
+                
+            # tuple to reshape output before symmetrization
+            self.input_shape = (-1,1,L,L)
+            self.reduce_shape = (-1,self.N_symm,self.out_chan,L,L)
+            self.output_shape = (-1,self.out_chan*L*L)
         else:
-            raise ValueError("unsupported string for variable for NN_type.") 
+            raise ValueError("unsupported string for variable NN_type.") 
         
- 
+
+        # initialize parameters
+        W_real, = init_params(rng,input_shape)[1]
+        W_imag, = init_params(rng,input_shape)[1]
+
+        # W_real2, = init_params(rng,input_shape)[1]
+        # W_imag2, = init_params(rng,input_shape)[1]
+
+        self.params=[W_real, W_imag, ]
+        #self.params=[W_real, W_imag, W_real2, W_imag2, ]
+
+
+        self.shapes=np.array([W.shape for W in self.params])
+        self.dims=np.array([np.prod(shape) for shape in self.shapes])
+        self.N_varl_params=self.dims.sum()
 
         
 
     def _init_evaluate(self):
 
-        #self.evaluate_log  =self._evaluate_log
-        #self.evaluate_phase=self._evaluate_phase
+        # self.evaluate_mod  =self._evaluate_mod
+        # self.evaluate_phase=self._evaluate_phase
 
         # define network evaluation on GPU
         self.evaluate_log  =jit(self._evaluate_log)
         self.evaluate_phase=jit(self._evaluate_phase)
+
+
         
         if self.NN_type=='DNN':
             self.spin_config=<func_type>int_to_spinstate
@@ -377,14 +288,14 @@ cdef class Neural_Net:
         self.N_MC_chains=N_MC_chains
         self.N_spinconfigelmts=self.N_symm*self.N_sites
 
-        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
-        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
+        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.float64)
+        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.float64)
 
         # access data in device array; transfer memory from numpy to jax
         if self.NN_type=='DNN':
             spinstate_shape=[self.N_MC_chains*self.N_symm,self.N_sites]
         elif self.NN_type=='CNN':
-            spinstate_shape=[self.N_MC_chains*self.N_symm,1,_L,_L]
+            spinstate_shape=[self.N_MC_chains*self.N_symm,1,L,L]
         self.spinstate_s_py=np.asarray(self.spinstate_s).reshape(spinstate_shape)
         self.spinstate_t_py=np.asarray(self.spinstate_t).reshape(spinstate_shape)
 
@@ -395,22 +306,10 @@ cdef class Neural_Net:
 
         self.sites=np.arange(self.N_sites,dtype=np.uint16)
 
-
-        self.random_float = uniform_real_distribution[double](0.0,1.0)
-        self.random_int = uniform_int_distribution[int](0,self.N_sites-1)
-        self.rand_int_ordinal = uniform_int_distribution[int](0,choose_n_k(self.N_sites, self.N_sites//2))
-
-
         self.thread_seeds=np.zeros(self.N_MC_chains,dtype=np.uint)
         for i in range(self.N_MC_chains):
-            self.thread_seeds[i]=self.seed + 3333*self.MPI_rank + 7777*i   #(rand()%RAND_MAX)
-            self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
+            self.thread_seeds[i]=(rand()%RAND_MAX)
 
-
-
-    property input_shape:
-        def __get__(self):
-            return self.input_shape
   
     property N_sites:
         def __get__(self):
@@ -424,14 +323,14 @@ cdef class Neural_Net:
         def __get__(self):
             return self.NN_type
 
-    property NN_dtype:
+    property shapes:
         def __get__(self):
-            return self.NN_dtype
+            return self.shapes
 
-    property Reshape:
+    property dims:
         def __get__(self):
-            return self.Reshape
-    
+            return self.dims
+
     property N_varl_params:
         def __get__(self):
             return self.N_varl_params 
@@ -448,10 +347,6 @@ cdef class Neural_Net:
         def __get__(self):
             return self.evaluate_log
 
-    property apply_layer:
-        def __get__(self):
-            return self.apply_layer
-
 
 
     @cython.boundscheck(False)
@@ -459,6 +354,20 @@ cdef class Neural_Net:
         self.params=params
 
 
+
+    @cython.boundscheck(False)
+    def complex_inputlayer(self, params, batch):
+        # apply dense layer
+        Re_Ws = self.apply_layer(params[0], batch)
+        Im_Ws = self.apply_layer(params[1], batch)
+        return Re_Ws, Im_Ws
+
+    @cython.boundscheck(False)
+    def complex_deeplayer(self, params, Re_z, Im_z):
+        # apply dense layer
+        Re_Ws = self.apply_layer(params[0], Re_z) - self.apply_layer(params[1], Im_z)
+        Im_Ws = self.apply_layer(params[1], Re_z) + self.apply_layer(params[0], Im_z)
+        return Re_Ws, Im_Ws
         
 
     
@@ -469,9 +378,15 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
         # apply logcosh nonlinearity
-        Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_deeplayer(params[2:4],Re_z,Im_z)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
 
         # symmetrize
         log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -490,15 +405,26 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
         # apply logcosh nonlinearity
-        Re_z = logcosh_real((Re_Ws, Im_Ws))
+        Re_z = logcosh_real(Re_Ws, Im_Ws)
 
-       
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_deeplayer(params[2:4],Re_z,Im_z)
+        # # apply logcosh nonlinearity
+        # Re_z = logcosh_real(Re_Ws, Im_Ws) 
+        
+
         # symmetrize
-        log_psi = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
         # 
-        log_psi = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
+        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
         
         return log_psi
 
@@ -510,9 +436,20 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
         # apply logcosh nonlinearity
-        Im_z = logcosh_imag((Re_Ws, Im_Ws))
+        Im_z = logcosh_imag(Re_Ws, Im_Ws)
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_inputlayer(params[0:2],batch)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = logcosh_cpx(Re_Ws, Im_Ws)
+
+
+        # # apply dense layer
+        # Re_Ws, Im_Ws = self.complex_deeplayer(params[2:4],Re_z,Im_z)
+        # # apply logcosh nonlinearity
+        # Im_z = logcosh_imag(Re_Ws, Im_Ws)  
  
 
         # symmetrize
@@ -532,105 +469,86 @@ cdef class Neural_Net:
     def sample(self,
                     int N_MC_points,
                     int thermalization_time,
-                    double acceptance_ratio,
+                    int auto_correlation_time,
                     #
-                    np.int8_t[::1] spin_states,
-                    basis_type[::1] ket_states,
-                    np.float64_t[::1] mod_kets,
-                    #
-                    basis_type[::1] s0_vec
+                    np.float64_t[::1] spin_states,
+                    basis_type[:] ket_states,
+                    np.float64_t[:] mod_kets
+
                     ):
 
-        cdef int N_accepted=0
+        cdef int N_accepted=0, n_accepted=0
         cdef int chain_n
-        cdef vector[int] N_MC_proposals=np.zeros(self.N_MC_chains)
         # reduce MC points per chain
         cdef int n_MC_points=N_MC_points//self.N_MC_chains
-        cdef int auto_correlation_time = 0.4/np.max([0.05, acceptance_ratio])*self.N_sites
-
+        
+    
         with nogil:
 
             for chain_n in prange(self.N_MC_chains,schedule='static', num_threads=self.N_MC_chains):
-               
+            
                 N_accepted+=self._MC_core(
                                            n_MC_points,
-                                           &N_MC_proposals[chain_n],
                                            thermalization_time,
                                            auto_correlation_time,
                                            #
                                            &spin_states[chain_n*n_MC_points*self.N_symm*self.N_sites],
                                            &ket_states[chain_n*n_MC_points],
                                            &mod_kets[chain_n*n_MC_points],
-                                           &s0_vec[0],
                                            # 
                                            &self.spinstate_s[chain_n*self.N_spinconfigelmts],
                                            &self.spinstate_t[chain_n*self.N_spinconfigelmts],
                                            #
-                                           chain_n,
-                                           self.RNGs[chain_n]
+                                           chain_n
                                         )
 
-        # print(self.MPI_rank, np.array(ket_states))
-        # print(N_MC_proposals,N_accepted, ket_states.shape)
-        # exit()
-
-        # print('thread seeds', self.MPI_rank, self.thread_seeds)
-
-
-        return N_accepted, np.sum(N_MC_proposals);
+            
+        return N_accepted;
    
     
     @cython.boundscheck(False)
     cdef int _MC_core(self, int N_MC_points,
-                            int* N_MC_proposals,
                             int thermalization_time,
                             int auto_correlation_time,
                             #
-                            np.int8_t * spin_states,
+                            np.float64_t * spin_states,
                             basis_type * ket_states,
                             double * mod_kets,
-                            basis_type[] s0_vec,
                             #
-                            np.int8_t * spinstate_s,
-                            np.int8_t * spinstate_t,
+                            np.float64_t * spinstate_s,
+                            np.float64_t * spinstate_t,
                             #
-                            int chain_n,
-                            mt19937& rng
+                            int chain_n
         ) nogil:           
         
-        cdef int i=0, k=0; # counters
+        cdef int i=0, j=0, k=0; # counters
         cdef int N_accepted=0;
         cdef int thread_id = threadid();
-        
+        cdef unsigned int * thread_seed = &self.thread_seeds[thread_id];
+
         cdef double eps; # acceptance random float
 
         cdef basis_type t;
-        cdef np.uint16_t _i,_j;
-
         
+        cdef np.uint16_t _i,_j;
+        cdef basis_type s=0, one=1;
+
+
         # draw random initial state
-        # cdef basis_type ordinal = self.rand_int_ordinal(rng);
-        # cdef basis_type s=magnetized_int(self.N_sites//2, self.N_sites, ordinal)
-
-
-        cdef basis_type s=(1<<(self.N_sites//2))-1;
-        cdef int l;
-        for l in range(self.N_sites):
-            t=s;
-            while(t==s):
-                _i = self.random_int(rng)
-                _j = self.random_int(rng)
-                t = swap_bits(s,_i,_j);
-            s=t;
-
+        s=(one<<(self.N_sites//2))-one;
+        t=s;
+        while(t==s):
+            _i = rand_r(thread_seed)%self.N_sites 
+            _j = rand_r(thread_seed)%self.N_sites 
+            t = swap_bits(s,_i,_j);
+        s=t;
        
-        # store initial state
-        s0_vec[chain_n] = s;
+        # with gil:
+        #     print(thread_id, s)
 
         
         # compute initial spin config and its amplitude value
         self.spin_config(self.N_sites,s,&spinstate_s[0]);
-
 
 
         # set omp barrier
@@ -643,15 +561,16 @@ cdef class Neural_Net:
         # set barrier
         OMP_BARRIER_PRAGMA()
 
+
      
         while(k < N_MC_points):
-            
-            # propose a new state until a nontrivial configuration is drawn
+
             t=s;
+     
+            # propose a new state until a nontrivial configuration is drawn
             while(t==s):
-                _i = self.random_int(rng)
-                _j = self.random_int(rng)
-                
+                _i = rand_r(thread_seed)%self.N_sites 
+                _j = rand_r(thread_seed)%self.N_sites 
                 t = swap_bits(s,_i,_j);
             
 
@@ -668,8 +587,8 @@ cdef class Neural_Net:
             OMP_BARRIER_PRAGMA()
 
 
-            # MC accept/reject step
-            eps = self.random_float(rng);
+            # MC step
+            eps = float(rand_r(thread_seed))/float(RAND_MAX);
             if(eps*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] <= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n]): # accept
                 s = t;
                 self.mod_psi_s[chain_n] = self.mod_psi_t[chain_n];
@@ -679,7 +598,7 @@ cdef class Neural_Net:
                 N_accepted+=1;
     
 
-            if( (N_MC_proposals[0] > thermalization_time) & ((N_MC_proposals[0] % auto_correlation_time) == 0) ):
+            if( (j > thermalization_time) & (j % auto_correlation_time) == 0):
                 
                 for i in range(self.N_symm*self.N_sites):
                     spin_states[k*self.N_sites*self.N_symm + i] = spinstate_s[i];
@@ -690,7 +609,8 @@ cdef class Neural_Net:
 
                 k+=1;
                 
-            N_MC_proposals[0]+=1;
+            j+=1;
+
 
 
         return N_accepted;

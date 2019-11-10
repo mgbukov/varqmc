@@ -25,11 +25,28 @@ plt.tick_params(labelsize=20)
 
 class data():
 
-	def __init__(self,model_params,N_MC_points,N_epochs,extra_label=''):
+	def __init__(self,cwd,model_params,N_MC_points,N_epochs,extra_label=''):
 
 		self.model_params=model_params
 		self._create_name(extra_label)
 		self._define_variables(N_MC_points,N_epochs)
+
+		self.cwd=cwd
+		self._create_directories()
+
+
+	def _create_directories(self):	
+		# create a data directory
+		self.data_dir=self.cwd+'/data/checkpoints/'
+		if not os.path.exists(self.data_dir):
+		    os.makedirs(self.data_dir)
+
+		# create a plots directory
+		self.plots_dir=self.cwd+'/data/plots/'
+		if not os.path.exists(self.plots_dir):
+		    os.makedirs(self.plots_dir)
+
+
 
 	def _define_variables(self,N_MC_points,N_epochs):
 		self.N_epochs=N_epochs
@@ -54,25 +71,25 @@ class data():
 
 	
 	def save(self,NN_params=None):
-		with open('./data/data/'+self.file_name+'.pkl', 'wb') as handle:
+		with open(self.data_dir+self.file_name+'.pkl', 'wb') as handle:
 			pickle.dump([self.excess_energy,self.SdotS,self.loss,self.r2,self.phase_psi,self.mod_psi,self.file_name,], 
 						handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 		if NN_params is not None:
-			with open('./data/data/weights-'+self.file_name+'.pkl', 'wb') as handle:
+			with open(self.data_dir+'NNparams--'+self.file_name+'.pkl', 'wb') as handle:
 				pickle.dump([NN_params,], 
 							handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 		print("data saved as:\n {}\n".format(self.file_name) )
 
 	def load(self):
-		handle=open('./data/data/'+self.file_name+'.pkl','rb')
+		handle=open(self.data_dir+self.file_name+'.pkl','rb')
 		self.excess_energy,self.SdotS,self.loss,self.r2,self.phase_psi,self.mod_psi,_ = pickle.load(handle)
 		print("data loaded from:\n {}\n".format(self.file_name)  )
 		
 	def load_weights(self):
-		handle=open('./data/data/weights-'+self.file_name+'.pkl','rb')
-		NN_params = pickle.load(handle)
+		handle=open(self.data_dir+'NNparams--'+self.file_name+'.pkl','rb')
+		NN_params = pickle.load(handle)[0]
 		print("NN parameters loaded from:\n {}\n".format(self.file_name)  )
 		return NN_params
 
@@ -191,7 +208,7 @@ class data():
 		if save==False:
 			plt.show()
 		else:
-			plt.savefig('./data/plots/'+self.file_name+'.pdf',format='pdf')
+			plt.savefig(self.plots_dir+self.file_name+'.pdf',format='pdf')
 
 
 

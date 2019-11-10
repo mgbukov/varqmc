@@ -33,9 +33,8 @@ def configuration(parent_package='', top_path=None):
     cython_files()
 
 
-
-    extra_compile_args=["-fno-strict-aliasing","-fopenmp"]
-    extra_link_args=["-fopenmp"]  
+    extra_compile_args=["-fno-strict-aliasing","-O0",'-fopenmp']
+    extra_link_args=['-fopenmp']  
       
     if sys.platform == "darwin":
         extra_compile_args.append("-std=c++11")
@@ -48,8 +47,11 @@ def configuration(parent_package='', top_path=None):
     include_dirs.append(os.path.join(package_dir,"_cpp_funcs"))
 
     # mpi compiler
-    os.environ["CC"] = "mpicc"
-    os.environ["CXX"] = "mpicxx"
+    # os.environ["CC"] = "mpicc"
+    # os.environ["CXX"] = "mpicxx"
+
+    #os.environ["CC"] = "gcc-8"
+    #os.environ["CXX"] = "g++-8"
 
 
     #depends =[ os.path.join(package_dir,"_cpp_funcs","opcpp_utils_impl.h"), ]

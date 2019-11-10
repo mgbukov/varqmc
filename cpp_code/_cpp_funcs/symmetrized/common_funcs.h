@@ -1,6 +1,6 @@
 #include "numpy/ndarraytypes.h"
 //#include "./DNN.h"
-#include "models/RBM_real_symm.h"
+//#include "models/RBM_real_symm.h"
 #include <random>
 #include <cmath>
 #include <vector>
@@ -8,7 +8,9 @@
 #include <fstream>
 using namespace std;
 #include <unordered_map>
-#include <mpi.h>
+//#include <mpi.h>
+#include <omp.h>
+#include <stdlib.h>     /* srand, rand */
 
 
 
@@ -16,7 +18,7 @@ using namespace std;
 
 template<typename I>
 int op(I &r,double &m,const int n_op,const char opstr[],const int indx[], const int N){
-	//const I s = r;
+	const I s = r;
 	const I one = 1;
 	for(int j=n_op-1;j>-1;j--){
 
@@ -25,6 +27,14 @@ int op(I &r,double &m,const int n_op,const char opstr[],const int indx[], const 
 		const bool a = (bool)((r >> ind)&one);
 		const char op = opstr[j];
 		switch(op){
+			case '+':
+				m *= (a?0:1);
+				r ^= b;
+				break;
+			case '-':
+				m *= (a?1:0);
+				r ^= b;
+				break;
 			case 'z':
 				m *= (a?0.5:-0.5);
 				break;
@@ -40,23 +50,16 @@ int op(I &r,double &m,const int n_op,const char opstr[],const int indx[], const 
 			case 'I':
 				break;
 			*/
-			case '+':
-				m *= (a?0:1);
-				r ^= b;
-				break;
-			case '-':
-				m *= (a?1:0);
-				r ^= b;
-				break;
+			
 			default:
 				return -1;
 		}
-		/*
+
 		if(std::abs(m)==0){
 			r = s;
 			break;
 		}
-		*/
+
 	}
 
 	return 0;
@@ -85,360 +88,208 @@ inline T swap_bits(const T b,int i,int j)
 }
 
 
+inline int choose_n_k(int n, int k) {
+    double res = 1;
+    for (int i = 1; i <= k; ++i)
+        res = res * (n - k + i) / i;
+    return (int)(res + 0.01);
+}
+
+
 template<class T>
-inline void _int_to_spinstate(const int N,T state,npy_int8 out[])
-{	npy_int8 n;
+inline T magnetized_int(int m, int N, T ordinal)
+{
+	// https://cs.stackexchange.com/questions/67664/prng-for-generating-numbers-with-n-set-bits-exactly
+
+	T one = 1;
+	
+	//cout << ordinal << endl;
+
+    T s0 = 0; // output integer
+    for (int bit = N; m > 0; --bit)
+    {
+        T nCk = choose_n_k(bit, m);
+        if (ordinal >= nCk)
+        {
+            ordinal -= nCk;
+            s0 |= (one << bit);
+            --m;
+        }
+    }
+    return s0;
+}
+
+
+
+
+template<class T, class J>
+inline void _int_to_spinstate(const int N,T state,J out[])
+{	
+	//npy_float64 n;
 	T one=1;
 	for(int i=0;i<N;i++){
-		n=(state / (one<<(N-i-1)) ) % 2;
-		//out[i] = (n + 2) % 2; // [0,1] state representation
-		out[i] = 2 * ( (n + 2) % 2 ) - 1; // [-1,+1] state representation
+		//n=(state / (one<<(N-i-1)) ) % 2;
+		//out[i] = 2 * ( (n + 2) % 2 ) - 1; // [-1,+1] state representation
+
+		out[i] = (state & (one<<(N-i-1) )) ? 1 : -1; // [-1,+1] state representation
+
 	}
 }
 
 
-template<class I>
-npy_uint32 int_to_spinstate(const int N,I t,npy_int8 out[])
+template<class I, class J>
+I rep_int_to_spinstate(const int N,I s,J out[])
 {	
 	
-	//t=ref_state(t);
+	I t = s;
+	I r = s;
+	I p = s;
 
 	int counter=0;
-	bool encountered=0;
-	
-	std::vector<I> Ts(N_symms,0);
-	Ts[counter]=t;
+
 	
 	for(int i=0;i<2;i++){
 		for(int j=0;j<2;j++){
 			for(int k=0;k<2;k++){
-				//for(int l=0;l<2;l++){
-					for(int m=0;m<_L;m++){
-						for(int n=0;n<_L;n++){
+				for(int m=0;m<_L;m++){
+					for(int n=0;n<_L;n++){
 
-							
-							_int_to_spinstate(N,t,&out[counter*N]);
-							t = shift_x(t);
-							counter++;
-							
-							// t = shift_x(t);
+						p = t;
+						for(int l=0;l<2;l++){
+							if(p > r) r = p;
 
-							// // check if state has been encountered
-							// for(int _k=0;_k<counter+1;_k++){
-							// 	if(t==Ts[_k]){
-							// 		encountered=1;
-							// 		break;
-							// 	}
-							// }
-
-							// // break loop if state has been encountered
-							// if(encountered){
-							// 	encountered=0;
-							// 	break;
-							// }
-							// else{
-							// 	_int_to_spinstate(N,t,&out[counter*N]);
-							// 	Ts[counter]=t;
-							// 	counter++;
-								
-							// }
-
-
-								
+							p = inv_spin(p);
 						}
-						t = shift_y(t);
+
+						//if(t > r) r = t;	
+
+						
+						_int_to_spinstate(N,t,&out[counter*N]);
+						t = shift_x(t);
+						counter++;
+													
 					}
-				//	t = inv_spin(t);
-				//}
+					t = shift_y(t);
+				}
 				t = flip_x(t);
 			}
 			t = flip_y(t);
 		}
 		t = flip_d(t);
-	}	
+	}
+		
 
-	return counter;	
+	return r;	
 	
 		
 }
 
 
 
-///////////////////////////////////////////////////////////
-
-
-
-
-
-
-template <class I>
-class Monte_Carlo{
-
-    private:
-        std::random_device rd;
-        std::mt19937 gen;
-
-	public:
-
-		Monte_Carlo() {
-            std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
-        };
-
-		~Monte_Carlo(){};
-  
-  		unsigned int seed;
-		void set_seed(unsigned int u) {
-            gen.seed(u);
-            seed=u; 
-        };
-
-
-        int world_size=0;
-        int world_rank=0;
-
-        void mpi_init() {
-		    // Initialize the MPI environment
-		    MPI_Init(NULL, NULL);
-
-		    // Get the number of processes
-		    //int world_size;
-		    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
-		    // Get the rank of the process
-		    //int world_rank;
-		    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-
-		    // Get the name of the processor
-		    char processor_name[MPI_MAX_PROCESSOR_NAME];
-		    int name_len;
-		    MPI_Get_processor_name(processor_name, &name_len);
-
-		    // Print off a hello world message
-		    printf("initialized processor %s, rank %d/%d\n", processor_name, world_rank, world_size);
-
-		}
-
-		void mpi_close() {
-			MPI_Finalize();
-		}
-
-		template<class T>
-		void mpi_allgather(T* send_data,int send_count,T* recv_data,int recv_count	
-	    )
-	    {	int size_T = sizeof(T);
-	    	MPI_Allgather(send_data, size_T*send_count, MPI_CHAR, recv_data, size_T*recv_count, MPI_CHAR, MPI_COMM_WORLD);
-	    }
-
-
-        // Produce a uniform random sample from the open interval (0, 1).
-        double uniform() {
-            std::uniform_real_distribution<double> unif(0,1);
-            return unif(gen);
-        };
-
-
-        std::unordered_map<I, double> phase_dict;
-        std::unordered_map<I, double> mod_dict; 
-
-        int build_ED_dicts(int sign, int L, double J2){
-
-        	ifstream infile;
-        	I state;
-        	int sign_1, sign_2;
-        	double norm;
-        	double log_psi;
-        	
-
-
-        	if(J2 > 0.0001){
-        		if(L==4){
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=4_Ly=4_J1=1.0000_J2=0.5000.txt");
-	        	}
-	        	else{
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=6_Ly=6_J1=1.0000_J2=0.5000.txt");
-	        	}
-        	}
-        	else{
-        		if(L==4){
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=4_Ly=4_J1=1.0000_J2=0.0000.txt");
-	        	}
-	        	else{
-	        		infile.open("../ED_data/data-GS_J1-J2_Lx=6_Ly=6_J1=1.0000_J2=0.0000.txt");
-	        	}
-        	}
-        	
-		   
-
-		    if(infile.fail()) // checks to see if file opended 
-		    { 
-		    	cout << "error loading file" << endl; 
-		    	return 1; // no point continuing if the file didn't open...
-		    }
-
-		    while(!infile.eof()) // reads file to end of *file*, not line
-			{ 
-				infile >> state; // read first column number
-				infile >> log_psi; // read second column number
-				infile >> norm;
-				infile >> sign_1; // J1 flipped
-				infile >> sign_2; // J1 not flipped
-
-				//cout << state << " , " << norm << " , " << check_state(state) << endl;
-
-				if(sign<0){
-					if(sign_1 > 0){
-						phase_dict[state]=0.0;	
-					}
-					else{
-						phase_dict[state]=M_PI;
-					}
-				}
-				else{
-					if(sign_2 > 0){
-						phase_dict[state]=0.0;	
-					}
-					else{
-						phase_dict[state]=M_PI;
-					}
-				}
-
-				
-				
-				mod_dict[state]=std::exp(log_psi)*std::sqrt(norm/cyclicity_factor);
-
-			} 
-			infile.close();
-
-			cout << "finished creating ED data dicts.\n" << endl;
-
-			return 0;
-        }
-
-
-        void evaluate_mod_dict(I keys[], double values[], int Ns){
-        	for(int j=0; j<Ns; ++j){
-        		values[j]=mod_dict[keys[j]];
-        	}
-        }
-
-        void evaluate_phase_dict(I keys[], double values[], int Ns){
-        	for(int j=0; j<Ns; ++j){
-        		values[j]=phase_dict[keys[j]];
-        	}
-        }
-
-
-
-		int sample_DNN(I s,
-						int N_MC_points,
-						int thermalization_time,
-						int auto_correlation_time,
-						//
-						npy_int8 rep_spin_states[],
-						I ket_states[],
-						I rep_ket_states[],
-						double mod_kets[],
-						double phase_kets[],
-						//
-						const double W_fc_real[],
-						const double W_fc_imag[],
-						const int N_fc
-
-			)
-		{			
-			int N_sites=_L*_L;
-
-			I t;
-			double mod_psi_s, mod_psi_t, phase_psi_s;
-
-			npy_uint16 _i,_j;
-			std::uniform_int_distribution<> random_site(0,N_sites-1);
-
-			std::vector<npy_int8> spinstate_s(N_sites*N_symms), spinstate_t(N_sites*N_symms);
-		 
-
-			int_to_spinstate(N_sites,s,&spinstate_s[0]);
-			mod_psi_s=evaluate_mod(&spinstate_s[0],W_fc_real,W_fc_imag,N_sites,N_fc);
-				  		    
-
-		    int j=0;
-		    int k=0;
-		    int accepted=0;
-
-		  
-		    while(k < N_MC_points){
-
-		    	t=s;
-		    	spinstate_t=spinstate_s;
-
-		    	// propose a new state until a nontrivial configuration is drawn
-		    	while(t==s){
-		    		_i = random_site(gen);
-		    		_j = random_site(gen);
-		    		t = swap_bits(s,_i,_j);
-		    	};
-
-		    	//cout << _i << " , " << _j << " , " << s << " , " << t << endl;
-
-		    	
-		    	// swap spin configuration
-		    	// for(int _k=0;_k<N_symms;_k++){
-		    	// 	spinstate_t[N_sites-1-_i + _k*N_sites] = spinstate_s[N_sites-1-_j + _k*N_sites];
-		    	// 	spinstate_t[N_sites-1-_j + _k*N_sites] = spinstate_s[N_sites-1-_i + _k*N_sites];
-		    	// }
-
-		    	int_to_spinstate(N_sites,t,&spinstate_t[0]);
-		    	
-		    	   	
-		    	// compute amplitude
-		    	mod_psi_t=evaluate_mod(&spinstate_t[0],W_fc_real,W_fc_imag,N_sites,N_fc);
-
-		    	//cout << s << " , " << t << " , " << mod_psi_s << " , " << mod_psi_t << endl;
-		    
+template<class I, class J>
+void int_to_spinstate(const int N,I s,J out[])
+{	
 	
-		    	double eps = uniform();
-		    	if(eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t){ // accept
-					s = t;
-					mod_psi_s = mod_psi_t;
-					spinstate_s = spinstate_t;
-					accepted++;
-				}; 
+	I t = s;
+
+	npy_uint16 counter=0;
+
+	
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+				for(int m=0;m<_L;m++){
+					for(int n=0;n<_L;n++){
+
+						_int_to_spinstate(N,t,&out[counter*N]);
+						t = shift_x(t);
+						counter++;
+													
+					}
+					t = shift_y(t);
+				}
+				t = flip_x(t);
+			}
+			t = flip_y(t);
+		}
+		t = flip_d(t);
+	}
+		
+}
+
+
+
+template<class I, class J>
+I rep_int_to_spinstate_conv(const int N,I s,J out[])
+{	
+	
+	I t = s;
+	I r = s;
+	I p = s;
+
+	int counter=0;
+
+	
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
 				
+				p = t;
+				for(int l=0;l<2;l++){
+					for(int m=0;m<_L;m++){
+						for(int n=0;n<_L;n++){
+							if(p > r) r = p;
 
-				if( (j > thermalization_time) && (j % auto_correlation_time) == 0){
-					
-					//cout << j << " , " << thermalization_time << " , " << auto_correlation_time << endl;
-
-					for(int i=0;i<N_sites*N_symms;++i){
-						rep_spin_states[k*N_sites*N_symms + i] = spinstate_s[i];
-					};
+							p = shift_x(p);
+						}
+						p = shift_y(p);
+					}
+					p = inv_spin(p);
+				}
 				
+				_int_to_spinstate(N,t,&out[counter*N]);
+				t = flip_x(t);
+				counter++;
+
+			}
+			t = flip_y(t);
+		}
+		t = flip_d(t);
+	}
+		
+
+	return r;	
+	
+		
+}
+
+
+
+template<class I, class J>
+void int_to_spinstate_conv(const int N,I s,J out[])
+{	
+	
+	I t = s;
+
+	npy_uint16 counter=0;
+
+	
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+				
+				_int_to_spinstate(N,t,&out[counter*N]);
+				t = flip_x(t);
+				counter++;												
 					
-					phase_psi_s=evaluate_phase(&spinstate_s[0],W_fc_real,W_fc_imag,N_sites,N_fc);
-					
-					
-					ket_states[k] = s;
-					phase_kets[k]=phase_psi_s;
-					mod_kets[k]=mod_psi_s;
+			}
+			t = flip_y(t);
+		}
+		t = flip_d(t);
+	}
 
-
-					k++;
-					
-				};	
-
-				j++;
-
-		    };
-
-		    return accepted;
-
-		};
-
-
-
-};
-
-
+	
+}
 
 
 
@@ -451,47 +302,91 @@ class Monte_Carlo{
 
 template<class I>
 int update_offdiag(const int n_op,
-						  const char opstr[],
-						  const int indx[],
-						  const double A,
-						  const int Ns,
-						  const	I ket[], // col
-						  		I bra[],
-						  		npy_uint32 cyclicities[],
-						  		npy_int8 spin_bra[], // row
-						  		npy_uint32 ket_index[],
-						  		double M[]
-						  )
-{	int l=0; 
+				  const char opstr[],
+				  const int indx[],
+				  const double A,
+				  const int Ns,
+				  const int N_symm,
+				  const	I ket[], // col
+				  		I bra_rep[],
+				  		npy_int8 spin_bra[], // row
+				  		npy_int32 ket_index[],
+				  		double M[],
+				  I rep_int_to_spinconfig(const int,I,npy_int8*)
+				  )
+{	
 	int N=_L*_L;
-	//#pragma omp parallel
+	
+	#pragma omp parallel
 	{		
-		//const npy_intp chunk = std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
-		//#pragma omp for schedule(dynamic,chunk) 
+
+		int a=Ns/(100*omp_get_num_threads());
+		int b=1;
+
+		//cout << omp_get_num_threads() << " , " << omp_get_max_threads() << endl;
+
+		const npy_intp chunk = (a < b) ? b : a; // std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
+		#pragma omp for schedule(dynamic,chunk) 
 		for(int j=0;j<Ns;j++){
 			
+			
+			// const I one = 1; 
+			// I r = ket[j];
+
+			// // operator site indices
+			// const int ind_0 = N-indx[0]-1;
+			// const int ind_1 = N-indx[1]-1;
+			
+			// const bool a_0 = (bool)((r >> ind_0)&one);
+			// const bool a_1 = (bool)((r >> ind_1)&one);
+
+			// const bool bool_A = (opstr[0]=='+' && opstr[1]=='-' && (!a_0) &&   a_1 );
+			// const bool bool_B = (opstr[0]=='-' && opstr[1]=='+' &&   a_0  && (!a_1));
+
+			// if(bool_A || bool_B){
+
+			// 	r ^= (one << ind_0)^(one << ind_1);
+
+			// 	M[j] = A;
+			// 	ket_index[j]=j;
+
+			// 	bra_rep[j] = rep_int_to_spinstate(N,r,&spin_bra[N*N_symm*j]);
+
+			// }
+			
+
 			double m = A;
 			I r = ket[j];
-			
-			op(r,m,n_op,opstr,indx,_L*_L);
-			bool pcon_bool = (count_bits(r)==N/2);
 
-			if(pcon_bool && m!=0.0){ // r state in same particle-number sector
+			op(r,m,n_op,opstr,indx,N);
+			//bool pcon_bool = (count_bits(r)==N/2);
 
-				M[l] = m;
-				ket_index[l]=j;
+			//cout << pcon_bool << " , " << m << endl;
 
-				bra[l] = ref_state(r);
-
-				//std::cout << l << " , " << bra[l] << " , " << r  << " , " << j << std::endl;
-
-				cyclicities[l]=int_to_spinstate(N,r,&spin_bra[N*N_symms*l]);
-				
-				l++;
+			if(m!=0.0){ // r state in same particle-number sector
+	
+				bra_rep[j] = rep_int_to_spinconfig(N,r,&spin_bra[N*N_symm*j]);
+				M[j] = m;
+				ket_index[j]=j;
 
 			}
 		}
 	}
+
+
+	int l=0;
+	for(int j=0;j<Ns;j++){
+
+		if(ket_index[j]>=0){
+
+			ket_index[l]=j;
+
+			l++;
+		}
+	}
+
+
+
 	return l;
 }
 
@@ -508,10 +403,16 @@ void update_diag(const int n_op,
 				const I ket[], // col
 				  	  double M[]
 				  )
-{	//#pragma omp parallel
+{	
+	#pragma omp parallel
 	{		
-		//const npy_intp chunk = std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
-		//#pragma omp for schedule(dynamic,chunk) 
+		int a=Ns/(100*omp_get_num_threads());
+		int b=1;
+
+		//cout << omp_get_num_threads() << " , " << omp_get_max_threads() << endl;
+
+		const npy_intp chunk = (a < b) ? b : a;
+		#pragma omp for schedule(dynamic,chunk) 
 		for(int j=0;j<Ns;j++){
 			
 			double m = A;
@@ -531,7 +432,7 @@ void offdiag_sum(int Ns,
 				double Eloc_sin[],
 				npy_uint32 ket_ind[],
 				double MEs[],
-				const double psi_bras[],
+				const double log_psi_bras[],
 				const double phase_psi_bras[]
 	)
 {
@@ -547,8 +448,8 @@ void offdiag_sum(int Ns,
 			
 			//cout << l << " , "<< i << " , "<< n << " , "<<j<< " , " << Eloc_cos[ket_ind[j]] << " , " << ket_ind[j] << " , " << psi_bras[j] << " , " << std::cos(phase_psi_bras[j]) << endl;
 			 
-			Eloc_cos[ket_ind[j]] += MEs[j] * psi_bras[j] * std::cos(phase_psi_bras[j]);
-			Eloc_sin[ket_ind[j]] += MEs[j] * psi_bras[j] * std::sin(phase_psi_bras[j]);
+			Eloc_cos[ket_ind[j]] += MEs[j] * std::exp(log_psi_bras[j]) * std::cos(phase_psi_bras[j]);
+			Eloc_sin[ket_ind[j]] += MEs[j] * std::exp(log_psi_bras[j]) * std::sin(phase_psi_bras[j]);
 		}
 
 		n_cum+=n;
