@@ -12,7 +12,6 @@ from jax import jit, grad, random, device_put
 #from jax.experimental.stax import GeneralConv #relu, BatchNorm
 
 
-
 cimport cython
 import numpy as np
 cimport numpy as np

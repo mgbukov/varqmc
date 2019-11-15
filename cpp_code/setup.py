@@ -36,8 +36,8 @@ def configuration(parent_package='', top_path=None):
     extra_compile_args=["-fno-strict-aliasing","-O0",'-fopenmp']
     extra_link_args=['-fopenmp']  
       
-    if sys.platform == "darwin":
-        extra_compile_args.append("-std=c++11")
+    #if sys.platform == "darwin":
+    extra_compile_args.append("-std=c++11")
 
 
     package_dir = os.path.dirname(os.path.realpath(__file__))
