@@ -10,6 +10,8 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import jax
 print('local devices:', jax.local_devices() )
 
+exit()
+
 
 from jax import jit, grad, vmap, random, ops, partial
 from jax.config import config
