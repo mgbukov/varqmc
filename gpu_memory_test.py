@@ -17,7 +17,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]="{0:d}".format(comm.Get_rank()) # device numb
 
 
 
-from jax import jit, grad, vmap, random, ops, partial
+from jax import device_put, jit, grad, vmap, random, ops, partial
 from jax.config import config
 config.update("jax_enable_x64", True)
 from jax.experimental import optimizers
@@ -72,9 +72,16 @@ print(getsizeof(spinstates), spinstates.nbytes)
 #exit()
 
 ######
+batch_size=N_samples
 ti_tot=time.time()
-for i in range(10):
+spinstates=device_put(spinstates)
+for i in range(20):
     ti=time.time()
+    #for j in range(0,N_samples,batch_size):
+    #    log_psi, phase_psi = evaluate_NN(DNN.params, spinstates[j:j+batch_size])
+    
+    #spinstates=np.ones((N_samples,N_symm,N_sites), dtype=np.int8)
+    #spinstates=device_put(spinstates)
     log_psi, phase_psi = evaluate_NN(DNN.params, spinstates)
     tf=time.time()
 
@@ -82,7 +89,7 @@ for i in range(10):
 tf_tot=time.time()
 
 print()
-print(i, 'procces number:', comm.Get_rank(), 'total time: {0:0.4f}'.format(tf_tot-ti_tot))
+print('procces number:', comm.Get_rank(), 'total time: {0:0.4f}'.format(tf_tot-ti_tot))
 
 exit()
 
