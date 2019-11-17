@@ -235,8 +235,29 @@ tf_tot=time.time()
 
 
 print()
-print('total CPU time: {0:0.4f}'.format(tf_tot-ti_tot))
+print('total batch time: {0:0.4f}'.format(tf_tot-ti_tot))
 print()
+
+
+ti_tot=time.time()
+for i in range(N_epochs):
+    ti=time.time()
+
+    spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
+    log_psi, phase_psi   = vmap(partial(evaluate_NN, params))(spinstates, )
+    log_psi=log_psi.squeeze()
+    phase_psi=phase_psi.squeeze()
+
+
+    tf=time.time()
+    print(i, 'GPU time: {0:0.4f}'.format(tf-ti))
+tf_tot=time.time()
+
+
+print()
+print('total per-sample time: {0:0.4f}'.format(tf_tot-ti_tot))
+print()
+
 
 
 ti_tot=time.time()
@@ -246,13 +267,12 @@ for i in range(N_epochs):
     spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
     log_psi, phase_psi = evaluate_NN(params, spinstates)
 
-
     tf=time.time()
     print(i, 'GPU time: {0:0.4f}'.format(tf-ti))
 tf_tot=time.time()
 
 
 print()
-print('total GPU time: {0:0.4f}'.format(tf_tot-ti_tot))
-
+print('total bunch time: {0:0.4f}'.format(tf_tot-ti_tot))
+print()
 
