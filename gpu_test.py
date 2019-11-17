@@ -9,7 +9,7 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0" # no XLA memory preallocation
 #print("process {0:d} runs on GPU device {1:d}".format(comm.Get_rank(),int(os.environ["CUDA_VISIBLE_DEVICES"])))
 
 
-from jax import device_put, jit, grad, vmap, random, ops, partial
+from jax import device_put, jit, grad, vmap, random, ops, partial, lax
 from jax.config import config
 config.update("jax_enable_x64", True)
 from jax.experimental import optimizers
@@ -187,23 +187,72 @@ _, params = init_params(rng,(1,N_sites))
 
 
 # define data
-N_samples=10000
-spinstates=np.ones((N_samples,N_symm,N_sites), dtype=np.int8)
-print(spinstates.nbytes)
+N_samples=30000
+
+batch_size=100
+num_complete_batches, leftover = divmod(N_samples, batch_size)
+num_batches = num_complete_batches + bool(leftover)
+
+
+
+#spinstates=np.ones((N_samples,N_symm,N_sites), dtype=np.int8)
+#print(spinstates.nbytes)
+
+
+def data_stream():
+    #rng = np.random.RandomState(0)
+    while True:
+        #perm = rng.permutation(N_samples)
+        for i in range(num_batches):
+            #batch_idx = perm[i * batch_size : (i + 1) * batch_size]
+            batch_idx = np.arange(i*batch_size, min(N_samples, (i+1)*batch_size), 1)
+            yield spinstates[batch_idx], batch_idx
+batches = data_stream()
 
 
 
 
+
+log_psi=np.zeros(N_samples,)
+phase_psi=np.zeros(N_samples,)
+
+N_epochs=10
 ti_tot=time.time()
 #spinstates=device_put(spinstates)
-for i in range(20):
+for i in range(N_epochs):
     ti=time.time()
-    log_psi, phase_psi = evaluate_NN(params, spinstates)
+
+    spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
+
+    for j in range(num_batches):
+        batch, batch_idx = next(batches)
+        log_psi[batch_idx], phase_psi[batch_idx] = evaluate_NN(params, batch)
+
+
     tf=time.time()
-    print(i, 'DNN time: {0:0.4f}'.format(tf-ti))
+    print(i, 'CPU time: {0:0.4f}'.format(tf-ti))
 tf_tot=time.time()
 
 
-print('total time: {0:0.4f}'.format(tf-ti))
+print()
+print('total CPU time: {0:0.4f}'.format(tf_tot-ti_tot))
+print()
+
+
+ti_tot=time.time()
+for i in range(N_epochs):
+    ti=time.time()
+
+    spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
+    log_psi, phase_psi = evaluate_NN(params, spinstates)
+
+
+    tf=time.time()
+    print(i, 'GPU time: {0:0.4f}'.format(tf-ti))
+tf_tot=time.time()
+
+
+print()
+print('total GPU time: {0:0.4f}'.format(tf_tot-ti_tot))
 
 
