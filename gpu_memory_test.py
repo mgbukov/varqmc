@@ -1,16 +1,20 @@
 import sys,os
 
+from mpi4py import MPI
+comm=MPI.COMM_WORLD
+
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
+os.environ["CUDA_VISIBLE_DEVICES"]="{0:d}".format(comm.Get_rank()) # device number
 
 
-import jax
-print('local devices:', jax.local_devices() )
+#import jax
+#print('local devices:', jax.local_devices() )
 
-exit()
+
 
 
 from jax import jit, grad, vmap, random, ops, partial
@@ -34,9 +38,13 @@ np.random.RandomState(seed)
 rng = random.PRNGKey(seed)
 
 
+print(comm.Get_rank(),os.environ["CUDA_VISIBLE_DEVICES"])
+
+#exit()
+
+
 #########################################
 L=6
-
 
 N_neurons=6
 shapes=dict(layer_1 = [L**2, N_neurons], 
@@ -55,23 +63,26 @@ evaluate_NN=jit(DNN.evaluate)
 ##### data
 N_symm=2*2*2*L*L
 N_sites=L*L
-N_samples=73882
+N_samples=30000 #73882
 
 spinstates=np.ones((N_samples,N_symm,N_sites), dtype=np.int8)
 
 from sys import getsizeof
 print(getsizeof(spinstates), spinstates.nbytes)
-exit()
+#exit()
 
 ######
+ti_tot=time.time()
+for i in range(10):
+    ti=time.time()
+    log_psi, phase_psi = evaluate_NN(DNN.params, spinstates)
+    tf=time.time()
 
+    print(i, 'procces number:', comm.Get_rank(), 'DNN time: {0:0.4f}'.format(tf-ti))
+tf_tot=time.time()
 
-ti=time.time()
-log_psi, phase_psi = evaluate_NN(DNN.params, spinstates)
-tf=time.time()
-
-print('DNN time: {0:0.4f}'.format(tf-ti))
-
+print()
+print(i, 'procces number:', comm.Get_rank(), 'total time: {0:0.4f}'.format(tf_tot-ti_tot))
 
 exit()
 
