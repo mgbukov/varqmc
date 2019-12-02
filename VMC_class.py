@@ -4,14 +4,14 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occ
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+#os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 #quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
 quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
 sys.path.insert(0,quspin_path)
 
-import jax
-print('local devices:', jax.local_devices() )
+#import jax
+#print('local devices:', jax.local_devices() )
 
 
 from jax import jit, grad, vmap, random, ops, partial
