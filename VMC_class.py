@@ -241,8 +241,7 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			#step_size=5E-3
-			step_size=1E-5
+			step_size=1E-2
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=step_size)
 			#self.opt_state = self.opt_init(self.NN_params)
 			self.opt_state = self.opt_init(self.DNN.params)

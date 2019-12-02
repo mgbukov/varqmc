@@ -39,7 +39,7 @@ def GeneralDense_cpx(W_shape, ignore_b=False):
 
     def init_fun(rng,input_shape):
 
-        init_value_W=1E-3 #1E-1
+        init_value_W=1E-2 #1E-1
 
         rng_real, rng_imag = random.split(rng)
         
@@ -191,6 +191,31 @@ def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
 # nonlinearities
 
 @jit
+def poly_cpx(x):
+    x_real, x_imag = x
+    Re = 0.5*x_real**2 - 0.0833333*x_real**4 + 0.0222222*x_real**6 - 0.5*x_imag**2 + 0.5*x_real**2*x_imag**2 - 0.333333*x_real**4*x_imag**2 - 0.0833333*x_imag**4 + 0.333333*x_real**2*x_imag**4 - 0.0222222*x_imag**6
+    Im = x_real*x_imag - 0.333333*x_real**3*x_imag + 0.133333*x_real**5*x_imag + 0.333333*x_real*x_imag**3 - 0.444444*x_real**3*x_imag**3 + 0.133333*x_real*x_imag**5
+    return Re, Im
+
+
+@jit
+def poly_real(x):
+    x_real, x_imag = x
+    Re_z = 0.5*x_real**2 - 0.0833333*x_real**4 + 0.0222222*x_real**6 - 0.5*x_imag**2 + 0.5*x_real**2*x_imag**2 - 0.333333*x_real**4*x_imag**2 - 0.0833333*x_imag**4 + 0.333333*x_real**2*x_imag**4 - 0.0222222*x_imag**6
+    return Re_z
+
+
+@jit
+def poly_imag(x):
+    x_real, x_imag = x
+    Im_z = x_real*x_imag - 0.333333*x_real**3*x_imag + 0.133333*x_real**5*x_imag + 0.333333*x_real*x_imag**3 - 0.444444*x_real**3*x_imag**3 + 0.133333*x_real*x_imag**5
+    return Im_z
+
+
+#############################################
+
+
+@jit
 def cpx_cosh(Re_a,Im_a):
     # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
         
@@ -236,4 +261,4 @@ def logcosh_imag(Ws):
 ###############
 
 LogCosh_cpx=elementwise(logcosh_cpx)
-
+Poly_cpx=elementwise(poly_cpx)

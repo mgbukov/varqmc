@@ -52,7 +52,7 @@ class natural_gradient():
 	
 		self.cg_maxiter=1E4
 		self.tol=1E-7 # CG tolerance
-		self.delta=1E-4 #50.0 # S-matrix regularizer
+		self.delta=100 # S-matrix regularizer
 
 		self.epoch=0
 		self.r2_cost=0.0
@@ -95,7 +95,7 @@ class natural_gradient():
 
 		
 		self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
-
+		
 		# check for symmetry and positivity
 		if self.check_on:
 			self._S_matrix_checks()

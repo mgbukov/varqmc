@@ -297,7 +297,7 @@ cdef class Neural_Net:
             # define DNN
             init_params, self.apply_layer = serial(
                                                     GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                                    #LogCosh_cpx,
+                                                    #Poly_cpx,
                                                     #GeneralDense_cpx(shapes['layer_2'], ignore_b=False), 
                                                 )
            
@@ -331,7 +331,7 @@ cdef class Neural_Net:
 
             init_params, self.apply_layer = serial(
                                                     GeneralConv_cpx(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], strides=shapes['layer_1']['strides'], padding='PERIODIC', ignore_b=True, W_init=W_init, b_init=b_init), 
-                                                    #LogCosh_cpx,
+                                                    #Poly_cpx,
                                                     #GeneralConv_cpx(dim_nums, shapes['layer_2']['out_chan'], shapes['layer_2']['filter_shape'], strides=shapes['layer_2']['strides'], padding='PERIODIC', ignore_b=False, W_init=W_init, b_init=b_init), 
                                             
                                                 )
@@ -470,7 +470,8 @@ cdef class Neural_Net:
         # apply dense layer
         Re_Ws, Im_Ws = self.apply_layer(params,batch)
         # apply logcosh nonlinearity
-        Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
+        #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
 
         # symmetrize
         log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -491,7 +492,8 @@ cdef class Neural_Net:
         # apply dense layer
         Re_Ws, Im_Ws = self.apply_layer(params,batch)
         # apply logcosh nonlinearity
-        Re_z = logcosh_real((Re_Ws, Im_Ws))
+        Re_z = poly_real((Re_Ws, Im_Ws))
+        #Re_z = logcosh_real((Re_Ws, Im_Ws))
 
        
         # symmetrize
@@ -511,7 +513,8 @@ cdef class Neural_Net:
         # apply dense layer
         Re_Ws, Im_Ws = self.apply_layer(params,batch)
         # apply logcosh nonlinearity
-        Im_z = logcosh_imag((Re_Ws, Im_Ws))
+        Im_z = poly_imag((Re_Ws, Im_Ws))
+        #Im_z = logcosh_imag((Re_Ws, Im_Ws))
  
 
         # symmetrize
