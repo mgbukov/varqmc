@@ -95,10 +95,19 @@ class VMC(object):
 				print('only one MPI process allowed for "exact" simulation.')
 				exit()
 		else:
-			self.N_batch=self.N_MC_points//self.comm.Get_size()
-			if self.N_batch//self.N_MC_chains != self.N_batch/self.N_MC_chains:
-				print('number of MC chains incompatible with the total number of points:', self.N_batch//self.N_MC_chains, self.N_batch/self.N_MC_chains)
-				exit()
+			n_batch=self.N_MC_points//self.comm.Get_size()
+			rest=self.N_MC_points%self.comm.Get_size()
+			
+			if self.comm.Get_rank()==0:
+				self.N_batch=n_batch+rest
+			else:
+				self.N_batch=n_batch
+
+
+			# self.N_batch=self.N_MC_points//self.comm.Get_size()
+			# if self.N_batch//self.N_MC_chains != self.N_batch/self.N_MC_chains:
+			# 	print('number of MC chains incompatible with the total number of points:', self.N_batch//self.N_MC_chains, self.N_batch/self.N_MC_chains)
+			# 	exit()
 			
 
 		
@@ -415,10 +424,10 @@ class VMC(object):
 
 			
 			##### check c++ and python DNN evaluation
-			if iteration==0:
-				self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
-				if self.mode=='exact':
-					np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_estimator.H.expt_value(self.psi[self.inv_index]))
+			# if iteration==0:
+			# 	self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
+			# 	if self.mode=='exact':
+			# 		np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_estimator.H.expt_value(self.psi[self.inv_index]))
 
 
 			#####		

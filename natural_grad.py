@@ -95,7 +95,7 @@ class natural_gradient():
 
 		
 		self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
-		
+
 		# check for symmetry and positivity
 		if self.check_on:
 			self._S_matrix_checks()
