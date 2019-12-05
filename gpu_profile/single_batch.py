@@ -45,9 +45,9 @@ rng = random.PRNGKey(seed)
 L=6
 N_sites=L*L
 N_symm=L*L*2*2*2 # no Z symmetry
-N_neurons=6
-shapes=dict(layer_1 = [L**2, N_neurons])
-
+N_neurons=10
+#shapes=dict(layer_1 = [L**2, N_neurons])
+shapes=dict(layer_1 = [L**2, N_neurons], layer_2 = [N_neurons,20])
 
 ################################################################################################
 
@@ -180,8 +180,8 @@ evaluate_NN=jit(evaluate)
 # define DNN
 init_params, apply_layer = serial(
                                         GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                        #LogCosh_cpx,
-                                        #GeneralDense_cpx(shapes['layer_2'], ignore_b=False), 
+                                        #logcosh_cpx,
+                                        GeneralDense_cpx(shapes['layer_2'], ignore_b=False), 
                                     )
 _, params = init_params(rng,(1,N_sites))
 
@@ -189,7 +189,8 @@ _, params = init_params(rng,(1,N_sites))
 # define data
 N_samples=1000
 spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
-    
+#spinstates=device_put(spinstates)
+
 N_epochs=10
 
 ti_tot=time.time()
@@ -197,12 +198,14 @@ for i in range(N_epochs):
     ti=time.time()
 
     log_psi, phase_psi = evaluate_NN(params, spinstates)
+    log_psi.block_until_ready()
+    phase_psi.block_until_ready()
 
     tf=time.time()
-    print(i, 'bunch time: {0:0.6f}'.format(tf-ti))
+    print(i, 'epoch time: {0:0.6f}'.format(tf-ti))
 tf_tot=time.time()
 
 
 print()
-print('total bunch time: {0:0.6f}'.format(tf_tot-ti_tot))
+print('total time: {0:0.6f}'.format(tf_tot-ti_tot))
 print()
