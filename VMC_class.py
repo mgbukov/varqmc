@@ -95,13 +95,13 @@ class VMC(object):
 				print('only one MPI process allowed for "exact" simulation.')
 				exit()
 		else:
-			n_batch=self.N_MC_points//self.comm.Get_size()
-			rest=self.N_MC_points%self.comm.Get_size()
+
+			self.N_batch=self.N_MC_points//self.comm.Get_size()
 			
-			if self.comm.Get_rank()==0:
-				self.N_batch=n_batch+rest
-			else:
-				self.N_batch=n_batch
+			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
+				self.N_batch+=1
+
+			#print(self.comm.Get_rank(), self.N_batch)
 
 
 			# self.N_batch=self.N_MC_points//self.comm.Get_size()
@@ -291,13 +291,13 @@ class VMC(object):
 	def _create_energy_estimator(self):
 		### Energy estimator
 		self.E_estimator=Energy_estimator(self.comm,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type) # contains all of the physics
-		self.E_estimator.init_global_params()
+		self.E_estimator.init_global_params(self.N_MC_points)
 		self.N_features=self.DNN.N_sites*self.DNN.N_symm
 
 	def _create_MC_sampler(self):
 		### initialize MC sampler variables
 		self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool.init_global_vars(self.L,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type)
+		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type)
 		self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
 		
 		

@@ -48,7 +48,7 @@ class MC_sampler():
 
 
 
-	def init_global_vars(self,L,N_batch,N_symm,basis_type):
+	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,basis_type):
 
 		self.N_batch=N_batch
 		self.N_sites=L**2
@@ -67,9 +67,9 @@ class MC_sampler():
 		self.mod_kets=np.zeros((N_batch,),dtype=np.float64)
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
-		#self.spinstates_ket_tot=np.zeros((self.comm.Get_size()*self.N_batch*self.N_features,),dtype=np.int8)
-		self.mod_kets_tot=np.zeros((self.comm.Get_size()*N_batch,),dtype=np.float64)
-		self.phase_kets_tot=np.zeros((self.comm.Get_size()*N_batch,),dtype=np.float64)
+		#self.spinstates_ket_tot=np.zeros((N_MC_points*self.N_features,),dtype=np.int8)
+		self.mod_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
+		self.phase_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
 
 		
 		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
@@ -83,12 +83,15 @@ class MC_sampler():
 
 		self.mod_kets_tot*=0.0
 
-		#self.comm.Allgather([self.spinstates_ket,  MPI.DOUBLE], [self.spinstates_ket_tot, MPI.DOUBLE])
-		self.comm.Allgather([self.mod_kets,    MPI.DOUBLE], [self.mod_kets_tot,   MPI.DOUBLE])
-		self.comm.Allgather([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_tot, MPI.DOUBLE])
+		
+		
+		#self.comm.Allgatherv([self.spinstates_ket,  MPI.DOUBLE], [self.spinstates_ket_tot, MPI.DOUBLE])
+		self.comm.Allgatherv([self.mod_kets,    MPI.DOUBLE], [self.mod_kets_tot,   MPI.DOUBLE])
+		self.comm.Allgatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_tot, MPI.DOUBLE])
+
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgather([self.s0,  MPI.INT], [self.s0_tot, MPI.INT])
+			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_tot, MPI.INT])
 		else:
 			self.s0_tot=self.s0.copy()
 		
@@ -106,7 +109,7 @@ class MC_sampler():
 		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio,
 												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
 												)
-			
+
 		# N_accepted, N_MC_proposals = sample(self.N_batch,self.thermalization_time,self.acceptance_ratio,
 		# 									self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
 		# 									DNN)
