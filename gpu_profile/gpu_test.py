@@ -187,9 +187,9 @@ _, params = init_params(rng,(1,N_sites))
 
 
 # define data
-N_samples=30000
+N_samples=10000
 
-batch_size=100
+batch_size=1000
 num_complete_batches, leftover = divmod(N_samples, batch_size)
 num_batches = num_complete_batches + bool(leftover)
 
@@ -227,7 +227,8 @@ for i in range(N_epochs):
     for j in range(num_batches):
         batch, batch_idx = next(batches)
         log_psi[batch_idx], phase_psi[batch_idx] = evaluate_NN(params, batch)
-
+        #log_psi.block_until_ready()
+        #phase_psi.block_until_ready()
 
     tf=time.time()
     print(i, 'batch time: {0:0.4f}'.format(tf-ti))
@@ -245,6 +246,8 @@ for i in range(N_epochs):
 
     spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
     log_psi, phase_psi = vmap(partial(evaluate_NN, params))(spinstates, )
+    log_psi.block_until_ready()
+    phase_psi.block_until_ready()
     log_psi=log_psi.squeeze()
     phase_psi=phase_psi.squeeze()
 
@@ -266,7 +269,8 @@ for i in range(N_epochs):
 
     spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
     log_psi, phase_psi = evaluate_NN(params, spinstates)
-
+    log_psi.block_until_ready()
+    phase_psi.block_until_ready()
     tf=time.time()
     print(i, 'bunch time: {0:0.4f}'.format(tf-ti))
 tf_tot=time.time()
