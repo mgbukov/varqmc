@@ -1,10 +1,14 @@
 import sys,os
+from mpi4py import MPI
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
+
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
-#os.environ["CUDA_VISIBLE_DEVICES"]="0"
+#os.environ["CUDA_VISIBLE_DEVICES"]="{0:d}".format(MPI.COMM_WORLD.Get_rank()) # device number
+#print("process {0:d} runs on GPU device {1:d}".format(MPI.COMM_WORLD.Get_rank(),int(os.environ["CUDA_VISIBLE_DEVICES"])))
+
 
 #quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
 quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
@@ -24,10 +28,6 @@ import numpy as np
 
 import yaml
 import pickle
-
-
-from mpi4py import MPI
-
 
 from cpp_code import Neural_Net
 from cpp_code import integer_to_spinstate
