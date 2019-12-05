@@ -197,17 +197,17 @@ class Energy_estimator():
 
 
 
-	def init_global_params(self,SdotS=False):
+	def init_global_params(self,N_MC_points,SdotS=False):
 
 		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
 		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
 
-		self.E_diff_real_tot=np.zeros(self.comm.Get_size()*self.N_batch,dtype=np.float64)
+		self.E_diff_real_tot=np.zeros(N_MC_points,dtype=np.float64)
 		self.E_diff_imag_tot=np.zeros_like(self.E_diff_real_tot)
 
-		self.SdotS_real_tot=np.zeros(self.comm.Get_size()*self.N_batch,dtype=np.float64)
+		self.SdotS_real_tot=np.zeros(N_MC_points,dtype=np.float64)
 		self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
 
 

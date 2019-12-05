@@ -7,8 +7,7 @@ $ pip install mpi4py --no-cache-dir
 
 Then, I had to edit /etc/hosts and add the line
 
-127.0.0.1     <mycomputername>
-
+127.0.0.1     <mycomputername> # see below
 import socket
 print(socket.gethostname()) # mycomputername
 

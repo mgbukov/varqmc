@@ -189,8 +189,8 @@ _, params = init_params(rng,(1,N_sites))
 # define data
 N_samples=1000
 spinstates=np.random.uniform(size=(N_samples,N_symm,N_sites))
-#spinstates=device_put(spinstates)
-
+spinstates=device_put(spinstates)
+    
 N_epochs=10
 
 ti_tot=time.time()

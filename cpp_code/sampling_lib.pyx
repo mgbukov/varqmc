@@ -17,7 +17,7 @@ import numpy as np
 cimport numpy as np
 from libcpp.vector cimport vector
 from libc.stdlib cimport rand, srand, RAND_MAX
-#from libcpp cimport bool
+from libcpp cimport bool
 
 from cython.parallel cimport prange, threadid, parallel
 cimport openmp
@@ -297,7 +297,7 @@ cdef class Neural_Net:
             # define DNN
             init_params, self.apply_layer = serial(
                                                     GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                                    #LogCosh_cpx,
+                                                    #Poly_cpx,
                                                     #GeneralDense_cpx(shapes['layer_2'], ignore_b=False), 
                                                 )
            
@@ -331,7 +331,7 @@ cdef class Neural_Net:
 
             init_params, self.apply_layer = serial(
                                                     GeneralConv_cpx(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], strides=shapes['layer_1']['strides'], padding='PERIODIC', ignore_b=True, W_init=W_init, b_init=b_init), 
-                                                    #LogCosh_cpx,
+                                                    #Poly_cpx,
                                                     #GeneralConv_cpx(dim_nums, shapes['layer_2']['out_chan'], shapes['layer_2']['filter_shape'], strides=shapes['layer_2']['strides'], padding='PERIODIC', ignore_b=False, W_init=W_init, b_init=b_init), 
                                             
                                                 )
@@ -470,7 +470,8 @@ cdef class Neural_Net:
         # apply dense layer
         Re_Ws, Im_Ws = self.apply_layer(params,batch)
         # apply logcosh nonlinearity
-        Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
+        #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
 
         # symmetrize
         log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -491,7 +492,8 @@ cdef class Neural_Net:
         # apply dense layer
         Re_Ws, Im_Ws = self.apply_layer(params,batch)
         # apply logcosh nonlinearity
-        Re_z = logcosh_real((Re_Ws, Im_Ws))
+        Re_z = poly_real((Re_Ws, Im_Ws))
+        #Re_z = logcosh_real((Re_Ws, Im_Ws))
 
        
         # symmetrize
@@ -511,7 +513,8 @@ cdef class Neural_Net:
         # apply dense layer
         Re_Ws, Im_Ws = self.apply_layer(params,batch)
         # apply logcosh nonlinearity
-        Im_z = logcosh_imag((Re_Ws, Im_Ws))
+        Im_z = poly_imag((Re_Ws, Im_Ws))
+        #Im_z = logcosh_imag((Re_Ws, Im_Ws))
  
 
         # symmetrize
@@ -545,7 +548,13 @@ cdef class Neural_Net:
         cdef vector[int] N_MC_proposals=np.zeros(self.N_MC_chains)
         # reduce MC points per chain
         cdef int n_MC_points=N_MC_points//self.N_MC_chains
+        cdef int n_MC_points_leftover=N_MC_points%self.N_MC_chains
+        
+        #print(N_MC_points, n_MC_points,n_MC_points_leftover)
+        #
         cdef int auto_correlation_time = 0.4/np.max([0.05, acceptance_ratio])*self.N_sites
+
+
 
         with nogil:
 
@@ -566,9 +575,35 @@ cdef class Neural_Net:
                                            &self.spinstate_t[chain_n*self.N_spinconfigelmts],
                                            #
                                            chain_n,
-                                           self.RNGs[chain_n]
+                                           self.RNGs[chain_n],
+                                           False,
+                                           0
                                         )
 
+            # take care of left-over, continue chain_n = 0
+            if n_MC_points_leftover>0:
+ 
+                N_accepted+=self._MC_core(
+                                           n_MC_points_leftover,
+                                           &N_MC_proposals[0],
+                                           0, # thermalization time
+                                           auto_correlation_time,
+                                           #
+                                           &spin_states[self.N_MC_chains*n_MC_points*self.N_symm*self.N_sites],
+                                           &ket_states[self.N_MC_chains*n_MC_points],
+                                           &mod_kets[self.N_MC_chains*n_MC_points],
+                                           &s0_vec[0],
+                                           # 
+                                           &self.spinstate_s[0],
+                                           &self.spinstate_t[0],
+                                           #
+                                           0, # chain_n
+                                           self.RNGs[0],
+                                           True, # thermal
+                                           ket_states[n_MC_points-1]
+                                        )
+
+            
         # print(self.MPI_rank, np.array(ket_states))
         # print(N_MC_proposals,N_accepted, ket_states.shape)
         # exit()
@@ -594,7 +629,9 @@ cdef class Neural_Net:
                             np.int8_t * spinstate_t,
                             #
                             int chain_n,
-                            mt19937& rng
+                            mt19937& rng,
+                            bool thermal,
+                            basis_type s0
         ) nogil:           
         
         cdef int i=0, k=0; # counters
@@ -612,19 +649,24 @@ cdef class Neural_Net:
         # cdef basis_type s=magnetized_int(self.N_sites//2, self.N_sites, ordinal)
 
 
-        cdef basis_type s=(1<<(self.N_sites//2))-1;
+        cdef basis_type s;
         cdef int l;
-        for l in range(self.N_sites):
-            t=s;
-            while(t==s):
-                _i = self.random_int(rng)
-                _j = self.random_int(rng)
-                t = swap_bits(s,_i,_j);
-            s=t;
+            
+        if not thermal:
+            s=(1<<(self.N_sites//2))-1;
+            for l in range(self.N_sites):
+                t=s;
+                while(t==s):
+                    _i = self.random_int(rng)
+                    _j = self.random_int(rng)
+                    t = swap_bits(s,_i,_j);
+                s=t;
 
-       
-        # store initial state
-        s0_vec[chain_n] = s;
+           
+            # store initial state
+            s0_vec[chain_n] = s;
+        else:
+            s=s0;
 
         
         # compute initial spin config and its amplitude value
@@ -638,7 +680,6 @@ cdef class Neural_Net:
         if thread_id==0:
             with gil:
                 self.mod_psi_s=jnp.exp(self.evaluate_log(self.params, self.spinstate_s_py));
-                
         # set barrier
         OMP_BARRIER_PRAGMA()
 

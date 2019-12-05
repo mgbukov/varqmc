@@ -4,14 +4,14 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occ
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+#os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 #quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin/")
 quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
 sys.path.insert(0,quspin_path)
 
-import jax
-print('local devices:', jax.local_devices() )
+#import jax
+#print('local devices:', jax.local_devices() )
 
 
 from jax import jit, grad, vmap, random, ops, partial
@@ -95,10 +95,19 @@ class VMC(object):
 				print('only one MPI process allowed for "exact" simulation.')
 				exit()
 		else:
+
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
-			if self.N_batch//self.N_MC_chains != self.N_batch/self.N_MC_chains:
-				print('number of MC chains incompatible with the total number of points:', self.N_batch//self.N_MC_chains, self.N_batch/self.N_MC_chains)
-				exit()
+			
+			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
+				self.N_batch+=1
+
+			#print(self.comm.Get_rank(), self.N_batch)
+
+
+			# self.N_batch=self.N_MC_points//self.comm.Get_size()
+			# if self.N_batch//self.N_MC_chains != self.N_batch/self.N_MC_chains:
+			# 	print('number of MC chains incompatible with the total number of points:', self.N_batch//self.N_MC_chains, self.N_batch/self.N_MC_chains)
+			# 	exit()
 			
 
 		
@@ -241,8 +250,7 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			#step_size=5E-3
-			step_size=1E-5
+			step_size=1E-2
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=step_size)
 			#self.opt_state = self.opt_init(self.NN_params)
 			self.opt_state = self.opt_init(self.DNN.params)
@@ -283,13 +291,13 @@ class VMC(object):
 	def _create_energy_estimator(self):
 		### Energy estimator
 		self.E_estimator=Energy_estimator(self.comm,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type) # contains all of the physics
-		self.E_estimator.init_global_params()
+		self.E_estimator.init_global_params(self.N_MC_points)
 		self.N_features=self.DNN.N_sites*self.DNN.N_symm
 
 	def _create_MC_sampler(self):
 		### initialize MC sampler variables
 		self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool.init_global_vars(self.L,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type)
+		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type)
 		self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
 		
 		
@@ -416,10 +424,10 @@ class VMC(object):
 
 			
 			##### check c++ and python DNN evaluation
-			if iteration==0:
-				self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
-				if self.mode=='exact':
-					np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_estimator.H.expt_value(self.psi[self.inv_index]))
+			# if iteration==0:
+			# 	self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
+			# 	if self.mode=='exact':
+			# 		np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_estimator.H.expt_value(self.psi[self.inv_index]))
 
 
 			#####		
