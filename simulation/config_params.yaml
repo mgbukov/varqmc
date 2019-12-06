@@ -8,6 +8,7 @@ N_MC_points: 500
 N_batch: 125
 N_iterations: 5
 load_data: false
+minibatch_size: 100
 mode: MC
 optimizer: NG
 save_data: true

@@ -17,7 +17,7 @@ sys.path.insert(0,quspin_path)
 #import jax
 #print('local devices:', jax.local_devices() )
 
-
+from jax.lib import xla_bridge
 from jax import jit, grad, vmap, random, ops, partial
 from jax.config import config
 config.update("jax_enable_x64", True)
@@ -52,6 +52,7 @@ class VMC(object):
 
 		# initialize communicator
 		self.comm=MPI.COMM_WORLD
+		self.platform=xla_bridge.get_backend().platform
 		self.seed = params_dict['seed']
 
 		np.random.seed(self.seed)
@@ -79,11 +80,9 @@ class VMC(object):
 		self.N_MC_points=params_dict['N_MC_points']
 		self.N_MC_chains = params_dict['N_MC_chains'] # number of MC chains to run in parallel
 
+
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
-		#os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0" # memory per process, interferes with mpi
-		#os.environ["CUDA_VISIBLE_DEVICES"]="0" # device number
-
-
+		
 
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
@@ -110,6 +109,13 @@ class VMC(object):
 			# 	exit()
 			
 
+		# define batch size for GPU evaluation of local energy
+		if self.platform=='cpu':
+			self.minibatch_size=self.N_batch
+		elif self.platform=='gpu':
+			self.minibatch_size=params_dict['minibatch_size']
+
+		
 		
 		if self.load_data:
 
@@ -503,7 +509,7 @@ class VMC(object):
 
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift)
+		self.E_estimator.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.minibatch_size)
 		self.logfile.write("total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti))
 		if self.comm.Get_rank()==0:
 			print("total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti))

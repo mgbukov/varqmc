@@ -199,15 +199,15 @@ num_batches = num_complete_batches + bool(leftover)
 #print(spinstates.nbytes)
 
 
-def data_stream():
+def data_stream(data,batch_size,N_samples,N_batches):
     #rng = np.random.RandomState(0)
     while True:
         #perm = rng.permutation(N_samples)
-        for i in range(num_batches):
+        for i in range(N_batches):
             #batch_idx = perm[i * batch_size : (i + 1) * batch_size]
             batch_idx = np.arange(i*batch_size, min(N_samples, (i+1)*batch_size), 1)
-            yield spinstates[batch_idx], batch_idx
-batches = data_stream()
+            yield data[batch_idx], batch_idx
+batches = data_stream(spinstates,batch_size,N_samples,num_batches)
 
 
 

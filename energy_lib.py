@@ -13,6 +13,17 @@ import jax.numpy as jnp
 
 
 
+def data_stream(data,minibatch_size,sample_size,N_minibatches):
+    #rng = np.random.RandomState(0)
+    while True:
+        #perm = rng.permutation(sample_size)
+        for i in range(N_minibatches):
+            #batch_idx = perm[i * minibatch_size : (i + 1) * minibatch_size]
+            batch_idx = np.arange(i*minibatch_size, min(sample_size, (i+1)*minibatch_size), 1)
+            yield data[batch_idx], batch_idx
+
+
+
 class Energy_estimator():
 
 	def __init__(self,comm,J2,N_MC_points,N_batch,L,N_symm,NN_type):
@@ -236,7 +247,7 @@ class Energy_estimator():
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)	
 
 
-	def compute_local_energy(self,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,log_psi_shift,SdotS=False):
+	def compute_local_energy(self,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
 		
 
 		if SdotS:
@@ -274,7 +285,7 @@ class Energy_estimator():
 		# exit()
 
 
-		# per MPI process: 160
+		# evaluate network on unique representatives only
 
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
@@ -284,10 +295,39 @@ class Energy_estimator():
 		#print(_ints_bra_uq)
 		#print(_ints_bra_uq.shape)
 		
-		# evaluate network on unique representatives only
-		log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
-		log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
-		phase_psi_bras=phase_psi_bras[inv_index]._value
+		# evaluate network using minibatches
+		
+		num_complete_batches, leftover = divmod(nn_uq, minibatch_size)
+		N_minibatches = num_complete_batches + bool(leftover)
+
+		data=self._spinstates_bra[:nn][index]
+		batches = data_stream(data,minibatch_size,nn_uq,N_minibatches)
+
+		# preallocate data
+		log_psi_bras=np.zeros(nn_uq,dtype=np.float64)
+		phase_psi_bras=np.zeros(nn_uq,dtype=np.float64)
+
+		for j in range(N_minibatches):
+			batch, batch_idx = next(batches)
+			log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites))
+		
+		log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
+		phase_psi_bras=phase_psi_bras[inv_index]
+
+
+		#######
+		### evaluate network on entire sample
+		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
+		# log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
+		# phase_psi_bras=phase_psi_bras[inv_index]._value
+
+
+		#######
+		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
+		# log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
+		# phase_psi_bras=phase_psi_bras[inv_index]._value
+
+		
 
 		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symm,self.N_sites))
 		# log_psi_bras=log_psi_bras._value - log_psi_shift
