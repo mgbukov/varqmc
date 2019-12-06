@@ -110,10 +110,7 @@ class VMC(object):
 			
 
 		# define batch size for GPU evaluation of local energy
-		if self.platform=='cpu':
-			self.minibatch_size=self.N_batch
-		elif self.platform=='gpu':
-			self.minibatch_size=params_dict['minibatch_size']
+		self.minibatch_size=params_dict['minibatch_size']
 
 		
 		

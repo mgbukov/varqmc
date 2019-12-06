@@ -296,30 +296,33 @@ class Energy_estimator():
 		#print(_ints_bra_uq.shape)
 		
 		# evaluate network using minibatches
+
+		if minibatch_size > 0:
 		
-		num_complete_batches, leftover = divmod(nn_uq, minibatch_size)
-		N_minibatches = num_complete_batches + bool(leftover)
+			num_complete_batches, leftover = divmod(nn_uq, minibatch_size)
+			N_minibatches = num_complete_batches + bool(leftover)
 
-		data=self._spinstates_bra[:nn][index]
-		batches = data_stream(data,minibatch_size,nn_uq,N_minibatches)
+			data=self._spinstates_bra[:nn][index]
+			batches = data_stream(data,minibatch_size,nn_uq,N_minibatches)
 
-		# preallocate data
-		log_psi_bras=np.zeros(nn_uq,dtype=np.float64)
-		phase_psi_bras=np.zeros(nn_uq,dtype=np.float64)
+			# preallocate data
+			log_psi_bras=np.zeros(nn_uq,dtype=np.float64)
+			phase_psi_bras=np.zeros(nn_uq,dtype=np.float64)
 
-		for j in range(N_minibatches):
-			batch, batch_idx = next(batches)
-			log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites))
-		
-		log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
-		phase_psi_bras=phase_psi_bras[inv_index]
+			for j in range(N_minibatches):
+				batch, batch_idx = next(batches)
+				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites))
+			
+			log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
+			phase_psi_bras=phase_psi_bras[inv_index]
 
 
-		#######
-		### evaluate network on entire sample
-		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
-		# log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
-		# phase_psi_bras=phase_psi_bras[inv_index]._value
+		else:
+
+			### evaluate network on entire sample
+			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
+			log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
+			phase_psi_bras=phase_psi_bras[inv_index]._value
 
 
 		#######
