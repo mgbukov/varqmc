@@ -182,7 +182,7 @@ class VMC(object):
 
 
 
-
+	"""
 	def batch_normalization(self, params, inputs, layers, kwargs, update=True):
 
 		nlayers = len(layers.values())
@@ -225,7 +225,27 @@ class VMC(object):
 				MEAN+=np.mean(np.abs(mean))
 			
 		return MEAN
+	
+			##############################################
+		
+		# inputs=np.random.randint(2,size=(100,288,36)).astype(np.float64)
+		
+		
+		# #print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
 
+		# #print(self.DNN.apply_fun_args)
+		# mean=self.batch_normalization(self.DNN.params, inputs, self.DNN.NN_architecture, self.DNN.apply_fun_args)
+		# #print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
+	
+		# #print(self.DNN.apply_fun_args)
+		# mean=self.batch_normalization(self.DNN.params, inputs, self.DNN.NN_architecture, self.DNN.apply_fun_args)
+	
+
+		# print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
+
+		# #exit()
+
+	"""
 
 	def _create_NN(self, load_data=False):
 
@@ -261,32 +281,10 @@ class VMC(object):
 		
 
 		# jit functions
-		self.evaluate_NN=jit(self.DNN.evaluate)
 		self.evaluate_NN_nojit=self.DNN.evaluate
-
-
-		##############################################
-
-
+		self.evaluate_NN=jit(self.DNN.evaluate)
 		
-			
-		
-		# inputs=np.random.randint(2,size=(100,288,36)).astype(np.float64)
-		
-		
-		# #print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
 
-		# #print(self.DNN.apply_fun_args)
-		# mean=self.batch_normalization(self.DNN.params, inputs, self.DNN.NN_architecture, self.DNN.apply_fun_args)
-		# #print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
-	
-		# #print(self.DNN.apply_fun_args)
-		# mean=self.batch_normalization(self.DNN.params, inputs, self.DNN.NN_architecture, self.DNN.apply_fun_args)
-	
-
-		# print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
-
-		# #exit()
 
 
 	def _create_optimizer(self):
@@ -306,24 +304,25 @@ class VMC(object):
 		@jit
 		def compute_grad_log_psi(NN_params,batch,):
 
+			# dlog_psi_s   = vmap(partial(grad(loss_log_psi),   NN_params))(batch, )
+			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
+
 			dlog_psi_s   = vmap(partial(jit(grad(loss_log_psi)),   NN_params))(batch, )
 			dphase_psi_s = vmap(partial(jit(grad(loss_phase_psi)), NN_params))(batch, )
 
 			# dlog_psi_s   = vmap(jit(grad(loss_log_psi)),   in_axes=(None,0,) )(NN_params,batch, )
 			# dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
-			
+
 			
 			N_MC_points=batch.shape[0]
 
 			dlog_psi = []
 			for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
-				for (dlog_psi_vals,dphase_psi_vals) in zip(dlog_psi_layer,dphase_psi_layer): # cpx vs real network
-					for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_vals,dphase_psi_vals): # W, b
-						dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(N_MC_points,-1) )
+				for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # NN params
+					dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(N_MC_points,-1) )
 
 			return jnp.concatenate(dlog_psi, axis=1 )
-			#return jnp.concatenate( [(dlog_psi+1j*dphase_psi).reshape(N_MC_points,-1) for (dlog_psi,dphase_psi) in zip(dlog_psi_s,dphase_psi_s)], axis=1  )
-
+		
 
 
 		### self.optimizer params

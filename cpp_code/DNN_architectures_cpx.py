@@ -57,10 +57,10 @@ def GeneralDense_cpx(W_shape, ignore_b=False):
             b_real = random.uniform(k1,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
             b_imag = random.uniform(k2,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
             
-            params=((W_real,b_real),(W_imag,b_imag))
+            params=(W_real,W_imag,b_real,b_imag)
         
         else:
-            params=((W_real,),(W_imag,))
+            params=(W_real,W_imag,)
         
         return output_shape, params
 
@@ -68,8 +68,8 @@ def GeneralDense_cpx(W_shape, ignore_b=False):
         #return jnp.einsum('ij,lj->li',params, inputs)
 
         # read-off params
-        W_real=params[0][0]
-        W_imag=params[1][0]
+        W_real=params[0]
+        W_imag=params[1]
 
         if isinstance(inputs, tuple):
             inputs_real, inputs_imag = inputs
@@ -87,8 +87,8 @@ def GeneralDense_cpx(W_shape, ignore_b=False):
 
         if not ignore_b:
             # add bias
-            z_real += params[0][1]
-            z_imag += params[1][1]
+            z_real += params[2]
+            z_imag += params[3]
        
         return z_real, z_imag
 
@@ -412,7 +412,7 @@ def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True,
                             
         
         z = normalize_cpx(x, mean=p_dict['mean'], std_mat_inv=p_dict['std_mat_inv'])
-        
+
         if center and scale: 
             return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1] + beta[0],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1] + beta[1]
         if center: 

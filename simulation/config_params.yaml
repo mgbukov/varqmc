@@ -10,7 +10,7 @@ N_iterations: 3
 load_data: false
 minibatch_size: 100
 mode: MC
-optimizer: NG
+optimizer: RK
 save_data: true
 seed: 1
 start_iter: 0

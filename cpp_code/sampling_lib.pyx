@@ -300,7 +300,7 @@ cdef class Neural_Net:
             self.NN_architecture = {
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
                                     'nonlin_1': Poly_cpx,
-                                #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
                                 #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
                                 #    'nonlin_2': Poly_cpx,
                                 #    'batch_norm_2': Normalize_cpx,
@@ -362,8 +362,8 @@ cdef class Neural_Net:
             self.output_shape = (-1,np.prod(output_shape[1:]) ) #(-1,out_chan*_L*_L)
            
 
-            self.Reshape = Reshape(self.params)
-            self.N_varl_params=self.Reshape.dims.sum() 
+            self.NN_Tree = NN_Tree(self.params)
+            self.N_varl_params=self.NN_Tree.sizes.sum() 
 
 
         else:
