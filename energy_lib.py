@@ -290,12 +290,10 @@ class Energy_estimator():
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
+		print("{0:d}/{1:d} unique configs; using minibatch size {2:d}.".format(nn_uq, nn, minibatch_size) )
+
 		
-		print(nn, nn_uq)
-		#print(_ints_bra_uq)
-		#print(_ints_bra_uq.shape)
-		
-		# evaluate network using minibatches
+		### evaluate network using minibatches
 
 		if minibatch_size > 0:
 		
@@ -336,6 +334,7 @@ class Energy_estimator():
 		# log_psi_bras=log_psi_bras._value - log_psi_shift
 		# phase_psi_bras=phase_psi_bras._value
 		
+		print(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)) )	
 
 		# compute real and imaginary part of local energy
 		self._n_per_term=self._n_per_term[self._n_per_term>0]

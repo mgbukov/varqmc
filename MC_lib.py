@@ -68,8 +68,8 @@ class MC_sampler():
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 		#self.spinstates_ket_tot=np.zeros((N_MC_points*self.N_features,),dtype=np.int8)
-		self.mod_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
-		self.phase_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
+		#self.mod_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
+		#self.phase_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
 
 		
 		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
@@ -78,7 +78,7 @@ class MC_sampler():
 
 		self._reset_global_vars()
 		
-
+	'''
 	def Allgather(self):
 
 		self.mod_kets_tot*=0.0
@@ -94,8 +94,8 @@ class MC_sampler():
 			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_tot, MPI.INT])
 		else:
 			self.s0_tot=self.s0.copy()
-		
-
+	'''	
+	
 	def _reset_global_vars(self):
 		self.spinstates_ket=np.zeros((self.N_batch*self.N_features,),dtype=np.int8)
 		

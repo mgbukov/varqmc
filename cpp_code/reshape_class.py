@@ -1,10 +1,42 @@
 import numpy as np
 import jax.numpy as jnp
 from jax import jit
+from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
+
+
+
+class NN_Tree(object):
+
+    def __init__(self,pytree):
+
+        flattened, self.tree = tree_flatten(pytree)
+
+        self.shapes=[]
+        self.sizes=np.zeros(len(flattened),dtype=int)
+
+        for j,x in enumerate(flattened):
+
+            self.shapes.append(x.shape)
+            self.sizes[j]=x.size
+
+        
+    def flatten(self,data):
+        return jnp.concatenate([x.flatten() for x in self.tree.flatten_up_to(data)])
+
+    def unflatten(self,data):
+
+        cum_size=0
+        data_flattened=[]
+        for j,size in enumerate(self.sizes):
+            data_flattened.append( jnp.array(data[cum_size:cum_size+size].reshape(self.shapes[j])) )
+            cum_size+=size
+
+        return self.tree.unflatten(data_flattened)
 
 
 
 
+"""
 class Reshape(object):
 
     def __init__(self,params,NN_dtype='cpx'):
@@ -87,5 +119,5 @@ class Reshape(object):
     @property
     def from_gradient_format(self):
         return jit(self._from_gradient_format)
-    
+""" 
  

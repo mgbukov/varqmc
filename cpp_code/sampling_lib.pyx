@@ -9,7 +9,7 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax import jit, grad, random, device_put
-#from jax.experimental.stax import GeneralConv #relu, BatchNorm
+from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
 
 
 cimport cython
@@ -25,7 +25,7 @@ cimport openmp
 
 
 from DNN_architectures_cpx import *
-from reshape_class import Reshape
+from reshape_class import NN_Tree
 from functools import partial   
 
 
@@ -235,12 +235,14 @@ def c_offdiag_sum(
 @cython.boundscheck(False)
 cdef class Neural_Net:
 
-    cdef object Reshape
+    cdef object NN_Tree
     cdef object apply_layer
     cdef object W_real, W_imag
     cdef object params
     cdef object input_shape, reduce_shape, output_shape, out_chan, strides, filter_shape 
     cdef object NN_type, NN_dtype
+    cdef object NN_architecture
+    cdef object apply_fun_args
 
     cdef int MPI_rank, seed
     cdef int N_varl_params, N_symm, N_sites
@@ -295,26 +297,38 @@ cdef class Neural_Net:
             self.N_symm=_L*_L*2*2*2 # no Z symmetry
           
             # define DNN
-            init_params, self.apply_layer = serial(
-                                                    GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                                    #Poly_cpx,
-                                                    #GeneralDense_cpx(shapes['layer_2'], ignore_b=False), 
-                                                )
+            self.NN_architecture = {
+                                    'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
+                                    'nonlin_1': Poly_cpx,
+                                #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
+                                #    'nonlin_2': Poly_cpx,
+                                #    'batch_norm_2': Normalize_cpx,
+                                #    'layer_3': GeneralDense_cpx(shapes['layer_3'], ignore_b=False), 
+                                }
+
+            init_params, self.apply_layer, self.apply_fun_args = serial(*self.NN_architecture.values())
            
             input_shape=(1,self.N_sites)
             output_shape, self.params = init_params(rng,input_shape)
+            self._init_apply_fun_args(rng,input_shape)
 
-            #print(self.params)
 
 
-            self.input_shape = (-1,self.N_sites) # reshape input data batch
+            self.input_shape  = (-1,self.N_sites) # reshape input data batch
             self.reduce_shape = (-1,self.N_symm,output_shape[1]) # tuple to reshape output before symmetrization
             self.output_shape = (-1,) + output_shape[1:]
            
+          
+            self.NN_Tree = NN_Tree(self.params)
+            self.N_varl_params=self.NN_Tree.sizes.sum() 
 
-            self.Reshape = Reshape(self.params)
-            self.N_varl_params=self.Reshape.dims.sum() 
+            # flat=self.NN_Tree.flatten(self.params)
+            # unflat=self.NN_Tree.unflatten(flat)
 
+            # print(flat)
+            # print(unflat)
+            # exit()
 
 
         elif NN_type=='CNN':
@@ -329,12 +343,15 @@ cdef class Neural_Net:
             W_init = partial(random.uniform, minval=-init_value_W, maxval=+init_value_W )
             b_init = partial(random.uniform, minval=-init_value_b, maxval=+init_value_b )
 
-            init_params, self.apply_layer = serial(
-                                                    GeneralConv_cpx(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], strides=shapes['layer_1']['strides'], padding='PERIODIC', ignore_b=True, W_init=W_init, b_init=b_init), 
-                                                    #Poly_cpx,
-                                                    #GeneralConv_cpx(dim_nums, shapes['layer_2']['out_chan'], shapes['layer_2']['filter_shape'], strides=shapes['layer_2']['strides'], padding='PERIODIC', ignore_b=False, W_init=W_init, b_init=b_init), 
-                                            
-                                                )
+
+            self.NN_architecture = {
+                                    'layer_1': GeneralConv_cpx(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], strides=shapes['layer_1']['strides'], padding='PERIODIC', ignore_b=True, W_init=W_init, b_init=b_init), 
+                                    'nonlin_1': Poly_cpx,
+                                #    'batch_norm_1': Normalize_cpx,
+                                #    'layer_2': GeneralConv_cpx(dim_nums, shapes['layer_2']['out_chan'], shapes['layer_2']['filter_shape'], strides=shapes['layer_2']['strides'], padding='PERIODIC', ignore_b=False, W_init=W_init, b_init=b_init),     
+                                }
+
+            init_params, self.apply_layer, self.apply_fun_args = serial(*self.NN_architecture)
             
             input_shape=np.array((1,1,_L,_L),dtype=np.int) # NCHW input format
             output_shape, self.params = init_params(rng,input_shape)
@@ -353,6 +370,19 @@ cdef class Neural_Net:
             raise ValueError("unsupported string for variable for NN_type.") 
         
  
+    def _init_apply_fun_args(self,rng,input_shape):
+        
+        layers_type=list(self.NN_architecture.keys())
+        init_funs, apply_funs = zip(*self.NN_architecture.values())
+
+        for j, (init_fun, layer_type) in enumerate(zip(init_funs, layers_type)):        
+            
+            rng, layer_rng = random.split(rng)
+            input_shape, _ = init_fun(layer_rng, input_shape)
+
+            if 'batch_norm' in layer_type:
+                mean, std_mat_inv = init_beatchnorm_cpx_params(input_shape)
+                self.apply_fun_args[j]=dict(overwrite=False, fixpoint_iter=False, p_dict=dict(mean=mean, std_mat_inv=std_mat_inv,))        
 
         
 
@@ -427,10 +457,20 @@ cdef class Neural_Net:
         def __get__(self):
             return self.NN_dtype
 
-    property Reshape:
+    property NN_architecture:
         def __get__(self):
-            return self.Reshape
-    
+            return self.NN_architecture
+
+    property apply_fun_args:
+        def __get__(self):
+            return self.apply_fun_args
+        def __set__(self,value):
+            self.apply_fun_args=value
+
+    property NN_Tree:
+        def __get__(self):
+            return self.NN_Tree
+
     property N_varl_params:
         def __get__(self):
             return self.N_varl_params 
@@ -462,13 +502,13 @@ cdef class Neural_Net:
 
     
     @cython.boundscheck(False)
-    def evaluate(self, params, batch):
+    def evaluate(self, params, batch, **kwargs):
 
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         # apply logcosh nonlinearity
         Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
         #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
@@ -490,7 +530,7 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         # apply logcosh nonlinearity
         Re_z = poly_real((Re_Ws, Im_Ws))
         #Re_z = logcosh_real((Re_Ws, Im_Ws))
@@ -511,7 +551,7 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         # apply logcosh nonlinearity
         Im_z = poly_imag((Re_Ws, Im_Ws))
         #Im_z = logcosh_imag((Re_Ws, Im_Ws))
@@ -710,7 +750,9 @@ cdef class Neural_Net:
 
             # MC accept/reject step
             eps = self.random_float(rng);
-            if(eps*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] <= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n]): # accept
+            if( (eps*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] <= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n]) & \
+                (500*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] >= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n])      ): # accept
+
                 s = t;
                 self.mod_psi_s[chain_n] = self.mod_psi_t[chain_n];
                 # set spin configs

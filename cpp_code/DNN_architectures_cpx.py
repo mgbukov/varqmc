@@ -2,12 +2,12 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax import jit, grad, random, device_put 
-from jax.experimental.stax import elementwise, BatchNorm, serial
+from jax.experimental.stax import BatchNorm
 
 import functools
 import itertools
-from jax import lax
-from jax import random
+from jax import lax, random
+from jax import ops, disable_jit
 import jax.numpy as jnp
 import numpy as np
 
@@ -31,7 +31,6 @@ def periodic_padding(inputs,filter_shape,strides):
     n_x=filter_shape[0]-strides[0]
     n_y=filter_shape[1]-strides[1]
     return jnp.pad(inputs, ((0,0),(0,0),(0,n_x),(0,n_y)), mode='wrap')
-
 
 
 
@@ -190,7 +189,7 @@ def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
 
 # nonlinearities
 
-@jit
+#@jit
 def poly_cpx(x):
     x_real, x_imag = x
     Re = 0.5*x_real**2 - 0.0833333*x_real**4 + 0.0222222*x_real**6 - 0.5*x_imag**2 + 0.5*x_real**2*x_imag**2 - 0.333333*x_real**4*x_imag**2 - 0.0833333*x_imag**4 + 0.333333*x_real**2*x_imag**4 - 0.0222222*x_imag**6
@@ -198,14 +197,14 @@ def poly_cpx(x):
     return Re, Im
 
 
-@jit
+#@jit
 def poly_real(x):
     x_real, x_imag = x
     Re_z = 0.5*x_real**2 - 0.0833333*x_real**4 + 0.0222222*x_real**6 - 0.5*x_imag**2 + 0.5*x_real**2*x_imag**2 - 0.333333*x_real**4*x_imag**2 - 0.0833333*x_imag**4 + 0.333333*x_real**2*x_imag**4 - 0.0222222*x_imag**6
     return Re_z
 
 
-@jit
+#@jit
 def poly_imag(x):
     x_real, x_imag = x
     Im_z = x_real*x_imag - 0.333333*x_real**3*x_imag + 0.133333*x_real**5*x_imag + 0.333333*x_real*x_imag**3 - 0.444444*x_real**3*x_imag**3 + 0.133333*x_real*x_imag**5
@@ -215,7 +214,7 @@ def poly_imag(x):
 #############################################
 
 
-@jit
+#@jit
 def cpx_cosh(Re_a,Im_a):
     # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
         
@@ -224,18 +223,18 @@ def cpx_cosh(Re_a,Im_a):
 
     return Re, Im
 
-@jit
+#@jit
 def cpx_log_real(Re, Im,):
     #a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
     return 0.5*jnp.log(Re**2+Im**2)
   
-@jit
+#@jit
 def cpx_log_imag(Re, Im,):
     #a_fc_imag = tf.atan( tf.tan(Im_Ws)*tf.tanh(Re_Ws) )
     return jnp.arctan2(Im,Re)
 
 
-@jit
+#@jit
 def logcosh_cpx(x):
     x_real, x_imag = x
     Re, Im  = cpx_cosh(x_real, x_imag)
@@ -243,7 +242,7 @@ def logcosh_cpx(x):
     Im_z = cpx_log_imag(Re, Im, )
     return Re_z, Im_z
 
-@jit
+#@jit
 def logcosh_real(Ws):
     Re_Ws, Im_Ws = Ws
     Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
@@ -251,14 +250,210 @@ def logcosh_real(Ws):
     return Re_z
 
 
-@jit
+#@jit
 def logcosh_imag(Ws):
     Re_Ws, Im_Ws = Ws
     Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
     Im_z = cpx_log_imag(Re, Im, )
     return Im_z
 
+
+##############################
+
+#@jit
+def normalize_cpx(x,mean=0.0+0.0j,std_mat_inv=np.eye(2),):
+    # mean = np.mean(x)
+    # var_mat_inv = (sigma_mat)^(-1/2)
+
+    x_real, x_imag = x
+
+    z_real=x_real-mean.real
+    z_imag=x_imag-mean.imag
+
+    return std_mat_inv[0,0,...]*z_real + std_mat_inv[0,1,...]*z_imag,   std_mat_inv[1,0,...]*z_real + std_mat_inv[1,1,...]*z_imag
+
+
+
+#@jit
+def scale_cpx(inputs,axis=(0,)):
+
+    # compute mean
+    Re_mean=jnp.mean(inputs[0],axis=axis,keepdims=True)
+    Im_mean=jnp.mean(inputs[1],axis=axis,keepdims=True)
+    mean=Re_mean+1j*Im_mean
+ 
+    ### compute V^{-1/2}
+
+    # correlation matrix V
+    V_rr=jnp.mean((inputs[0] - Re_mean)**2, axis=axis)# - Re_mean**2 
+    V_ii=jnp.mean((inputs[1] - Im_mean)**2, axis=axis)# - Im_mean**2 
+    V_ri=jnp.mean((inputs[0] - Re_mean)*(inputs[1] - Im_mean), axis=axis)
+    V = jnp.array([[V_rr,V_ri],[V_ri,V_ii]])
+
+    # compute V^{-1/2}
+    Id = jnp.array([np.identity(2) for _ in range(V.shape[-1])]).T
+    mask=jnp.array([np.array([[1.,-1.],[-1.,1.]]) for _ in range(V.shape[-1])]).T
+
+    # flip A <-> D, B -> -B, C -> -C
+    VV = mask*V[::-1,::-1,:].transpose([1,0,2])
+
+    # compute det and tr for each hidden unit
+    det=jnp.linalg.det(VV.T)
+    trace=jnp.trace(VV,axis1=0,axis2=1)
+
+    # aux. variables: V^{-1/2} = 1/t(Id + VV/s)
+    s=jnp.sqrt(det)
+    t=jnp.sqrt(trace + 2.0*s)
+
+    std_mat_inv=jnp.einsum('k,ijk->ijk',1.0/(s*t),VV) + jnp.einsum('k,ijk->ijk',1.0/t,Id)
+
+    #from scipy.linalg import sqrtm, pinvh
+    #std_mat_inv=np.array(list(pinvh(sqrtm(std)) for std in V.T) ).T
+
+
+    # print( std_mat_inv2[...,1]  )             
+    # print( pinvh(1.0/t[1]*(V[...,1] + s[1]*Id[...,1]))  )
+    # print( pinvh(sqrtm(V[...,1])) )
+            
+    return mean, std_mat_inv
+
+
+
+
+
 ###############
+
+
+def serial(*layers):
+    """Combinator for composing layers in serial.
+
+    Args:
+    *layers: a sequence of layers, each an (init_fun, apply_fun) pair.
+
+    Returns:
+    A new layer, meaning an (init_fun, apply_fun) pair, representing the serial
+    composition of the given sequence of layers.
+    """
+    nlayers = len(layers)
+    init_funs, apply_funs = zip(*layers)
+    apply_fun_args = list((dict(),)*nlayers)
+    def init_fun(rng, input_shape):
+        params = []
+        for init_fun in init_funs:
+            rng, layer_rng = random.split(rng)
+            input_shape, param = init_fun(layer_rng, input_shape)
+            params.append(param)
+        return input_shape, params
+    def apply_fun(params, inputs, rng=None, kwargs=apply_fun_args):
+        rngs = random.split(rng, nlayers) if rng is not None else (None,) * nlayers
+        for fun, param, rng, kwarg in zip(apply_funs, params, rngs, kwargs):
+            inputs = fun(param, inputs, rng=rng, **kwarg)
+        return inputs
+    return init_fun, apply_fun, apply_fun_args
+
+
+
+
+
+def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True,
+              beta_init=zeros, gamma_init=ones):
+    """Layer construction function for a batch normalization layer."""
+    _beta_init = lambda rng, shape: beta_init(rng, shape) if center else ()
+    _gamma_init = lambda rng, shape: gamma_init(rng, shape) if scale else ()
+    axis = (axis,) if np.isscalar(axis) else axis
+    
+    def init_fun(rng, input_shape):
+        shape = tuple(d for i, d in enumerate(input_shape) if i not in axis) 
+        k1, k2 = random.split(rng)
+        beta = _beta_init(k1, shape)
+        gamma = np.array([[_gamma_init(k2, shape),zeros(k2,shape)],[zeros(k2,shape),_gamma_init(k2, shape)]]).T
+        gamma/=np.sqrt(2.0)
+        return input_shape, (beta, gamma)
+
+    def apply_fun(params, x, overwrite=False, fixpoint_iter=False, p_dict=None, **kwargs):
+        #
+        beta, gamma = params
+        # TODO(phawkins): np.expand_dims should accept an axis tuple.
+        # (https://github.com/numpy/numpy/issues/12290)
+        ed = tuple(None if i in axis else slice(None) for i in range(np.ndim(x[0])))
+        beta = beta[ed]
+        gamma = gamma[ed]
+        
+        if overwrite==True:
+
+            if fixpoint_iter: # mean -> mean + std_mat.dot(mean_old), std_mat_inv -> std_mat_inv.dot(std_mat_iv_old)
+                
+                # old stats    
+                mean=p_dict['mean']
+                std_mat_inv=p_dict['std_mat_inv']
+        
+                # normalize
+                z=normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)
+
+                # compute new stats
+                mean_new, std_mat_inv_new = scale_cpx(z, axis=axis)
+
+                # fix point iteration: 
+                std_mat = jnp.array(list(np.linalg.inv(mat) for mat in std_mat_inv.T) ).T
+                mean_vec= jnp.array([mean_new.squeeze().real, mean_new.squeeze().imag] )
+
+                sigma_mean = jnp.einsum('ijp,jp->ip',std_mat,mean_vec)
+                sigma_mean = (sigma_mean[0,...] + 1j*sigma_mean[1,...]).reshape(mean_new.shape)
+        
+                mean_new=mean+sigma_mean
+                std_mat_inv_new=jnp.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv)
+
+            else: # mean -> mean, std_mat_inv -> std_mat_inv
+                mean_new, std_mat_inv_new = scale_cpx(x,axis=axis)  
+        
+            # pass arguments
+            p_dict['mean']=mean_new
+            p_dict['std_mat_inv']=std_mat_inv_new
+                            
+        
+        z = normalize_cpx(x, mean=p_dict['mean'], std_mat_inv=p_dict['std_mat_inv'])
+        
+        if center and scale: 
+            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1] + beta[0],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1] + beta[1]
+        if center: 
+            return z[0] + beta[0], z[1] + beta[1]
+        if scale: 
+            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1]
+        return z
+
+    return init_fun, apply_fun
+
+
+def init_beatchnorm_cpx_params(input_shape):
+
+    broadcast_shape=(Ellipsis,)
+    for _ in range(len(input_shape[1:])):
+        broadcast_shape+=(None,)
+
+    mean=np.zeros((1,)+input_shape[1:],dtype=np.complex128)
+    std_mat_inv=np.broadcast_to(np.identity(2)[broadcast_shape], (2,2)+input_shape[1:]).copy()
+
+    return mean, std_mat_inv
+
+
+
+
+
+def elementwise(fun, **fun_kwargs):
+    """Layer that applies a scalar function elementwise on its inputs."""
+    init_fun = lambda rng, input_shape: (input_shape, ())
+    def apply_fun(params, inputs, **kwargs):
+        kwargs.pop('rng', None)
+        return fun(inputs, **kwargs, **fun_kwargs) #
+    return init_fun, apply_fun
+
+
+
+
 
 LogCosh_cpx=elementwise(logcosh_cpx)
 Poly_cpx=elementwise(poly_cpx)
+Normalize_cpx=elementwise(normalize_cpx)
+
+
+

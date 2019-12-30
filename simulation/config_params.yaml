@@ -1,12 +1,12 @@
 J2: 0.5
 L: 6
 NN_dtype: cpx
-NN_shape_str: 36--6
+NN_shape_str: 36--2
 NN_type: DNN
-N_MC_chains: 1
-N_MC_points: 500
-N_batch: 125
-N_iterations: 5
+N_MC_chains: 4
+N_MC_points: 100
+N_batch: 100
+N_iterations: 3
 load_data: false
 minibatch_size: 100
 mode: MC
@@ -14,4 +14,4 @@ optimizer: NG
 save_data: true
 seed: 1
 start_iter: 0
-stop_iter: 4
+stop_iter: 2
