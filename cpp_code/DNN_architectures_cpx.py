@@ -4,6 +4,8 @@ import jax.numpy as jnp
 from jax import jit, grad, random, device_put 
 from jax.experimental.stax import BatchNorm
 
+from mpi4py import MPI
+
 import functools
 import itertools
 from jax import lax, random
@@ -33,12 +35,69 @@ def periodic_padding(inputs,filter_shape,strides):
     return jnp.pad(inputs, ((0,0),(0,0),(0,n_x),(0,n_y)), mode='wrap')
 
 
+def GeneralDense_cpx_nonholo(W_shape, ignore_b=False):
+
+    def init_fun(rng,input_shape):
+
+        init_value_W=1E-2 #1E-2 #1E-1
+
+        rng_real, rng_imag = random.split(rng)
+        
+        output_shape=(input_shape[0],W_shape[1])
+
+        W_A = random.uniform(rng_real,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
+        W_B = random.uniform(rng_imag,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
+
+        if not ignore_b:
+
+            init_value_b=1E-2
+
+            rng_real, k1 = random.split(rng_real)
+            rng_imag, k2 = random.split(rng_imag)
+
+            b_real = random.uniform(k1,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
+            b_imag = random.uniform(k2,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
+            
+            params=(W_A,W_B,W_B,W_A, b_real,b_imag,)
+        
+        else:
+            params=(W_A,-W_B,W_B,W_A,)
+        
+        return output_shape, params
+
+    def apply_fun(params,inputs, **kwargs):
+        #return jnp.einsum('ij,lj->li',params, inputs)
+
+        if isinstance(inputs, tuple):
+            inputs_real, inputs_imag = inputs
+        else:
+            inputs_real = inputs
+            inputs_imag = None
+
+        z_real = jnp.dot(inputs_real,params[0]) 
+        z_imag = jnp.dot(inputs_real,params[2])
+
+
+        if inputs_imag is not None:
+            z_real -= jnp.dot(inputs_imag,params[1]) 
+            z_imag += jnp.dot(inputs_imag,params[3])
+
+        if not ignore_b:
+            # add bias
+            z_real += params[4]
+            z_imag += params[5]
+       
+        return z_real, z_imag
+
+
+    return init_fun, apply_fun
+
 
 def GeneralDense_cpx(W_shape, ignore_b=False):
 
     def init_fun(rng,input_shape):
 
-        init_value_W=1E-2 #1E-1
+        init_value_W=1E-2 #1E-2 #1E-1
 
         rng_real, rng_imag = random.split(rng)
         
@@ -134,10 +193,10 @@ def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
             b_real = b_init(k2_real, bias_shape, dtype=dtype)
             b_imag = b_init(k2_imag, bias_shape, dtype=dtype)
 
-            params = ((W_real,b_real),(W_imag,b_imag))
+            params=(W_real,W_imag,b_real,b_imag)
         
         else:
-            params = ((W_real,),(W_imag,))
+            params=(W_real,W_imag,)
             
         return output_shape, params
 
@@ -148,8 +207,8 @@ def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
     def apply_fun(params, inputs, **kwargs):
 
         # read-off params
-        W_real=params[0][0]
-        W_imag=params[1][0]
+        W_real=params[0]
+        W_imag=params[1]
 
         if isinstance(inputs, tuple):
             inputs_real, inputs_imag = inputs
@@ -172,8 +231,8 @@ def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
 
         if not ignore_b:
             # read-off params
-            b_real=params[0][1]
-            b_imag=params[1][1]
+            b_real=params[2]
+            b_imag=params[3]
 
             z_real += b_real
             z_imag += b_imag
@@ -275,20 +334,34 @@ def normalize_cpx(x,mean=0.0+0.0j,std_mat_inv=np.eye(2),):
 
 
 #@jit
-def scale_cpx(inputs,axis=(0,)):
+def scale_cpx(inputs,comm,axis=(0,)):
 
     # compute mean
     Re_mean=jnp.mean(inputs[0],axis=axis,keepdims=True)
     Im_mean=jnp.mean(inputs[1],axis=axis,keepdims=True)
-    mean=Re_mean+1j*Im_mean
+    mean_loc=Re_mean+1j*Im_mean
+
+    mean=np.zeros_like(mean_loc)
+
+    # MPI collect   
+    comm.Allreduce([mean_loc._value, MPI.DOUBLE], [mean, MPI.DOUBLE], op=MPI.SUM)
+    mean=device_put(mean/comm.Get_size())
  
+
     ### compute V^{-1/2}
 
     # correlation matrix V
-    V_rr=jnp.mean((inputs[0] - Re_mean)**2, axis=axis)# - Re_mean**2 
-    V_ii=jnp.mean((inputs[1] - Im_mean)**2, axis=axis)# - Im_mean**2 
-    V_ri=jnp.mean((inputs[0] - Re_mean)*(inputs[1] - Im_mean), axis=axis)
-    V = jnp.array([[V_rr,V_ri],[V_ri,V_ii]])
+    V_rr=jnp.mean((inputs[0] - mean.real)**2, axis=axis)# - Re_mean**2 
+    V_ii=jnp.mean((inputs[1] - mean.imag)**2, axis=axis)# - Im_mean**2 
+    V_ri=jnp.mean((inputs[0] - mean.real)*(inputs[1] - mean.imag), axis=axis)
+    V_loc = jnp.array([[V_rr,V_ri],[V_ri,V_ii]])
+
+    V=np.zeros_like(V_loc)
+
+    # MPI collect   
+    comm.Allreduce([V_loc._value, MPI.DOUBLE], [V, MPI.DOUBLE], op=MPI.SUM)
+    V=device_put(V/comm.Get_size())
+
 
     # compute V^{-1/2}
     Id = jnp.array([np.identity(2) for _ in range(V.shape[-1])]).T
@@ -386,12 +459,13 @@ def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True,
                 # old stats    
                 mean=p_dict['mean']
                 std_mat_inv=p_dict['std_mat_inv']
+                comm=p_dict['comm']
         
                 # normalize
                 z=normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)
 
                 # compute new stats
-                mean_new, std_mat_inv_new = scale_cpx(z, axis=axis)
+                mean_new, std_mat_inv_new = scale_cpx(z, comm, axis=axis)
 
                 # fix point iteration: 
                 std_mat = jnp.array(list(np.linalg.inv(mat) for mat in std_mat_inv.T) ).T

@@ -204,7 +204,7 @@ class natural_gradient():
 	def compute(self,NN_params,batch,Eloc_params_dict,mode='MC',):
 		
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch)
-
+		
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 
@@ -243,7 +243,7 @@ class natural_gradient():
 
 			#self.nat_grad /= np.sqrt(jnp.dot(self.F_vector.conj(),self.nat_grad).real)
 			
-			return self.NN_Tree.unflatten(self.nat_grad,)
+			return self.NN_Tree.unravel(self.nat_grad,)
 		else:
 			return self.nat_grad
 		
@@ -294,7 +294,7 @@ class natural_gradient():
 	def Runge_Kutta(self,NN_params,batch,Eloc_params_dict,mode,get_training_data):
 
 		# flatten weights
-		params=self.NN_Tree.flatten(NN_params,)
+		params=self.NN_Tree.ravel(NN_params,)
 		
 		max_param=jnp.max(jnp.abs(params)).block_until_ready()
 		#max_param=jnp.max(np.abs(params[:32]+1j*params[32:]))
@@ -311,7 +311,7 @@ class natural_gradient():
 			self.k1[:]=-self.RK_step_size*initial_grad
 			
 			### RK step 2
-			NN_params_shifted=self.NN_Tree.unflatten(params+self.k1)
+			NN_params_shifted=self.NN_Tree.unravel(params+self.k1)
 			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k1/self.RK_step_size
 			self.k2[:]=-self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
@@ -323,7 +323,7 @@ class natural_gradient():
 			self.k3[:]=-0.5*self.RK_step_size*initial_grad # 0.5*k1
 			
 			### RK step 2
-			NN_params_shifted=self.NN_Tree.unflatten(params+self.k3)
+			NN_params_shifted=self.NN_Tree.unravel(params+self.k3)
 			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k3/(0.5*self.RK_step_size)
 			self.k4[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
@@ -332,13 +332,13 @@ class natural_gradient():
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
 			
 			### RK step 1
-			NN_params_shifted=self.NN_Tree.unflatten(params+self.dy_star)
+			NN_params_shifted=self.NN_Tree.unravel(params+self.dy_star)
 			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k4/(0.5*self.RK_step_size)
 			self.k5[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
 
 			### RK step 2
-			NN_params_shifted=self.NN_Tree.unflatten(params+self.dy_star+self.k5)
+			NN_params_shifted=self.NN_Tree.unravel(params+self.dy_star+self.k5)
 			batch, Eloc_params_dict=get_training_data(NN_params_shifted)
 			self.nat_grad_guess[:]=self.k5/(0.5*self.RK_step_size)
 			self.k6[:]=-0.5*self.RK_step_size*self.compute(NN_params_shifted,batch,Eloc_params_dict,mode=mode)
@@ -371,5 +371,5 @@ class natural_gradient():
 		
 		print('steps={0:d}-step_size={1:0.12f}-time={2:0.4f}-delta={3:0.10f}-cg_tol-{4:0.12f}.\n'.format(self.counter, self.RK_step_size, self.RK_time, self.delta, self.tol) )
 	
-		return self.NN_Tree.unflatten(params + self.dy_star - 1.0/6.0*(self.dy-self.dy_star), )
+		return self.NN_Tree.unravel(params + self.dy_star - 1.0/6.0*(self.dy-self.dy_star), )
 

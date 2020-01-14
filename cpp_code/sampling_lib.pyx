@@ -7,8 +7,9 @@
 
 from jax.config import config
 config.update("jax_enable_x64", True)
+import jax
 import jax.numpy as jnp
-from jax import jit, grad, random, device_put
+from jax import jit, grad, random, device_put, partial
 from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
 
 
@@ -48,6 +49,8 @@ cdef extern from *:
 IF _L==4:
     ctypedef np.uint16_t basis_type
 IF _L==6:
+    ctypedef np.uint64_t basis_type
+IF _L==8:
     ctypedef np.uint64_t basis_type
 
 
@@ -243,6 +246,7 @@ cdef class Neural_Net:
     cdef object NN_type, NN_dtype
     cdef object NN_architecture
     cdef object apply_fun_args
+    cdef object comm
 
     cdef int MPI_rank, seed
     cdef int N_varl_params, N_symm, N_sites
@@ -268,10 +272,12 @@ cdef class Neural_Net:
     cdef vector[mt19937] RNGs # hold a C++ instance
         
 
-    def __init__(self,MPI_rank,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
+    def __init__(self,comm,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
 
         self.N_sites=_L*_L
-        self.MPI_rank=MPI_rank
+
+        self.comm=comm
+        self.MPI_rank=self.comm.Get_rank()
  
         # fix seed
         self.seed=seed
@@ -301,10 +307,10 @@ cdef class Neural_Net:
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
                                     'nonlin_1': Poly_cpx,
                                     'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
+                                    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
                                 #    'nonlin_2': Poly_cpx,
-                                #    'batch_norm_2': Normalize_cpx,
-                                #    'layer_3': GeneralDense_cpx(shapes['layer_3'], ignore_b=False), 
+                                #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                #    'layer_3': GeneralDense_cpx_nonholo(shapes['layer_3'], ignore_b=False), 
                                 }
 
             init_params, self.apply_layer, self.apply_fun_args = serial(*self.NN_architecture.values())
@@ -321,14 +327,7 @@ cdef class Neural_Net:
            
           
             self.NN_Tree = NN_Tree(self.params)
-            self.N_varl_params=self.NN_Tree.sizes.sum() 
-
-            # flat=self.NN_Tree.flatten(self.params)
-            # unflat=self.NN_Tree.unflatten(flat)
-
-            # print(flat)
-            # print(unflat)
-            # exit()
+            self.N_varl_params=self.NN_Tree.N_varl_params 
 
 
         elif NN_type=='CNN':
@@ -363,7 +362,7 @@ cdef class Neural_Net:
            
 
             self.NN_Tree = NN_Tree(self.params)
-            self.N_varl_params=self.NN_Tree.sizes.sum() 
+            self.N_varl_params=self.NN_Tree.N_varl_params
 
 
         else:
@@ -382,7 +381,7 @@ cdef class Neural_Net:
 
             if 'batch_norm' in layer_type:
                 mean, std_mat_inv = init_beatchnorm_cpx_params(input_shape)
-                self.apply_fun_args[j]=dict(overwrite=False, fixpoint_iter=False, p_dict=dict(mean=mean, std_mat_inv=std_mat_inv,))        
+                self.apply_fun_args[j]=dict(overwrite=False, fixpoint_iter=False, p_dict=dict(mean=mean, std_mat_inv=std_mat_inv, comm=self.comm, ))        
 
         
 
@@ -392,8 +391,8 @@ cdef class Neural_Net:
         #self.evaluate_phase=self._evaluate_phase
 
         # define network evaluation on GPU
-        self.evaluate_log  =jit(self._evaluate_log)
-        self.evaluate_phase=jit(self._evaluate_phase)
+        #self.evaluate_log  =jit(self._evaluate_log)
+        #self.evaluate_phase=jit(self._evaluate_phase)
         
         if self.NN_type=='DNN':
             self.spin_config=<func_type>int_to_spinstate
@@ -502,13 +501,14 @@ cdef class Neural_Net:
 
     
     @cython.boundscheck(False)
-    def evaluate(self, params, batch, **kwargs):
+    #@jax.partial(jit, static_argnums=(0,3))
+    def evaluate(self, params, batch, apply_fun_args):
 
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
         # apply logcosh nonlinearity
         Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
         #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
@@ -524,13 +524,13 @@ cdef class Neural_Net:
 
 
     @cython.boundscheck(False)
-    cpdef object _evaluate_log(self, object params, object batch):
+    cpdef object _evaluate_log(self, object params, object batch, object apply_fun_args):
 
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
         # apply logcosh nonlinearity
         Re_z = poly_real((Re_Ws, Im_Ws))
         #Re_z = logcosh_real((Re_Ws, Im_Ws))
@@ -544,14 +544,19 @@ cdef class Neural_Net:
         return log_psi
 
 
+    @jax.partial(jit, static_argnums=(0,3))
+    def evaluate_log(self, params, batch, apply_fun_args):
+        return self._evaluate_log(params, batch, apply_fun_args)
+
+
     @cython.boundscheck(False)
-    cpdef object _evaluate_phase(self, object params, object batch):
+    cpdef object _evaluate_phase(self, object params, object batch, object apply_fun_args):
 
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
         # apply logcosh nonlinearity
         Im_z = poly_imag((Re_Ws, Im_Ws))
         #Im_z = logcosh_imag((Re_Ws, Im_Ws))
@@ -565,7 +570,9 @@ cdef class Neural_Net:
         return phase_psi
 
 
-
+    @jax.partial(jit, static_argnums=(0,3))
+    def evaluate_phase(self, params, batch, apply_fun_args):
+        return self._evaluate_phase(params, batch, apply_fun_args)
 
 
     
@@ -593,8 +600,6 @@ cdef class Neural_Net:
         #print(N_MC_points, n_MC_points,n_MC_points_leftover)
         #
         cdef int auto_correlation_time = 0.4/np.max([0.05, acceptance_ratio])*self.N_sites
-
-
 
         with nogil:
 
@@ -690,10 +695,11 @@ cdef class Neural_Net:
 
 
         cdef basis_type s;
+        cdef basis_type one=1;
         cdef int l;
             
         if not thermal:
-            s=(1<<(self.N_sites//2))-1;
+            s=(one<<(self.N_sites//2))-one;
             for l in range(self.N_sites):
                 t=s;
                 while(t==s):
@@ -719,7 +725,7 @@ cdef class Neural_Net:
         # evaluate DNN on GPU
         if thread_id==0:
             with gil:
-                self.mod_psi_s=jnp.exp(self.evaluate_log(self.params, self.spinstate_s_py));
+                self.mod_psi_s=jnp.exp(self.evaluate_log(self.params, self.spinstate_s_py, self.apply_fun_args));
         # set barrier
         OMP_BARRIER_PRAGMA()
 
@@ -743,7 +749,7 @@ cdef class Neural_Net:
             # evaluate DNN on GPU
             if thread_id==0:
                 with gil:
-                    self.mod_psi_t=jnp.exp(self.evaluate_log(self.params,self.spinstate_t_py));
+                    self.mod_psi_t=jnp.exp(self.evaluate_log(self.params, self.spinstate_t_py, self.apply_fun_args));
             # set barrier
             OMP_BARRIER_PRAGMA()
 
@@ -779,65 +785,3 @@ cdef class Neural_Net:
 
         
 
-
-
-'''
-
-@jit
-def melu(x):
-    return jnp.where(jnp.abs(x)>1.0, jnp.abs(x)-0.5, 0.5*x**2)
-
-
-def create_NN(shape):
-
-    init_value_W=1E-1 
-    init_value_b=1E-1
-    
-    W_fc_base = random.uniform(rng,shape=shape[0], minval=-init_value_W, maxval=+init_value_W)
-    
-    W_fc_log_psi = random.uniform(rng,shape=shape[1], minval=-init_value_W,   maxval=+init_value_W)
-    W_fc_phase   = random.uniform(rng,shape=shape[2], minval=-init_value_W, maxval=+init_value_W)
-
-    b_fc_log_psi = random.uniform(rng,shape=(shape[1][1],), minval=-init_value_b, maxval=+init_value_b)
-    b_fc_phase   = random.uniform(rng,shape=(shape[2][1],), minval=-init_value_b, maxval=+init_value_b)
-
-    
-    architecture=[W_fc_base, W_fc_log_psi, W_fc_phase, b_fc_log_psi, b_fc_phase]
-
-    return architecture
-
-
-
-@jit
-def evaluate_NN(params,batch):
-
-    ### common layer
-    Ws = jnp.einsum('ij,...lj->...il',params[0], batch)
-    # nonlinearity
-    #a_fc_base = jnp.log(jnp.cosh(Ws))
-    a_fc_base = melu(Ws) 
-    #a_fc_base = relu(Ws)
-    # symmetrize
-    a_fc_base = jnp.sum(a_fc_base, axis=[-1])
-
-    
-    ### log_psi head
-    a_fc_log_psi = jnp.dot(a_fc_base, params[1]) + params[3]
-    #log_psi = jnp.log(jnp.cosh(a_fc_log_psi))
-    log_psi = melu(a_fc_log_psi) 
-    #log_psi = relu(a_fc_log_psi)
-
-    ### phase head
-    a_fc_phase =jnp.dot(a_fc_base, params[2]) + params[4]
-    #phase_psi = jnp.log(jnp.cosh(a_fc_phase))
-    phase_psi = melu(a_fc_phase) 
-    #phase_psi = relu(a_fc_phase)
-
-    
-    log_psi = jnp.sum(log_psi, axis=[1])#/log_psi.shape[0]
-    phase_psi = jnp.sum(phase_psi, axis=[1])#/phase_psi.shape[0]    
-
-
-    return log_psi, phase_psi  #
-
-'''

@@ -14,7 +14,7 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
 quspin_path = os.path.join(os.path.expanduser('~'),"quspin/QuSpin_dev/")
 sys.path.insert(0,quspin_path)
 
-#import jax
+import jax
 #print('local devices:', jax.local_devices() )
 
 from jax.lib import xla_bridge
@@ -173,86 +173,27 @@ class VMC(object):
 		self.train(self.start_iter)
 		
 
-	def update_batchnorm_params(self,layers,set_overwrite=True, set_fixpoint_iter=True):
+	def update_batchnorm_params(self,layers,set_overwrite=True, set_fixpoint_iter=True, collect=False):
 		layers_type=list(layers.keys())
 		for j, layer_type in enumerate(layers_type):
 			if 'batch_norm' in layer_type:
 				self.DNN.apply_fun_args[j]['overwrite']=set_overwrite
 				self.DNN.apply_fun_args[j]['fixpoint_iter']=set_fixpoint_iter
 
-
-
-	"""
-	def batch_normalization(self, params, inputs, layers, kwargs, update=True):
-
-		nlayers = len(layers.values())
-		init_funs, apply_funs = zip(*layers.values())
-		layers_type=list(layers.keys())
-
-		MEAN=0.0 # cumulative mean over matrix dimensions
-
-		for j, (fun, param, kwarg, layer_type) in enumerate(zip(apply_funs, params, kwargs, layers_type)):
-			
-			rng = kwarg.pop('rng', None)
-			inputs = fun(param, inputs, rng=rng, **kwarg)
-
+				# average data from different MPI processes 
+				if collect:
+					pass
 				
-			if 'batch_norm' in layer_type:
 
-				# compute mean and sigma^{-1/2}
-				mean, std_mat_inv = scale_cpx(inputs)
-	
-				
-				# update parameter
-				if update:
-					if 'mean' in self.DNN.apply_fun_args[j]:
-	
-						std_mat_old = np.array(list(pinvh(mat) for mat in self.DNN.apply_fun_args[j]['std_mat_inv'].T) ).T
-						mean_vec=np.array([mean.squeeze().real, mean.squeeze().imag])
 
-						sigma_mean = np.einsum('ijp,jp->ip',std_mat_old,mean_vec)
-						mean_updated=(sigma_mean[0,...] + 1j*sigma_mean[1,...]).reshape(mean.shape)
 
-				
-						self.DNN.apply_fun_args[j]['mean']+=mean_updated
-						self.DNN.apply_fun_args[j]['std_mat_inv']=np.einsum('ijp,jkp->ikp',std_mat_inv, self.DNN.apply_fun_args[j]['std_mat_inv'])	
-						
-
-					else:
-						self.DNN.apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv)
-
-			
-				MEAN+=np.mean(np.abs(mean))
-			
-		return MEAN
-	
-			##############################################
-		
-		# inputs=np.random.randint(2,size=(100,288,36)).astype(np.float64)
-		
-		
-		# #print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
-
-		# #print(self.DNN.apply_fun_args)
-		# mean=self.batch_normalization(self.DNN.params, inputs, self.DNN.NN_architecture, self.DNN.apply_fun_args)
-		# #print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
-	
-		# #print(self.DNN.apply_fun_args)
-		# mean=self.batch_normalization(self.DNN.params, inputs, self.DNN.NN_architecture, self.DNN.apply_fun_args)
-	
-
-		# print(self.evaluate_NN(self.DNN.params,inputs)[0][0])
-
-		# #exit()
-
-	"""
 
 	def _create_NN(self, load_data=False):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 2], 
-						#	 layer_2 = [12       ,  8],
+			self.shapes=dict(layer_1 = [self.L**2, 12], 
+							 layer_2 = [12       ,  8],
 						#	 layer_3 = [8       ,  4], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
@@ -267,7 +208,8 @@ class VMC(object):
 		
 
 		### create Neural network
-		self.DNN=Neural_Net(self.comm.Get_rank(), self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
+		#print('here')
+		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
 
 
 		if load_data:
@@ -282,22 +224,22 @@ class VMC(object):
 
 		# jit functions
 		self.evaluate_NN_nojit=self.DNN.evaluate
-		self.evaluate_NN=jit(self.DNN.evaluate)
+		#self.evaluate_NN=self.evaluate_NN_nojit 
+		self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
 		
-
 
 
 	def _create_optimizer(self):
 
 		@jit
 		def loss_log_psi(NN_params,batch,):
-			log_psi = self.DNN.evaluate_log(NN_params,batch,)
+			log_psi = self.DNN.evaluate_log(NN_params,batch,self.DNN.apply_fun_args,)
 			return jnp.sum(log_psi)
 			
 
 		@jit
 		def loss_phase_psi(NN_params,batch,):
-			phase_psi = self.DNN.evaluate_phase(NN_params,batch,)	
+			phase_psi = self.DNN.evaluate_phase(NN_params,batch,self.DNN.apply_fun_args,)	
 			return jnp.sum(phase_psi)
 
 
@@ -314,14 +256,14 @@ class VMC(object):
 			# dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
 
 			
-			N_MC_points=batch.shape[0]
-
+			#N_MC_points=batch.shape[0]
+			
 			dlog_psi = []
 			for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
-				for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # NN params
-					dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(N_MC_points,-1) )
+				for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # loop over NN params
+					dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
 
-			return jnp.concatenate(dlog_psi, axis=1 )
+			return jnp.concatenate(dlog_psi, axis=1)
 		
 
 
@@ -342,21 +284,21 @@ class VMC(object):
 			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=step_size, b1=0.9, b2=0.99, eps=1e-08)
 			if self.mode=='exact':
 
-				@jit
-				def loss_energy_exact(NN_params,batch,params_dict):
-					log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)
+				@jax.partial(jit, static_argnums=(2,3))
+				def loss_energy_exact(NN_params,batch,params_dict,apply_fun_args):
+					log_psi, phase_psi = self.evaluate_NN(NN_params,batch,apply_fun_args)
 					return 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag ))
 
 				self.compute_grad=jit(grad(loss_energy_exact))
 			
 			elif self.mode=='MC':
 
-				@jit
-				def loss_energy_MC(NN_params,batch,params_dict,):
-					log_psi, phase_psi = self.evaluate_NN(NN_params,batch,)
+				@jax.partial(jit, static_argnums=(2,3))
+				def loss_energy_MC(NN_params,batch,params_dict,apply_fun_args):
+					log_psi, phase_psi = self.evaluate_NN(NN_params,batch,apply_fun_args)
 					return 2.0*jnp.sum(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
 
-				self.compute_grad=jit(grad(loss_energy_MC))
+				self.compute_grad=jit(grad(loss_energy_MC), static_argnums=(2,3))
 
 			self.opt_state = self.opt_init(self.DNN.params)
 
@@ -509,13 +451,7 @@ class VMC(object):
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.DNN.NN_type)
 
 
-		# prenormalize the weights
-		#self.weights_normalization(self.DNN.params,len(self.shapes)+1)
 
-
-		#self.compute_batchnorm_params(self.DNN.params,len(self.shapes)+1) #
-		#exit()
-		
 
 		for iteration in range(start,self.N_iterations, 1): 
 
@@ -530,8 +466,8 @@ class VMC(object):
 
 
 			##### determine batchnorm mean and variance
-			#self.compute_batchnorm_params(self.DNN.params,len(self.shapes)+1) #
-			
+			self.compute_batchnorm_params(self.DNN.params,len(self.shapes)+1) #
+
 
 
 			##### evaluate model
@@ -604,89 +540,31 @@ class VMC(object):
 		self.file_phase_hist.close()
 
 
-	def compute_batchnorm_params(self,NN_params,N_iter):
 
-		
+	def compute_batchnorm_params(self,NN_params,N_iter):
+	
+		ti=time.time()
+
 		for i in range(N_iter):
 			
-			ti=time.time()
 			# draw MC sample
 			acceptance_ratio = self.MC_tool.sample(self.DNN)
-			print(self.MC_tool.ints_ket)
-			print()
-
-			#print(self.DNN.apply_fun_args[2]['p_dict'])
-			
-			#log_psi, phase_psi = self.evaluate_NN(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), arg=0 )
-			#print('1',log_psi ) #, self.DNN.apply_fun_args[2]['p_dict']['mean'])
-			
+		
 			self.update_batchnorm_params(self.DNN.NN_architecture, set_overwrite=True, set_fixpoint_iter=True)
-			log_psi, phase_psi = self.evaluate_NN_nojit(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites))
+			log_psi, phase_psi = self.evaluate_NN_nojit(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), self.DNN.apply_fun_args)
 			self.update_batchnorm_params(self.DNN.NN_architecture, set_overwrite=False, set_fixpoint_iter=False)
-			print('2',log_psi ) #, self.DNN.apply_fun_args[2]['p_dict']['mean'])
-			
 
-			#print(self.DNN.apply_fun_args[2]['p_dict'])
-
-			#mean=self.batch_normalization(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), self.DNN.NN_architecture, self.DNN.apply_fun_args)
-							
-			MC_str="{0:d} :: weights norm: MC with acceptance ratio={1:.4f}: took {2:.4f} secs.\n".format(i,acceptance_ratio[0],time.time()-ti)
-			self.logfile.write(MC_str)
+			norm_str="i: {0:d}, min(log_psi)={1:0.4f}, max(log_psi={2:0.4f}".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
+			self.logfile.write(norm_str)
 			if self.comm.Get_rank()==0:
-				print(MC_str)
+				print(norm_str)	
 
-
-
-		log_psi, phase_psi = self.evaluate_NN(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
-		print('3',log_psi ) #, self.DNN.apply_fun_args[2]['p_dict']['mean'])
-		print()
-
-		acceptance_ratio = self.MC_tool.sample(self.DNN)
-		print(self.MC_tool.ints_ket)
-		print()
-
-		log_psi, phase_psi = self.evaluate_NN(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites) )
-		print('4',log_psi ) #, self.DNN.apply_fun_args[2]['p_dict']['mean'])
-
-		log_psi, phase_psi = self.evaluate_NN(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites) )
-		print('5',log_psi ) #, self.DNN.apply_fun_args[2]['p_dict']['mean'])
-
-		#log_psi, phase_psi = self.evaluate_NN_nojit(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites) )
-		#print('6',log_psi ) #, self.DNN.apply_fun_args[2]['p_dict']['mean'])
-
-
-
-
-	def weights_normalization(self,NN_params,N_iter):
-
-		for i in range(N_iter):
-
-			##### get spin configs #####
-			if self.mode=='exact':
-				self.MC_tool.exact(self.DNN.params, evaluate_NN=self.evaluate_NN)
-
-				mean=self.batch_normalization(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch*self.MC_tool.N_symm,self.MC_tool.N_sites), self.DNN.NN_architecture, self.DNN.apply_fun_args)
-				
-			elif self.mode=='MC':
-				ti=time.time()
-				
-				# if i==0:
-				# 	acceptance_ratio = self.MC_tool.sample(self.DNN)
-				# else:
-				# 	acceptance_ratio=[-1.0]
-
-				acceptance_ratio = self.MC_tool.sample(self.DNN)
-
-				mean=self.batch_normalization(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), self.DNN.NN_architecture, self.DNN.apply_fun_args)
 								
-				MC_str="{0:d} :: weights norm: MC with acceptance ratio={1:.4f} & mean = {2:0.4f}: took {3:.4f} secs.\n".format(i,acceptance_ratio[0],mean,time.time()-ti)
-				self.logfile.write(MC_str)
-				if self.comm.Get_rank()==0:
-					print(MC_str)
+		MC_str="\nweight normalization with final MC acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio[0],time.time()-ti)
+		self.logfile.write(MC_str)
+		if self.comm.Get_rank()==0:
+			print(MC_str)
 
-			#print(self.DNN.apply_fun_args[2]['std_mat_inv'][...,0])
-			#print(self.DNN.apply_fun_args[2]['mean'])
-			
 
 			
 
@@ -694,7 +572,7 @@ class VMC(object):
 
 		##### get spin configs #####
 		if self.mode=='exact':
-			self.MC_tool.exact(self.DNN.params, evaluate_NN=self.evaluate_NN)
+			self.MC_tool.exact(self.evaluate_NN,self.DNN)
 			
 		elif self.mode=='MC':
 			ti=time.time()
@@ -711,7 +589,7 @@ class VMC(object):
 
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.evaluate_NN,self.DNN.params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.minibatch_size)
+		self.E_estimator.compute_local_energy(self.evaluate_NN,self.DNN,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.minibatch_size)
 		
 		Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		self.logfile.write(Eloc_str)
@@ -774,23 +652,25 @@ class VMC(object):
 
 			elif self.optimizer=='adam':
 				# compute adam gradients
-				grads_MPI=self.DNN.NN_Tree.flatten( self.compute_grad(self.DNN.params,self.batch,self.Eloc_params_dict) )
+				grads_MPI=self.DNN.NN_Tree.ravel( self.compute_grad(self.DNN.params,self.batch,self.Eloc_params_dict,self.DNN.apply_fun_args) )
 				
 				# sum up MPI processes
 				grads=np.zeros_like(grads_MPI)
 				self.comm.Allreduce(grads_MPI._value, grads,  op=MPI.SUM)
 				loss=[np.max(grads),0.0]
 				
-				grads = self.DNN.NN_Tree.unflatten(grads)
+				grads = self.DNN.NN_Tree.unravel(grads)
 				
-				
-
 			##### apply gradients
 			self.opt_state = self.opt_update(iteration, grads, self.opt_state) 
 			self.DNN.update_params(self.get_params(self.opt_state))
 			
 		##### compute loss
 		r2=self.NG.r2_cost
+
+		#print(self.DNN.params[2][0])
+		#print(self.DNN.params[2][1])
+
 
 		return loss, r2
 

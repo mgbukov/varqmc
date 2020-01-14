@@ -1,6 +1,9 @@
 import numpy as np 
+import jax
 import jax.numpy as jnp
-from jax import jit
+from jax import jit, lax
+
+print('\n\n\n\n\n')
 
 x=np.array([0,1,2,])
 
@@ -8,38 +11,37 @@ p_dict=dict(a=0.0)
 
 
 
-def func(x,**kwargs):
-	return jnp.mean(x)+a
+# def foo(x):
+# 	y = lax.tag(x ** 2, "y")
+# 	z = y + 1
+# 	return z
 
 
-def apply_func(x,p_dict):
-	return func(x,**kwargs)
+# value, intermediates = collect(foo)(2.)
 
-
-def call_func(x):
-	return apply_func(x)
+# print(value, intermediates)
 
 
 
-# print(func(x,p_dict))
-# p_dict=dict(a=1.0)
-# print(func(x,p_dict))
+
+@jax.partial(jit, static_argnums=1)
+def func(x,param):
+	return 2.0*jnp.mean(x) + param
 
 
-#########################################
-from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
+def _func2(x,param):
+	return 2.0*jnp.mean(x) + param
 
-data=((jnp.array([[0,2,4],[1,3,5]]),) , (jnp.array([3.14, 2.71]),), )
-
-data_flat, tree = tree_flatten(data)
-
-print(tree.flatten_up_to(data))
+@jax.partial(jit, static_argnums=1)
+def func2(x,param):
+	return _func2(x,param)
 
 
-data_new=tree.unflatten(data_flat)
+param=2.0
+x=np.array([1.0,0.0])
 
-print(data)
-print(data_flat)
-print(data_new)
+print(func(x,param))
+print(func2(x,param))
+
 
 
