@@ -1,5 +1,6 @@
 
 
+
 template<typename I>
 I rol(I x, uint rot, uint bits) {
 // INLINE

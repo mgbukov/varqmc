@@ -127,7 +127,8 @@ class Energy_estimator():
 				self.E_GS= -24.4393969968 #-0.6788721388*self.N_sites
 			else:
 				self.E_GS= -18.13716 #-0.503810*self.N_sites	
-
+		elif Lx==8:
+			self.basis_type=np.uint64
 
 		
 
@@ -247,7 +248,7 @@ class Energy_estimator():
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)	
 
 
-	def compute_local_energy(self,evaluate_NN,NN_params,ints_ket,mod_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
+	def compute_local_energy(self,evaluate_NN,DNN,ints_ket,mod_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
 		
 
 		if SdotS:
@@ -290,12 +291,10 @@ class Energy_estimator():
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
+		print("{0:d}/{1:d} unique configs; using minibatch size {2:d}.".format(nn_uq, nn, minibatch_size) )
+
 		
-		print(nn, nn_uq)
-		#print(_ints_bra_uq)
-		#print(_ints_bra_uq.shape)
-		
-		# evaluate network using minibatches
+		### evaluate network using minibatches
 
 		if minibatch_size > 0:
 		
@@ -311,7 +310,7 @@ class Energy_estimator():
 
 			for j in range(N_minibatches):
 				batch, batch_idx = next(batches)
-				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites))
+				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),DNN.apply_fun_args)
 			
 			log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
 			phase_psi_bras=phase_psi_bras[inv_index]
@@ -320,7 +319,7 @@ class Energy_estimator():
 		else:
 
 			### evaluate network on entire sample
-			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
+			log_psi_bras, phase_psi_bras = evaluate_NN(DNN.params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites),DNN.apply_fun_args)
 			log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
 			phase_psi_bras=phase_psi_bras[inv_index]._value
 
@@ -336,6 +335,9 @@ class Energy_estimator():
 		# log_psi_bras=log_psi_bras._value - log_psi_shift
 		# phase_psi_bras=phase_psi_bras._value
 		
+		print()
+		print(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)) )	
+		print()
 
 		# compute real and imaginary part of local energy
 		self._n_per_term=self._n_per_term[self._n_per_term>0]

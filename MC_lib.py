@@ -68,8 +68,8 @@ class MC_sampler():
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 		#self.spinstates_ket_tot=np.zeros((N_MC_points*self.N_features,),dtype=np.int8)
-		self.mod_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
-		self.phase_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
+		#self.mod_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
+		#self.phase_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
 
 		
 		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
@@ -78,7 +78,7 @@ class MC_sampler():
 
 		self._reset_global_vars()
 		
-
+	'''
 	def Allgather(self):
 
 		self.mod_kets_tot*=0.0
@@ -94,8 +94,8 @@ class MC_sampler():
 			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_tot, MPI.INT])
 		else:
 			self.s0_tot=self.s0.copy()
-		
-
+	'''	
+	
 	def _reset_global_vars(self):
 		self.spinstates_ket=np.zeros((self.N_batch*self.N_features,),dtype=np.int8)
 		
@@ -115,7 +115,7 @@ class MC_sampler():
 		# 									DNN)
 
 
-		self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites))#._value
+		self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), DNN.apply_fun_args)#._value
 		
 		self.log_psi_shift=0.0 
 
@@ -129,9 +129,9 @@ class MC_sampler():
 
 
 
-	def exact(self,NN_params,evaluate_NN=None):
+	def exact(self,evaluate_NN,DNN):
 
-		log_psi, phase_kets = evaluate_NN(NN_params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites))
+		log_psi, phase_kets = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites))
 		
 		#print(log_psi)
 		#exit()
