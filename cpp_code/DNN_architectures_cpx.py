@@ -459,7 +459,7 @@ def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True,
                 # old stats    
                 mean=p_dict['mean']
                 std_mat_inv=p_dict['std_mat_inv']
-                comm=p_dict['comm']
+                comm=p_dict['comm'] # MPI communicator
         
                 # normalize
                 z=normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)

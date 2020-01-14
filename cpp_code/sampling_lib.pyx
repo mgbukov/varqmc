@@ -24,7 +24,6 @@ from cython.parallel cimport prange, threadid, parallel
 cimport openmp
 
 
-
 from DNN_architectures_cpx import *
 from reshape_class import NN_Tree
 from functools import partial   
@@ -32,7 +31,7 @@ from functools import partial
 
 
 ##############################################
-
+# linear square lattice dimension
 
 DEF _L=6
 cdef extern from *:
