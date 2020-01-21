@@ -5,6 +5,8 @@ import sys
 import subprocess
 import glob
 
+boost_path='../../libs/boost_1_72_0/'
+
 
 def cython_files():
     import numpy
@@ -43,7 +45,7 @@ def configuration(parent_package='', top_path=None):
     package_dir = os.path.dirname(os.path.realpath(__file__))
     package_dir = os.path.expandvars(package_dir)
 
-    include_dirs = [numpy.get_include()]
+    include_dirs = [numpy.get_include(),boost_path,]
     include_dirs.append(os.path.join(package_dir,"_cpp_funcs"))
 
     # mpi compiler
