@@ -210,7 +210,8 @@ class VMC(object):
 		### create Neural network
 		#print('here')
 		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
-
+		print(self.DNN.N_symm)
+		exit()
 
 		if load_data:
 
