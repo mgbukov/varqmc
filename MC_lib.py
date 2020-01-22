@@ -116,7 +116,7 @@ class MC_sampler():
 
 
 		if compute_phases:
-			self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), DNN.apply_fun_args)#._value
+			self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites))#, DNN.apply_fun_args)#._value
 		
 		self.log_psi_shift=0.0 
 

@@ -231,13 +231,13 @@ class VMC(object):
 
 		@jit
 		def loss_log_psi(NN_params,batch,):
-			log_psi = self.DNN.evaluate_log(NN_params,batch,self.DNN.apply_fun_args,)
+			log_psi = self.DNN.evaluate_log(NN_params,batch,)#self.DNN.apply_fun_args,)
 			return jnp.sum(log_psi)
 			
 
 		@jit
 		def loss_phase_psi(NN_params,batch,):
-			phase_psi = self.DNN.evaluate_phase(NN_params,batch,self.DNN.apply_fun_args,)	
+			phase_psi = self.DNN.evaluate_phase(NN_params,batch,)#self.DNN.apply_fun_args,)	
 			return jnp.sum(phase_psi)
 
 

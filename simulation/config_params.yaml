@@ -1,7 +1,7 @@
 J2: 0.5
-L: 4
+L: 6
 NN_dtype: cpx
-NN_shape_str: 16--8--4
+NN_shape_str: 36--8
 NN_type: DNN
 N_MC_chains: 1
 N_MC_points: 100

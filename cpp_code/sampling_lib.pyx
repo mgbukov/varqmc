@@ -33,10 +33,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=4
+DEF _L=6
 cdef extern from *:
     """
-    #define _L 4
+    #define _L 6
     """
     pass
 
@@ -391,8 +391,8 @@ cdef class Neural_Net:
         #self.evaluate_phase=self._evaluate_phase
 
         # define network evaluation on GPU
-        #self.evaluate_log  =jit(self._evaluate_log)
-        #self.evaluate_phase=jit(self._evaluate_phase)
+        self.evaluate_log  =jit(self._evaluate_log)
+        self.evaluate_phase=jit(self._evaluate_phase)
         
         if self.NN_type=='DNN':
             self.spin_config=<func_type>int_to_spinstate
@@ -523,13 +523,13 @@ cdef class Neural_Net:
 
 
     @cython.boundscheck(False)
-    cpdef object _evaluate_log(self, object params, object batch, object apply_fun_args):
+    cpdef object _evaluate_log(self, object params, object batch):#, object apply_fun_args):
 
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         # apply logcosh nonlinearity
         Re_z = poly_real((Re_Ws, Im_Ws))
         #Re_z = logcosh_real((Re_Ws, Im_Ws))
@@ -543,19 +543,19 @@ cdef class Neural_Net:
         return log_psi
 
 
-    @jax.partial(jit, static_argnums=(0,3))
-    def evaluate_log(self, params, batch, apply_fun_args):
-        return self._evaluate_log(params, batch, apply_fun_args)
+    #@jax.partial(jit, static_argnums=(0,3))
+    #def evaluate_log(self, params, batch, apply_fun_args):
+    #    return self._evaluate_log(params, batch, apply_fun_args)
 
 
     @cython.boundscheck(False)
-    cpdef object _evaluate_phase(self, object params, object batch, object apply_fun_args):
+    cpdef object _evaluate_phase(self, object params, object batch):#,object apply_fun_args):
 
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         # apply logcosh nonlinearity
         Im_z = poly_imag((Re_Ws, Im_Ws))
         #Im_z = logcosh_imag((Re_Ws, Im_Ws))
@@ -569,9 +569,9 @@ cdef class Neural_Net:
         return phase_psi
 
 
-    @jax.partial(jit, static_argnums=(0,3))
-    def evaluate_phase(self, params, batch, apply_fun_args):
-        return self._evaluate_phase(params, batch, apply_fun_args)
+    #@jax.partial(jit, static_argnums=(0,3))
+    #def evaluate_phase(self, params, batch, apply_fun_args):
+    #    return self._evaluate_phase(params, batch, apply_fun_argsr
 
 
     
@@ -724,7 +724,7 @@ cdef class Neural_Net:
         # evaluate DNN on GPU
         if thread_id==0:
             with gil:
-                self.mod_psi_s=jnp.exp(self.evaluate_log(self.params, self.spinstate_s_py, self.apply_fun_args));
+                self.mod_psi_s=jnp.exp(self.evaluate_log(self.params, self.spinstate_s_py)); #, self.apply_fun_args));
         # set barrier
         OMP_BARRIER_PRAGMA()
 
@@ -748,7 +748,7 @@ cdef class Neural_Net:
             # evaluate DNN on GPU
             if thread_id==0:
                 with gil:
-                    self.mod_psi_t=jnp.exp(self.evaluate_log(self.params, self.spinstate_t_py, self.apply_fun_args));
+                    self.mod_psi_t=jnp.exp(self.evaluate_log(self.params, self.spinstate_t_py)); #, self.apply_fun_args));
             # set barrier
             OMP_BARRIER_PRAGMA()
 
