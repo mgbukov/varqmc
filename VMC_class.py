@@ -344,19 +344,24 @@ class VMC(object):
 		self.sys_time=sys_data + self.optimizer
 
 		logfile_dir=os.getcwd()+'/data/'+self.sys_time+'/log_files/'
-		if not os.path.exists(logfile_dir):
-		    os.makedirs(logfile_dir)
-
 		self.savefile_dir=os.getcwd()+'/data/'+self.sys_time+'/data_files/'
-		if not os.path.exists(self.savefile_dir):
-		    os.makedirs(self.savefile_dir)
+		self.savefile_dir_NN=os.getcwd()+'/data/'+self.sys_time+'/NN_params/'	
+
+		if self.comm.Get_rank()==0:
+
+			if not os.path.exists(logfile_dir):
+			    os.makedirs(logfile_dir)
+
+			if not os.path.exists(self.savefile_dir):
+			    os.makedirs(self.savefile_dir)
+
+			if not os.path.exists(self.savefile_dir_NN):
+			    os.makedirs(self.savefile_dir_NN)
+
+		# wait for process 0 to check if directories exist
+		self.comm.Barrier()
 
 
-		self.savefile_dir_NN=os.getcwd()+'/data/'+self.sys_time+'/NN_params/'
-		if not os.path.exists(self.savefile_dir_NN):
-		    os.makedirs(self.savefile_dir_NN)
-		
-		
 		def create_open_file(file_name):
 			# open log_file
 			if os.path.exists(file_name):
