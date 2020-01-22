@@ -15,8 +15,11 @@ echo "#SBATCH --time=00:30:00" >> submission.sh
 
 echo "#SBATCH --constraint=haswell" >> submission.sh 
 echo "#SBATCH --tasks-per-node=${N_tot}" >> submission.sh
+echo "#SBATCH --nodes=2" >> submission.sh
 
 echo "#SBATCH --job-name=job_VMC" >> submission
+
+#echo "#SBATCH --mail-type=end,fail" >> submission
 #echo "#SBATCH --mail-user=mgbukov@berkeley.edu" >> submission.sh
 
 
