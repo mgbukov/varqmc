@@ -1,13 +1,13 @@
 J2: 0.5
 L: 4
 NN_dtype: cpx
-NN_shape_str: 16--12--8
+NN_shape_str: 16--8--4
 NN_type: DNN
 N_MC_chains: 1
 N_MC_points: 100
 N_batch: 100
 N_iterations: 3
-batchnorm: true
+batchnorm: false
 load_data: false
 minibatch_size: 100
 mode: MC

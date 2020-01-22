@@ -193,9 +193,9 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 12], 
-							 layer_2 = [12       ,  8],
-						#	 layer_3 = [8       ,  4], 
+			self.shapes=dict(layer_1 = [self.L**2, 8], 
+						#	 layer_2 = [8       ,  4],
+						#	 layer_3 = [4       ,  2], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
 

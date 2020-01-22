@@ -304,9 +304,9 @@ cdef class Neural_Net:
             # define DNN
             self.NN_architecture = {
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                    'nonlin_1': Poly_cpx,
-                                    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
+                                #    'nonlin_1': Poly_cpx,
+                                #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
                                 #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
                                 #    'nonlin_2': Poly_cpx,
                                 #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
@@ -501,7 +501,6 @@ cdef class Neural_Net:
 
     
     @cython.boundscheck(False)
-    #@jax.partial(jit, static_argnums=(0,3))
     def evaluate(self, params, batch, apply_fun_args):
 
         # reshaping required inside evaluate func because of per-sample gradients
