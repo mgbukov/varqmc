@@ -43,7 +43,7 @@ import time
 np.set_printoptions(threshold=np.inf)
 
 # import weights
-from misc.MC_weights import *
+#from misc.MC_weights import *
 
 
 
@@ -193,8 +193,8 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 4], 
-						#	 layer_2 = [12       ,  8],
+			self.shapes=dict(layer_1 = [self.L**2, 12], 
+							 layer_2 = [12       ,  8],
 						#	 layer_3 = [8       ,  4], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
@@ -210,7 +210,7 @@ class VMC(object):
 
 		### create Neural network
 		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
-		self.DNN.update_params(load_params())
+		#self.DNN.update_params(load_params())
 
 		if load_data:
 			file_name='NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name

@@ -33,10 +33,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=4
+DEF _L=6
 cdef extern from *:
     """
-    #define _L 4
+    #define _L 6
     """
     pass
 
@@ -304,9 +304,9 @@ cdef class Neural_Net:
             # define DNN
             self.NN_architecture = {
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                #    'nonlin_1': Poly_cpx,
-                                #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
+                                    'nonlin_1': Poly_cpx,
+                                    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
                                 #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
                                 #    'nonlin_2': Poly_cpx,
                                 #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
@@ -391,8 +391,8 @@ cdef class Neural_Net:
         #self.evaluate_phase=self._evaluate_phase
 
         # define network evaluation on GPU
-        self.evaluate_log  =jit(self._evaluate_log)
-        self.evaluate_phase=jit(self._evaluate_phase)
+        #self.evaluate_log  =jit(self._evaluate_log)
+        #self.evaluate_phase=jit(self._evaluate_phase)
         
         if self.NN_type=='DNN':
             self.spin_config=<func_type>int_to_spinstate
@@ -544,9 +544,9 @@ cdef class Neural_Net:
         return log_psi
 
 
-    # @jax.partial(jit, static_argnums=(0,3))
-    # def evaluate_log(self, params, batch, apply_fun_args):
-    #     return self._evaluate_log(params, batch, apply_fun_args)
+    @jax.partial(jit, static_argnums=(0,3))
+    def evaluate_log(self, params, batch, apply_fun_args):
+        return self._evaluate_log(params, batch, apply_fun_args)
 
 
     @cython.boundscheck(False)
@@ -570,9 +570,9 @@ cdef class Neural_Net:
         return phase_psi
 
 
-    # @jax.partial(jit, static_argnums=(0,3))
-    # def evaluate_phase(self, params, batch, apply_fun_args):
-    #     return self._evaluate_phase(params, batch, apply_fun_args)
+    @jax.partial(jit, static_argnums=(0,3))
+    def evaluate_phase(self, params, batch, apply_fun_args):
+        return self._evaluate_phase(params, batch, apply_fun_args)
 
 
     
