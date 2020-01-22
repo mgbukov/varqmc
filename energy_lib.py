@@ -334,10 +334,12 @@ class Energy_estimator():
 		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symm,self.N_sites))
 		# log_psi_bras=log_psi_bras._value - log_psi_shift
 		# phase_psi_bras=phase_psi_bras._value
+
+
+		psi_str="\nmin(log_psi_bras)={0:0.4f}, max(log_psi_bras)={1:0.4f}.\n".format(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)) )
+		if self.comm.Get_rank()==0:
+			print(psi_str)
 		
-		print()
-		print(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)) )	
-		print()
 
 		# compute real and imaginary part of local energy
 		self._n_per_term=self._n_per_term[self._n_per_term>0]

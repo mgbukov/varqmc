@@ -43,7 +43,7 @@ import time
 np.set_printoptions(threshold=np.inf)
 
 # import weights
-#from MC_weights import *
+from misc.MC_weights import *
 
 
 
@@ -72,6 +72,7 @@ class VMC(object):
 		 
 		self.save_data=params_dict['save_data']
 		self.load_data=params_dict['load_data']
+		self.batchnorm=params_dict['batchnorm']
 		
 
 		# training params
@@ -192,8 +193,8 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 12], 
-							 layer_2 = [12       ,  8],
+			self.shapes=dict(layer_1 = [self.L**2, 4], 
+						#	 layer_2 = [12       ,  8],
 						#	 layer_3 = [8       ,  4], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
@@ -208,14 +209,10 @@ class VMC(object):
 		
 
 		### create Neural network
-		#print('here')
 		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
-		print(self.DNN.N_symm)
-		exit()
+		self.DNN.update_params(load_params())
 
 		if load_data:
-
-			
 			file_name='NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
 			with open(self.load_dir+file_name+'.pkl', 'rb') as handle:
 				NN_params = pickle.load(handle)
@@ -407,7 +404,6 @@ class VMC(object):
 
 	def check_point(self, iteration, loss, r2, phase_hist):
 			
-
 		# NN parameters
 		file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
@@ -467,7 +463,8 @@ class VMC(object):
 
 
 			##### determine batchnorm mean and variance
-			self.compute_batchnorm_params(self.DNN.params,len(self.shapes)+1) #
+			if self.batchnorm==1:
+				self.compute_batchnorm_params(self.DNN.params,len(self.shapes)+1) #
 
 
 
@@ -493,9 +490,10 @@ class VMC(object):
 			if self.mode=='exact':
 				self.logfile.write('overlap = {0:0.4f}.\n\n'.format(self.Eloc_params_dict['overlap']) )
 
-
+			
 			#### update model parameters
 			if iteration<self.N_iterations-1:
+			
 				loss, r2 = self.update_NN_params(iteration)
 
 				##### store data
@@ -555,7 +553,7 @@ class VMC(object):
 			log_psi, phase_psi = self.evaluate_NN_nojit(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), self.DNN.apply_fun_args)
 			self.update_batchnorm_params(self.DNN.NN_architecture, set_overwrite=False, set_fixpoint_iter=False)
 
-			norm_str="i: {0:d}, min(log_psi)={1:0.4f}, max(log_psi={2:0.4f}".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
+			norm_str="i: {0:d}, min(log_psi)={1:0.4f}, max(log_psi)={2:0.4f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
 			self.logfile.write(norm_str)
 			if self.comm.Get_rank()==0:
 				print(norm_str)	
@@ -636,7 +634,6 @@ class VMC(object):
 
 	def update_NN_params(self,iteration):
 
-		
 
 		if self.optimizer=='RK':
 			# compute updated NN parameters

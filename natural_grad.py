@@ -5,7 +5,7 @@ from jax import jit, device_put
 
 from mpi4py import MPI
 import numpy as np
-from scipy.sparse.linalg import cg,cgs
+from scipy.sparse.linalg import cg,cgs,bicg,bicgstab
 #from cg import cg
 from scipy.linalg import eigh,eig
 
@@ -19,7 +19,15 @@ class natural_gradient():
 				 
 		self.comm=comm
 
-		dtype =np.float64 #np.complex128 #
+		#self.TDVP_type='cpx' 
+		self.TDVP_type='real'
+
+		dtype=np.float64
+		
+		# if self.TDVP_type=='real':
+		# 	dtype=np.float64 
+		# elif self.TDVP_type=='cpx':
+		# 	dtype=np.complex128 #
 
 		self.N_batch=N_batch
 		self.N_MC_points=N_MC_points
@@ -75,8 +83,13 @@ class natural_gradient():
 
 			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi).block_until_ready() 
 
-			self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
-							 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()
+
+			if self.TDVP_type=='real':
+				self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
+								 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()
+			elif self.TDVP_type=='cpx':
+				self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.imag).block_until_ready() \
+								 -jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.real).block_until_ready()
 
 		elif mode=='MC':
 
@@ -85,39 +98,45 @@ class natural_gradient():
 			# OO_expt = jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real)/self.N_MC_points \
 			# 		 +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag)/self.N_MC_points
 
-
 			self.comm.Allreduce(jnp.sum(self.dlog_psi,axis=0).block_until_ready()._value, self.O_expt, op=MPI.SUM)
 			self.O_expt/=self.N_MC_points
 
 
-			self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
-				                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()    )._value, \
-								self.OO_expt[:], op=MPI.SUM
-								)
+			if self.TDVP_type=='real':
+				self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
+					                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()    )._value, \
+									self.OO_expt[:], op=MPI.SUM
+									)
 
-			# self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.imag).block_until_ready() \
-			# 	                  -jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.real).block_until_ready()    )._value, \
-			# 					self.OO_expt[:], op=MPI.SUM
-			# 					)
+			elif self.TDVP_type=='cpx':
+				self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.imag).block_until_ready() \
+					                  -jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.real).block_until_ready()    )._value, \
+									self.OO_expt[:], op=MPI.SUM
+									)
 
+			
 			self.OO_expt/=self.N_MC_points
 
 
 
-		self.O_expt2[:] = (   jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
-				  		      + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
+		if self.TDVP_type=='real':
+			self.O_expt2[:] = (   jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
+					  		      + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
-		# self.O_expt2[:] = (    jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.imag).block_until_ready() \
-		# 		  		     - jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.real).block_until_ready()    )._value
+			self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
 
-		
-		self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
-		#self.S_matrix[:] =1j*(self.OO_expt - self.O_expt2)
+		elif self.TDVP_type=='cpx':
+			self.O_expt2[:] = (    jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.imag).block_until_ready() \
+					  		     - jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.real).block_until_ready()    )._value
+
+			#self.S_matrix[:] =1j*(self.OO_expt - self.O_expt2)
+			self.S_matrix[:] = self.OO_expt - self.O_expt2
+
 
 		print('S norm', np.linalg.norm(self.S_matrix))
 		
 		# check for symmetry and positivity
-		if self.check_on:
+		if self.check_on and self.TDVP_type=='real':
 			self._S_matrix_checks()
 
 
@@ -137,18 +156,23 @@ class natural_gradient():
 			# self.F_vector[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real)/self.N_MC_points \
 			#              + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag)/self.N_MC_points
 
-			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
-			             		 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()   )._value, \
-								self.F_vector[:], op=MPI.SUM
-								)
 
-			# self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.imag).block_until_ready() \
-			#              		 - jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.real).block_until_ready()   )._value + 0.0j, \
-			# 					self.F_vector[:], op=MPI.SUM
-			# 					)
+			if self.TDVP_type=='real':
+				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
+				             		 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()   )._value, \
+									self.F_vector[:], op=MPI.SUM
+									)
+
+			elif self.TDVP_type=='cpx':
+				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.imag).block_until_ready() \
+				             		 - jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.real).block_until_ready()   )._value + 0.0j, \
+									self.F_vector[:], op=MPI.SUM
+									)
+				#self.F_vector*=1j
+
 
 			self.F_vector/=self.N_MC_points
-			#self.F_vector*=1j
+
 
 
 	def _compute_r2_cost(self,Eloc_params_dict):
@@ -208,13 +232,18 @@ class natural_gradient():
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 
-		
 		### compute natural_gradients using cg
 		# regularize Fisher metric
 		#self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
+		
+		#if self.TDVP_type=='real':
 		self.S_matrix += self.delta*np.eye(self.S_matrix.shape[0]) # better regularization properties
 
 		#self.nat_grad=np.linalg.inv(self.S_matrix).dot(self.F_vector)
+
+		# E, V = eigh(self.S_matrix)
+		# print(E)
+		# exit()
 
 		
 		# apply conjugate gradient a few times
@@ -222,15 +251,18 @@ class natural_gradient():
 		while info>0 and self.cg_maxiter<1E5:
 			# apply cg
 			#self.nat_grad, info, iter_ = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
-			self.nat_grad, info = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
+			if self.TDVP_type=='real':
+				self.nat_grad, info = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
+			elif self.TDVP_type=='cpx':
+				self.nat_grad, info = bicg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
+			 
 			# 
 			if info>0:
 				self.cg_maxiter*=2
 				print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
 				
-		## print(np.linalg.cond(self.S_matrix), self.delta)
-		## print(self.F_vector[0],self.S_matrix[-1,-1], self.nat_grad_guess[0], self.nat_grad[0])
-		## exit()
+		#print(self.nat_grad)
+		#exit()
 	
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
