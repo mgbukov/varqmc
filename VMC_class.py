@@ -547,7 +547,7 @@ class VMC(object):
 		for i in range(N_iter):
 			
 			# draw MC sample
-			acceptance_ratio = self.MC_tool.sample(self.DNN)
+			acceptance_ratio = self.MC_tool.sample(self.DNN, compute_phases=False)
 		
 			self.update_batchnorm_params(self.DNN.NN_architecture, set_overwrite=True, set_fixpoint_iter=True)
 			log_psi, phase_psi = self.evaluate_NN_nojit(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), self.DNN.apply_fun_args)

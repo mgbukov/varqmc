@@ -101,7 +101,7 @@ class MC_sampler():
 		
 
 
-	def sample(self,DNN):
+	def sample(self,DNN, compute_phases=True):
 
 		self._reset_global_vars()
 		#assert(self.spinstates_ket.max()==0)
@@ -115,7 +115,8 @@ class MC_sampler():
 		# 									DNN)
 
 
-		self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), DNN.apply_fun_args)#._value
+		if compute_phases:
+			self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), DNN.apply_fun_args)#._value
 		
 		self.log_psi_shift=0.0 
 
