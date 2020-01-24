@@ -1,7 +1,6 @@
 #!bin/bash
-let "N_mpi=2"
-let "N_omp=1"
-let "N_tot=2"
+let "N_mpi=32"
+let "N_nodes=1"
 
 if [ -e  submission.sh ]
 then
@@ -9,15 +8,24 @@ rm submission.sh
 fi
 
 echo "#!/bin/bash -login" >> submission.sh
+
+#echo "#SBATCH --account = <NERSC Repository>" >> submission.sh
 echo "#SBATCH --qos=debug" >> submission.sh
-echo "#SBATCH --time=00:05:00" >> submission.sh
+#echo "#SBATCH --qos=regular" >> submission.sh
+echo "#SBATCH --time=00:03:00" >> submission.sh
 
+echo "#SBATCH --constraint=haswell" >> submission.sh # haswell: 2 sockets x 16 cores per node and 2 threads per core
+#echo "#SBATCH --constraint=knl" >> submission.sh # knl: 68 cores per node and 4 threads per core
 
-echo "#SBATCH --constraint=haswell" >> submission.sh 
-echo "#SBATCH --nodes=${N_tot}" >> submission.sh
+echo "#SBATCH --nodes=${N_nodes}" >> submission.sh
+#echo "#SBATCH --tasks=4" >> submission.sh # total number of tasks
+#echo "#SBATCH --cpus-per-task=272" >> submissio.sh # #OMP processes
+
 echo "#SBATCH --tasks-per-node=32" >> submission.sh
+#echo "#SBATCH --tasks-per-node=68" >> submission.sh
 
-echo "#SBATCH --job-name=job_VMC" >> submission
+
+echo "#SBATCH --job-name=job_VMC" >> submission.sh
 #echo "#SBATCH --mail-user=mgbukov@berkeley.edu" >> submission.sh
 
 
@@ -27,10 +35,11 @@ echo "source activate jax-noGPU" >> submission.sh
 
 
 ### CPU
-#echo srun mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
-echo srun ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
+#echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
+#echo ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
 
-#echo  mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
+#echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
+echo srun --cpu_bind=cores ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
 
 sbatch submission.sh
 #sh submission.sh
