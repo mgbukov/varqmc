@@ -127,7 +127,9 @@ class VMC(object):
 							  J2=self.J2,
 							  opt=self.optimizer,
 							  NNstrct=params_dict['NN_shape_str'],
-							  MCpts=self.N_MC_points,  
+							  MCpts=self.N_MC_points,
+							  Nprss=self.comm.Get_size(),
+							  NMCchains=self.N_MC_chains,
 							)
 			self._create_file_name(model_params)
 			self.load_dir=os.getcwd()+'/data/data_files/'
@@ -148,7 +150,9 @@ class VMC(object):
 							  J2=self.J2,
 							  opt=self.optimizer,
 							  NNstrct=self.NN_shape_str,
-							  MCpts=self.N_MC_points, 
+							  MCpts=self.N_MC_points,
+							  Nprss=self.comm.Get_size(),
+							  NMCchains=self.N_MC_chains, 
 							)
 			self._create_file_name(model_params)
 
@@ -343,9 +347,11 @@ class VMC(object):
 
 		self.sys_time=sys_data + self.optimizer
 
-		logfile_dir=os.getcwd()+'/data/'+self.sys_time+'/log_files/'
-		self.savefile_dir=os.getcwd()+'/data/'+self.sys_time+'/data_files/'
-		self.savefile_dir_NN=os.getcwd()+'/data/'+self.sys_time+'/NN_params/'	
+		self.data_dir=os.getcwd()+'/data/'+self.sys_time
+
+		logfile_dir=self.data_dir+'/log_files/'
+		self.savefile_dir=self.data_dir+'/data_files/'
+		self.savefile_dir_NN=self.data_dir+'/NN_params/'	
 
 		if self.comm.Get_rank()==0:
 
@@ -391,6 +397,10 @@ class VMC(object):
 			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data--'+common_str)
 			self.file_RK_data= create_open_file(self.savefile_dir+'RK_data--'+common_str)
 
+
+		### timing vector
+		self.timing_vec=np.zeros((self.N_iterations+1,),dtype=np.float64)
+		
 
 		
 	def _compute_phase_hist(self, phases, amplds):
@@ -517,10 +527,11 @@ class VMC(object):
 					self.check_point(iteration,loss,r2,phase_hist)
 
 			
-
-			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.\n".format(self.comm.Get_rank(), iteration, time.time()-ti)
+			prss_time=time.time()-ti
+			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.\n".format(self.comm.Get_rank(), iteration, prss_time)
 			self.logfile.write(fin_iter_str)
 			print(fin_iter_str)
+			self.timing_vec[iteration]=prss_time
 			
 			self.logfile.flush()
 			os.fsync(self.logfile.fileno())
@@ -529,11 +540,23 @@ class VMC(object):
 			# synch 
 			self.comm.Barrier()
 
-			
-		final_str='\n\nPROCESS_RANK {0:d}, total calculation time: {1:0.4f} secs.\n\n\n'.format(self.comm.Get_rank(),time.time()-t_start)
+		
+		prss_tot_time=time.time()-t_start
+		final_str='\n\nPROCESS_RANK {0:d}, total calculation time: {1:0.4f} secs.\n\n\n'.format(self.comm.Get_rank(),prss_tot_time)
 		print(final_str)
 		self.logfile.write(final_str)
-		
+		self.timing_vec[iteration+1]=prss_tot_time
+
+
+		timing_matrix=np.zeros((self.comm.Get_size(),self.N_iterations+1),dtype=np.float64)
+		self.comm.Allgather(self.timing_vec, timing_matrix)
+
+
+		if self.comm.Get_rank()==0 and self.save_data:
+			timing_matrix_filename = '/simulation_time--' + self.file_name + '.txt'
+			np.savetxt(self.data_dir+timing_matrix_filename,timing_matrix.T,delimiter=',')
+			
+
 
 		# close files
 		self.logfile.close()
