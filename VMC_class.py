@@ -12,6 +12,7 @@ os.environ["NUM_INTRA_THREADS"]="1"
 os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false"
                            "intra_op_parallelism_threads=1")
 
+
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
 #os.environ["CUDA_VISIBLE_DEVICES"]="{0:d}".format(MPI.COMM_WORLD.Get_rank()) # device number
 #print("process {0:d} runs on GPU device {1:d}".format(MPI.COMM_WORLD.Get_rank(),int(os.environ["CUDA_VISIBLE_DEVICES"])))
