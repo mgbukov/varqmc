@@ -619,7 +619,7 @@ class VMC(object):
 			if self.comm.Get_rank()==0:
 				print(MC_str)
 		
-		exit()
+		#exit()
 
 
 		##### compute local energies #####

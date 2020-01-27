@@ -39,7 +39,7 @@ def GeneralDense_cpx_nonholo(W_shape, ignore_b=False):
 
     def init_fun(rng,input_shape):
 
-        init_value_W=1E-3 #1E-2 #1E-1
+        init_value_W=1E-2 #1E-1
 
         rng_real, rng_imag = random.split(rng)
         
