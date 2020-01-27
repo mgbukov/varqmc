@@ -3,7 +3,14 @@ from mpi4py import MPI
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
+os.environ['OPENBLAS_NUM_THREADS']='1'
+os.environ['OMP_NUM_THREADS']='1'
 
+os.environ["NUM_INTER_THREADS"]="1"
+os.environ["NUM_INTRA_THREADS"]="1"
+
+os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false"
+                           "intra_op_parallelism_threads=1")
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
 #os.environ["CUDA_VISIBLE_DEVICES"]="{0:d}".format(MPI.COMM_WORLD.Get_rank()) # device number
@@ -59,7 +66,7 @@ class VMC(object):
 
 		np.random.seed(self.seed)
 		np.random.RandomState(self.seed)
-		rng = random.PRNGKey(self.seed)
+		#rng = random.PRNGKey(self.seed)
 
 
 		self.L=params_dict['L'] # system size
@@ -464,7 +471,6 @@ class VMC(object):
 
 
 
-
 		for iteration in range(start,self.N_iterations, 1): 
 
 			
@@ -612,6 +618,7 @@ class VMC(object):
 			if self.comm.Get_rank()==0:
 				print(MC_str)
 		
+		exit()
 
 
 		##### compute local energies #####

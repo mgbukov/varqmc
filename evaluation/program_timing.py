@@ -49,9 +49,12 @@ directory='../simulation/data/' + date + '_' + mode +'/'
 N_prss=[]
 M_prss_ave=[]
 j=0
-for filename in os.listdir(directory):
-	
-	if filename.endswith(".txt") and filename.startswith("simulation_time"): 
+#for filename in os.listdir(directory):	
+#	if filename.endswith(".txt") and filename.startswith("simulation_time"): 
+
+for k in range(26):
+
+		filename="simulation_time--model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_4000-Nprss_{0:d}-NMCchains_1.txt".format(k+1)
 		
 		M = np.loadtxt(directory+filename, delimiter=',')
 		
@@ -77,11 +80,14 @@ M_prss_iter_ave[:,0]=M_prss_ave[:,0]
 M_prss_iter_ave[:,1]=np.mean(M_prss_ave[:,1:-1],axis=1)
 M_prss_iter_ave[:,2]=M_prss_ave[:,-1]
 
+#
+#print(M_prss_iter_ave)
+#exit()
 
 # 1 core time / N core time vs N
-plt.plot(N_prss, M_prss_iter_ave[-1,0]/M_prss_iter_ave[:,0],'s-r', label='jit iteration')
-plt.plot(N_prss, M_prss_iter_ave[-1,1]/M_prss_iter_ave[:,1],'o-b', label='ave iteration')
-plt.plot(N_prss, M_prss_iter_ave[-1,2]/M_prss_iter_ave[:,2],'d-g', label='total time')
+plt.plot(N_prss, M_prss_iter_ave[0,0]/M_prss_iter_ave[:,0],'sr', label='jit iteration')
+plt.plot(N_prss, M_prss_iter_ave[0,1]/M_prss_iter_ave[:,1],'ob', label='ave iteration')
+plt.plot(N_prss, M_prss_iter_ave[0,2]/M_prss_iter_ave[:,2],'dg', label='total time')
 plt.legend()
 plt.grid()
 
@@ -92,7 +98,7 @@ plt.title('$'+date + ',\\ ' + mode+'$')
 plt.tight_layout()
 
 
-
+plt.show()
 
 plt.savefig('timing_'+date + '_' + simulation_data+'.pdf')
 

@@ -29,7 +29,6 @@ from reshape_class import NN_Tree
 from functools import partial   
 
 
-
 ##############################################
 # linear square lattice dimension
 
@@ -590,7 +589,7 @@ cdef class Neural_Net:
                     ):
 
         cdef int N_accepted=0
-        cdef int chain_n
+        cdef int chain_n=0
         cdef vector[int] N_MC_proposals=np.zeros(self.N_MC_chains)
         # reduce MC points per chain
         cdef int n_MC_points=N_MC_points//self.N_MC_chains
