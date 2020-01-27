@@ -2,7 +2,7 @@
 let "N_mpi=32"
 let "N_nodes=1"
 
-for N_mpi in $(seq 1 2 26)
+for N_mpi in $(seq 1 1 26)
 	do
 
 	if [ -e  submission.sh ]
@@ -13,8 +13,8 @@ for N_mpi in $(seq 1 2 26)
 
 	echo "#!/bin/bash -login" >> submission.sh
 
-	echo "#SBATCH --qos=debug" >> submission.sh
-	echo "#SBATCH --time=00:03:00" >> submission.sh
+	echo "#SBATCH --qos=regular" >> submission.sh
+	echo "#SBATCH --time=00:40:00" >> submission.sh
 	echo "#SBATCH --nodes=${N_nodes}" >> submission.sh
 
 

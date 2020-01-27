@@ -4,6 +4,11 @@ from mpi4py import MPI
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 
+os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false "
+                           "intra_op_parallelism_threads=1")
+
+os.environ["NUM_INTER_THREADS"]="1"
+os.environ["NUM_INTRA_THREADS"]="1"
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
 #os.environ["CUDA_VISIBLE_DEVICES"]="{0:d}".format(MPI.COMM_WORLD.Get_rank()) # device number
@@ -197,7 +202,7 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 6], 
+			self.shapes=dict(layer_1 = [self.L**2, 12], 
 						#	 layer_2 = [6       ,  4],
 						#	 layer_3 = [4       ,  2], 
 						)

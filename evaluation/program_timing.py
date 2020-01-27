@@ -11,10 +11,11 @@ from matplotlib.ticker import LogLocator,LinearLocator
 
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
+#import PyQt5
 
-matplotlib.use('Qt5Agg')
+#matplotlib.use('Qt5Agg')
 
-os.environ["PATH"] += ':/usr/local/texlive/2015/bin/x86_64-darwin'
+#os.environ["PATH"] += ':/usr/local/texlive/2015/bin/x86_64-darwin'
 plt.rc('text', usetex=True)
 plt.rc('font', family='serif')
 plt.rc('font', size=18)
