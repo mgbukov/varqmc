@@ -304,10 +304,10 @@ cdef class Neural_Net:
             # define DNN
             self.NN_architecture = {
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                #    'nonlin_1': Poly_cpx,
-                                #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                    'nonlin_1': Poly_cpx,
+                                    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
                                 #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
-                                #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
+                                    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
                                 #    'nonlin_2': Poly_cpx,
                                 #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
                                 #    'layer_3': GeneralDense_cpx_nonholo(shapes['layer_3'], ignore_b=False), 
