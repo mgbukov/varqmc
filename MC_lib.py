@@ -132,7 +132,7 @@ class MC_sampler():
 
 	def exact(self,evaluate_NN,DNN):
 
-		log_psi, phase_kets = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), DNN.apply_fun_args)
+		log_psi, phase_kets = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), )
 		
 		#print(log_psi)
 		#exit()
