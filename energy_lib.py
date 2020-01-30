@@ -248,7 +248,7 @@ class Energy_estimator():
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)	
 
 
-	def compute_local_energy(self,evaluate_NN,evaluate_NN_nojit,DNN,ints_ket,mod_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
+	def compute_local_energy(self,evaluate_NN,DNN,ints_ket,mod_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
 		
 
 		if SdotS:
@@ -317,10 +317,10 @@ class Energy_estimator():
 				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
 
 				
-				with disable_jit():
-					log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
+				# with disable_jit():
+				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
 			
-				print(log_psi_bras[batch_idx]-log)
+				#print(log_psi_bras[batch_idx]-log)
 				#print(log[:2])
 
 				

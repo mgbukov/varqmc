@@ -323,7 +323,7 @@ def logcosh_imag(Ws):
 
 ##############################
 
-@jit
+#@jit
 def normalize_cpx(x, mean, std_mat_inv,):
     # mean = np.mean(x)
     # var_mat_inv = (sigma_mat)^(-1/2)
@@ -398,18 +398,19 @@ def scale_cpx(inputs,comm,axis=(0,)):
 
 
 
-def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, beta_init=zeros, gamma_init=ones):
+def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, beta_init=zeros, gamma_init=ones, dtype=np.float64):
     """Layer construction function for a batch normalization layer."""
-    _beta_init = lambda rng, shape: beta_init(rng, shape) if center else ()
-    _gamma_init = lambda rng, shape: gamma_init(rng, shape) if scale else ()
+    _beta_init = lambda rng, shape: beta_init(rng, shape, dtype) if center else ()
+    _gamma_init = lambda rng, shape: gamma_init(rng, shape, dtype) if scale else ()
     axis = (axis,) if np.isscalar(axis) else axis
     
     def init_fun(rng, input_shape):
         shape = tuple(d for i, d in enumerate(input_shape) if i not in axis) 
         k1, k2 = random.split(rng)
-        beta = _beta_init(k1, shape)
-        gamma = np.array([[_gamma_init(k2, shape),zeros(k2,shape)],[zeros(k2,shape),_gamma_init(k2, shape)]]).T
+        beta = _beta_init(k1, shape)#.astype(np.float64)
+        gamma = np.array([[_gamma_init(k2, shape),zeros(k2,shape)],[zeros(k2,shape),_gamma_init(k2, shape)]]).T#.astype(np.float64)
         gamma/=np.sqrt(2.0)
+
         return input_shape, (beta, gamma)
 
     def apply_fun(params, x, mean, std_mat_inv, **kwargs):
@@ -435,13 +436,13 @@ def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, beta_in
 
 
 
-def BatchNorm_cpx_dyn(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, beta_init=zeros, gamma_init=ones):
+def BatchNorm_cpx_dyn(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, beta_init=zeros, gamma_init=ones, dtype=np.float64):
     """Layer construction function for a batch normalization layer."""
-    _beta_init = lambda rng, shape: beta_init(rng, shape) if center else ()
-    _gamma_init = lambda rng, shape: gamma_init(rng, shape) if scale else ()
+    _beta_init = lambda rng, shape: beta_init(rng, shape, dtype) if center else ()
+    _gamma_init = lambda rng, shape: gamma_init(rng, shape, dtype) if scale else ()
     axis = (axis,) if np.isscalar(axis) else axis
     
-    init_fun, _ = BatchNorm_cpx(axis=axis, epsilon=epsilon, center=center, scale=scale, beta_init=beta_init, gamma_init=gamma_init)
+    init_fun, _ = BatchNorm_cpx(axis=axis, epsilon=epsilon, center=center, scale=scale, beta_init=beta_init, gamma_init=gamma_init, dtype=dtype)
 
     def apply_fun(params, x, fixpoint_iter=False, mean=None, std_mat_inv=None, comm=None, **kwargs):
         #
