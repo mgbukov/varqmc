@@ -33,10 +33,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=4
+DEF _L=6
 cdef extern from *:
     """
-    #define _L 4
+    #define _L 6
     """
     pass
 
@@ -238,32 +238,34 @@ def c_offdiag_sum(
 cdef class Neural_Net:
 
     cdef object NN_Tree
-    cdef object apply_layer
-    cdef object W_real, W_imag
+
+    cdef object NN_architecture, NN_architecture_dyn
+    cdef object apply_layer, apply_layer_dyn
+    cdef object apply_fun_args, apply_fun_args_dyn
+    
+    #cdef object W_real, W_imag
     cdef object params
     cdef object input_shape, reduce_shape, output_shape, out_chan, strides, filter_shape 
     cdef object NN_type, NN_dtype
-    cdef object NN_architecture
-    cdef object apply_fun_args
     cdef object comm
 
     cdef int MPI_rank, seed
+    cdef vector[unsigned int] thread_seeds
+
     cdef int N_varl_params, N_symm, N_sites
+    cdef int N_MC_chains, N_spinconfigelmts, N_layers
 
     cdef object evaluate_phase, evaluate_log
 
+    cdef vector[double] mod_psi_s, mod_psi_t
     cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
+    cdef func_type spin_config
 
-    cdef vector[double] mod_psi_s, mod_psi_t
     
     cdef vector[np.uint16_t] sites
 
-    cdef int N_MC_chains, N_spinconfigelmts, N_layers
-
-    cdef vector[unsigned int] thread_seeds
-
-    cdef func_type spin_config
+    
 
 
     cdef uniform_real_distribution[double] random_float
@@ -306,15 +308,24 @@ cdef class Neural_Net:
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
                                     'nonlin_1': Poly_cpx,
                                     'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
-                                    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
+                                    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
+                                #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
                                 #    'nonlin_2': Poly_cpx,
                                 #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
                                 #    'layer_3': GeneralDense_cpx_nonholo(shapes['layer_3'], ignore_b=False), 
                                 }
 
+            # create a copy of the NN architecture to update the batch norm mean and variance dynamically
+            self.NN_architecture_dyn = self.NN_architecture.copy()
+            for key in self.NN_architecture.keys():
+                if 'batch_norm' in key:
+                    self.NN_architecture_dyn[key]=BatchNorm_cpx_dyn(axis=(0,))
+
+            # create NN
             init_params, self.apply_layer, self.apply_fun_args = serial(*self.NN_architecture.values())
+            _, self.apply_layer_dyn, self.apply_fun_args_dyn = serial(*self.NN_architecture_dyn.values())
            
+            # determine shape variables
             input_shape=(1,self.N_sites)
             output_shape, self.params = init_params(rng,input_shape)
             self._init_apply_fun_args(rng,input_shape)
@@ -381,8 +392,10 @@ cdef class Neural_Net:
 
             if 'batch_norm' in layer_type:
                 mean, std_mat_inv = init_beatchnorm_cpx_params(input_shape)
-                self.apply_fun_args[j]=dict(overwrite=False, fixpoint_iter=False, p_dict=dict(mean=mean, std_mat_inv=std_mat_inv, comm=self.comm, ))        
-
+                
+                # an update in the parameters of apply_fun_args_dyn UPDATES directly the params of apply_fun_args
+                self.apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv, )        
+                self.apply_fun_args_dyn[j]=dict(fixpoint_iter=False, mean=mean, std_mat_inv=std_mat_inv, comm=self.comm, )
         
 
     def _init_evaluate(self):
@@ -466,6 +479,12 @@ cdef class Neural_Net:
         def __set__(self,value):
             self.apply_fun_args=value
 
+    property apply_fun_args_dyn:
+        def __get__(self):
+            return self.apply_fun_args_dyn
+        def __set__(self,value):
+            self.apply_fun_args_dyn=value
+
     property NN_Tree:
         def __get__(self):
             return self.NN_Tree
@@ -499,7 +518,48 @@ cdef class Neural_Net:
 
         
 
-    
+    '''
+    @cython.boundscheck(False)
+    def _evaluate_body(self, params, batch, apply_fun_args):
+
+        # apply dense layer
+        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
+        # apply logcosh nonlinearity
+        Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
+        #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+
+        # symmetrize
+        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # 
+        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
+        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+        
+        return log_psi, phase_psi
+    '''
+
+    @cython.boundscheck(False)
+    def evaluate_dyn(self, params, batch,):
+
+        # reshaping required inside evaluate func because of per-sample gradients
+        batch=batch.reshape(self.input_shape)
+
+        # apply dense layer
+        Re_Ws, Im_Ws = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
+        # apply logcosh nonlinearity
+        Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
+        #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+
+        # symmetrize
+        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # 
+        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
+        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+        
+        return log_psi, phase_psi
+
+
     @cython.boundscheck(False)
     def evaluate(self, params, batch, apply_fun_args):
 
@@ -520,6 +580,12 @@ cdef class Neural_Net:
         phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
         
         return log_psi, phase_psi
+
+
+    # @jax.partial(jit, static_argnums=(0,3))
+    # def evaluate(self, params, batch, apply_fun_args):
+    #     return self._evaluate(params, batch, apply_fun_args)
+
 
 
     @cython.boundscheck(False)

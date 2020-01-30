@@ -8,7 +8,7 @@ import time
 
 from jax.config import config
 config.update("jax_enable_x64", True)
-from jax import jit
+from jax import jit, disable_jit
 import jax.numpy as jnp
 
 
@@ -291,9 +291,10 @@ class Energy_estimator():
 		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
 		nn_uq=_ints_bra_uq.shape[0]
 
+
 		print("{0:d}/{1:d} unique configs; using minibatch size {2:d}.".format(nn_uq, nn, minibatch_size) )
 
-		
+
 		### evaluate network using minibatches
 
 		if minibatch_size > 0:
@@ -308,10 +309,21 @@ class Energy_estimator():
 			log_psi_bras=np.zeros(nn_uq,dtype=np.float64)
 			phase_psi_bras=np.zeros(nn_uq,dtype=np.float64)
 
+
 			for j in range(N_minibatches):
+
 				batch, batch_idx = next(batches)
-				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),DNN.apply_fun_args)
+				
+				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
+
+				
+				# with disable_jit():
+				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
 			
+				#print(log_psi_bras[batch_idx]-log)
+				#print(log[:2])
+
+				
 			log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
 			phase_psi_bras=phase_psi_bras[inv_index]
 
@@ -319,7 +331,7 @@ class Energy_estimator():
 		else:
 
 			### evaluate network on entire sample
-			log_psi_bras, phase_psi_bras = evaluate_NN(DNN.params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites),DNN.apply_fun_args)
+			log_psi_bras, phase_psi_bras = evaluate_NN(DNN.params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites),)
 			log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
 			phase_psi_bras=phase_psi_bras[inv_index]._value
 
@@ -335,8 +347,7 @@ class Energy_estimator():
 		# log_psi_bras=log_psi_bras._value - log_psi_shift
 		# phase_psi_bras=phase_psi_bras._value
 
-
-		psi_str="\nmin(log_psi_bras)={0:0.4f}, max(log_psi_bras)={1:0.4f}.\n".format(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)) )
+		psi_str="\nmin(log_psi_bras)={0:0.8f}, max(log_psi_bras)={1:0.8f}.\n".format(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)) )
 		if self.comm.Get_rank()==0:
 			print(psi_str)
 		

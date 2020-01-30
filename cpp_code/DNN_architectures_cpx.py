@@ -273,7 +273,7 @@ def poly_imag(x):
 #############################################
 
 
-#@jit
+@jit
 def cpx_cosh(Re_a,Im_a):
     # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
         
@@ -282,18 +282,18 @@ def cpx_cosh(Re_a,Im_a):
 
     return Re, Im
 
-#@jit
+@jit
 def cpx_log_real(Re, Im,):
     #a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
     return 0.5*jnp.log(Re**2+Im**2)
   
-#@jit
+@jit
 def cpx_log_imag(Re, Im,):
     #a_fc_imag = tf.atan( tf.tan(Im_Ws)*tf.tanh(Re_Ws) )
     return jnp.arctan2(Im,Re)
 
 
-#@jit
+@jit
 def logcosh_cpx(x):
     x_real, x_imag = x
     Re, Im  = cpx_cosh(x_real, x_imag)
@@ -301,7 +301,7 @@ def logcosh_cpx(x):
     Im_z = cpx_log_imag(Re, Im, )
     return Re_z, Im_z
 
-#@jit
+@jit
 def logcosh_real(Ws):
     Re_Ws, Im_Ws = Ws
     Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
@@ -309,7 +309,7 @@ def logcosh_real(Ws):
     return Re_z
 
 
-#@jit
+@jit
 def logcosh_imag(Ws):
     Re_Ws, Im_Ws = Ws
     Re, Im  = cpx_cosh(Re_Ws, Im_Ws)
@@ -317,10 +317,14 @@ def logcosh_imag(Ws):
     return Im_z
 
 
+
+
+
+
 ##############################
 
 #@jit
-def normalize_cpx(x,mean=0.0+0.0j,std_mat_inv=np.eye(2),):
+def normalize_cpx(x, mean, std_mat_inv,):
     # mean = np.mean(x)
     # var_mat_inv = (sigma_mat)^(-1/2)
 
@@ -394,6 +398,113 @@ def scale_cpx(inputs,comm,axis=(0,)):
 
 
 
+def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, beta_init=zeros, gamma_init=ones, dtype=np.float64):
+    """Layer construction function for a batch normalization layer."""
+    _beta_init = lambda rng, shape: beta_init(rng, shape, dtype) if center else ()
+    _gamma_init = lambda rng, shape: gamma_init(rng, shape, dtype) if scale else ()
+    axis = (axis,) if np.isscalar(axis) else axis
+    
+    def init_fun(rng, input_shape):
+        shape = tuple(d for i, d in enumerate(input_shape) if i not in axis) 
+        k1, k2 = random.split(rng)
+        beta = _beta_init(k1, shape)#.astype(np.float64)
+        gamma = np.array([[_gamma_init(k2, shape),zeros(k2,shape)],[zeros(k2,shape),_gamma_init(k2, shape)]]).T#.astype(np.float64)
+        gamma/=np.sqrt(2.0)
+
+        return input_shape, (beta, gamma)
+
+    def apply_fun(params, x, mean, std_mat_inv, **kwargs):
+        #
+        beta, gamma = params
+        # TODO(phawkins): np.expand_dims should accept an axis tuple.
+        # (https://github.com/numpy/numpy/issues/12290)
+        ed = tuple(None if i in axis else slice(None) for i in range(np.ndim(x[0])))
+        beta = beta[ed]
+        gamma = gamma[ed]
+          
+        z = normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)
+
+        if center and scale: 
+            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1] + beta[0],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1] + beta[1]
+        if center: 
+            return z[0] + beta[0], z[1] + beta[1]
+        if scale: 
+            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1]
+        return z
+
+    return init_fun, apply_fun
+
+
+
+def BatchNorm_cpx_dyn(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, beta_init=zeros, gamma_init=ones, dtype=np.float64):
+    """Layer construction function for a batch normalization layer."""
+    _beta_init = lambda rng, shape: beta_init(rng, shape, dtype) if center else ()
+    _gamma_init = lambda rng, shape: gamma_init(rng, shape, dtype) if scale else ()
+    axis = (axis,) if np.isscalar(axis) else axis
+    
+    init_fun, _ = BatchNorm_cpx(axis=axis, epsilon=epsilon, center=center, scale=scale, beta_init=beta_init, gamma_init=gamma_init, dtype=dtype)
+
+    def apply_fun(params, x, fixpoint_iter=False, mean=None, std_mat_inv=None, comm=None, **kwargs):
+        #
+        beta, gamma = params
+        # TODO(phawkins): np.expand_dims should accept an axis tuple.
+        # (https://github.com/numpy/numpy/issues/12290)
+        ed = tuple(None if i in axis else slice(None) for i in range(np.ndim(x[0])))
+        beta = beta[ed]
+        gamma = gamma[ed]
+        
+        
+        if fixpoint_iter: # mean -> mean + std_mat.dot(mean_old), std_mat_inv -> std_mat_inv.dot(std_mat_iv_old)
+            # old stats    
+            std_mat = jnp.array(list(np.linalg.inv(mat) for mat in std_mat_inv.T) ).T
+                        
+            # normalize
+            z=normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)
+            
+            #comm=p_dict['comm'] # MPI communicator
+            mean_new, std_mat_inv_new = scale_cpx(z, comm, axis=axis)
+
+            # fix point iteration: 
+            mean_vec= np.array([mean_new.squeeze().real, mean_new.squeeze().imag] )
+
+            sigma_mean = np.einsum('ijp,jp->ip',std_mat,mean_vec)
+            sigma_mean = (sigma_mean[0,...] + 1j*sigma_mean[1,...]).reshape(mean.shape)
+    
+            mean+=sigma_mean
+            std_mat_inv[:]=jnp.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv)
+            #np.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv,out=std_mat_inv)
+
+        # else: # mean -> mean, std_mat_inv -> std_mat_inv
+        #     mean[:], std_mat_inv[:] = scale_cpx(x, comm ,axis=axis)  
+        
+        
+        z = normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)
+
+        if center and scale: 
+            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1] + beta[0],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1] + beta[1]
+        if center: 
+            return z[0] + beta[0], z[1] + beta[1]
+        if scale: 
+            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1]
+        return z
+
+    return init_fun, apply_fun
+
+
+def init_beatchnorm_cpx_params(input_shape):
+
+    broadcast_shape=(Ellipsis,)
+    for _ in range(len(input_shape[1:])):
+        broadcast_shape+=(None,)
+
+    mean=np.zeros((1,)+input_shape[1:],dtype=np.complex128)
+    std_mat_inv=np.broadcast_to(np.identity(2)[broadcast_shape], (2,2)+input_shape[1:]).copy()
+
+    return mean, std_mat_inv
+
+
+
+
 ###############
 
 
@@ -423,92 +534,6 @@ def serial(*layers):
             inputs = fun(param, inputs, rng=rng, **kwarg)
         return inputs
     return init_fun, apply_fun, apply_fun_args
-
-
-
-
-
-def BatchNorm_cpx(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True,
-              beta_init=zeros, gamma_init=ones):
-    """Layer construction function for a batch normalization layer."""
-    _beta_init = lambda rng, shape: beta_init(rng, shape) if center else ()
-    _gamma_init = lambda rng, shape: gamma_init(rng, shape) if scale else ()
-    axis = (axis,) if np.isscalar(axis) else axis
-    
-    def init_fun(rng, input_shape):
-        shape = tuple(d for i, d in enumerate(input_shape) if i not in axis) 
-        k1, k2 = random.split(rng)
-        beta = _beta_init(k1, shape)
-        gamma = np.array([[_gamma_init(k2, shape),zeros(k2,shape)],[zeros(k2,shape),_gamma_init(k2, shape)]]).T
-        gamma/=np.sqrt(2.0)
-        return input_shape, (beta, gamma)
-
-    def apply_fun(params, x, overwrite=False, fixpoint_iter=False, p_dict=None, **kwargs):
-        #
-        beta, gamma = params
-        # TODO(phawkins): np.expand_dims should accept an axis tuple.
-        # (https://github.com/numpy/numpy/issues/12290)
-        ed = tuple(None if i in axis else slice(None) for i in range(np.ndim(x[0])))
-        beta = beta[ed]
-        gamma = gamma[ed]
-        
-        if overwrite==True:
-
-            if fixpoint_iter: # mean -> mean + std_mat.dot(mean_old), std_mat_inv -> std_mat_inv.dot(std_mat_iv_old)
-                
-                # old stats    
-                mean=p_dict['mean']
-                std_mat_inv=p_dict['std_mat_inv']
-                comm=p_dict['comm'] # MPI communicator
-        
-                # normalize
-                z=normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)
-
-                # compute new stats
-                mean_new, std_mat_inv_new = scale_cpx(z, comm, axis=axis)
-
-                # fix point iteration: 
-                std_mat = jnp.array(list(np.linalg.inv(mat) for mat in std_mat_inv.T) ).T
-                mean_vec= jnp.array([mean_new.squeeze().real, mean_new.squeeze().imag] )
-
-                sigma_mean = jnp.einsum('ijp,jp->ip',std_mat,mean_vec)
-                sigma_mean = (sigma_mean[0,...] + 1j*sigma_mean[1,...]).reshape(mean_new.shape)
-        
-                mean_new=mean+sigma_mean
-                std_mat_inv_new=jnp.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv)
-
-            else: # mean -> mean, std_mat_inv -> std_mat_inv
-                mean_new, std_mat_inv_new = scale_cpx(x,axis=axis)  
-        
-            # pass arguments
-            p_dict['mean']=mean_new
-            p_dict['std_mat_inv']=std_mat_inv_new
-                            
-        
-        z = normalize_cpx(x, mean=p_dict['mean'], std_mat_inv=p_dict['std_mat_inv'])
-
-        if center and scale: 
-            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1] + beta[0],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1] + beta[1]
-        if center: 
-            return z[0] + beta[0], z[1] + beta[1]
-        if scale: 
-            return gamma[...,0,0]*z[0] + gamma[...,0,1]*z[1],   gamma[...,1,0]*z[0] + gamma[...,1,1]*z[1]
-        return z
-
-    return init_fun, apply_fun
-
-
-def init_beatchnorm_cpx_params(input_shape):
-
-    broadcast_shape=(Ellipsis,)
-    for _ in range(len(input_shape[1:])):
-        broadcast_shape+=(None,)
-
-    mean=np.zeros((1,)+input_shape[1:],dtype=np.complex128)
-    std_mat_inv=np.broadcast_to(np.identity(2)[broadcast_shape], (2,2)+input_shape[1:]).copy()
-
-    return mean, std_mat_inv
-
 
 
 
