@@ -3,6 +3,14 @@ from mpi4py import MPI
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
+os.environ['OPENBLAS_NUM_THREADS']='1'
+os.environ['OMP_NUM_THREADS']='1'
+
+os.environ["NUM_INTER_THREADS"]="1"
+os.environ["NUM_INTRA_THREADS"]="1"
+
+os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false"
+                           "intra_op_parallelism_threads=1")
 
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
@@ -59,7 +67,7 @@ class VMC(object):
 
 		np.random.seed(self.seed)
 		np.random.RandomState(self.seed)
-		rng = random.PRNGKey(self.seed)
+		#rng = random.PRNGKey(self.seed)
 
 
 		self.L=params_dict['L'] # system size
@@ -127,7 +135,9 @@ class VMC(object):
 							  J2=self.J2,
 							  opt=self.optimizer,
 							  NNstrct=params_dict['NN_shape_str'],
-							  MCpts=self.N_MC_points,  
+							  MCpts=self.N_MC_points,
+							  Nprss=self.comm.Get_size(),
+							  NMCchains=self.N_MC_chains,
 							)
 			self._create_file_name(model_params)
 			self.load_dir=os.getcwd()+'/data/data_files/'
@@ -148,7 +158,9 @@ class VMC(object):
 							  J2=self.J2,
 							  opt=self.optimizer,
 							  NNstrct=self.NN_shape_str,
-							  MCpts=self.N_MC_points, 
+							  MCpts=self.N_MC_points,
+							  Nprss=self.comm.Get_size(),
+							  NMCchains=self.N_MC_chains, 
 							)
 			self._create_file_name(model_params)
 
@@ -343,20 +355,27 @@ class VMC(object):
 
 		self.sys_time=sys_data + self.optimizer
 
-		logfile_dir=os.getcwd()+'/data/'+self.sys_time+'/log_files/'
-		if not os.path.exists(logfile_dir):
-		    os.makedirs(logfile_dir)
+		self.data_dir=os.getcwd()+'/data/'+self.sys_time
 
-		self.savefile_dir=os.getcwd()+'/data/'+self.sys_time+'/data_files/'
-		if not os.path.exists(self.savefile_dir):
-		    os.makedirs(self.savefile_dir)
+		logfile_dir=self.data_dir+'/log_files/'
+		self.savefile_dir=self.data_dir+'/data_files/'
+		self.savefile_dir_NN=self.data_dir+'/NN_params/'	
+
+		if self.comm.Get_rank()==0:
+
+			if not os.path.exists(logfile_dir):
+			    os.makedirs(logfile_dir)
+
+			if not os.path.exists(self.savefile_dir):
+			    os.makedirs(self.savefile_dir)
+
+			if not os.path.exists(self.savefile_dir_NN):
+			    os.makedirs(self.savefile_dir_NN)
+
+		# wait for process 0 to check if directories exist
+		self.comm.Barrier()
 
 
-		self.savefile_dir_NN=os.getcwd()+'/data/'+self.sys_time+'/NN_params/'
-		if not os.path.exists(self.savefile_dir_NN):
-		    os.makedirs(self.savefile_dir_NN)
-		
-		
 		def create_open_file(file_name):
 			# open log_file
 			if os.path.exists(file_name):
@@ -386,6 +405,10 @@ class VMC(object):
 			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data--'+common_str)
 			self.file_RK_data= create_open_file(self.savefile_dir+'RK_data--'+common_str)
 
+
+		### timing vector
+		self.timing_vec=np.zeros((self.N_iterations+1,),dtype=np.float64)
+		
 
 		
 	def _compute_phase_hist(self, phases, amplds):
@@ -446,7 +469,6 @@ class VMC(object):
 		if self.mode=='exact':
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.DNN.NN_type)
-
 
 
 
@@ -512,10 +534,11 @@ class VMC(object):
 					self.check_point(iteration,loss,r2,phase_hist)
 
 			
-
-			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.\n".format(self.comm.Get_rank(), iteration, time.time()-ti)
+			prss_time=time.time()-ti
+			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.\n".format(self.comm.Get_rank(), iteration, prss_time)
 			self.logfile.write(fin_iter_str)
 			print(fin_iter_str)
+			self.timing_vec[iteration]=prss_time
 			
 			self.logfile.flush()
 			os.fsync(self.logfile.fileno())
@@ -524,11 +547,23 @@ class VMC(object):
 			# synch 
 			self.comm.Barrier()
 
-			
-		final_str='\n\nPROCESS_RANK {0:d}, total calculation time: {1:0.4f} secs.\n\n\n'.format(self.comm.Get_rank(),time.time()-t_start)
+		
+		prss_tot_time=time.time()-t_start
+		final_str='\n\nPROCESS_RANK {0:d}, total calculation time: {1:0.4f} secs.\n\n\n'.format(self.comm.Get_rank(),prss_tot_time)
 		print(final_str)
 		self.logfile.write(final_str)
-		
+		self.timing_vec[iteration+1]=prss_tot_time
+
+
+		timing_matrix=np.zeros((self.comm.Get_size(),self.N_iterations+1),dtype=np.float64)
+		self.comm.Allgather(self.timing_vec, timing_matrix)
+
+
+		if self.comm.Get_rank()==0 and self.save_data:
+			timing_matrix_filename = '/simulation_time--' + self.file_name + '.txt'
+			np.savetxt(self.data_dir+timing_matrix_filename,timing_matrix.T,delimiter=',')
+			
+
 
 		# close files
 		self.logfile.close()
@@ -586,6 +621,7 @@ class VMC(object):
 			if self.comm.Get_rank()==0:
 				print(MC_str)
 		
+		#exit()
 
 
 		##### compute local energies #####

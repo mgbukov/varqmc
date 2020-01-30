@@ -13,6 +13,6 @@ minibatch_size: 100
 mode: MC
 optimizer: NG
 save_data: true
-seed: 1
+seed: 666
 start_iter: 0
 stop_iter: 4

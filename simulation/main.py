@@ -12,7 +12,6 @@ import yaml
 
 params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)
 
-
 DNN_psi=VMC(params)
 
 
