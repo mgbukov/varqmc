@@ -186,16 +186,13 @@ class VMC(object):
 		self.train(self.start_iter)
 		
 
-	def update_batchnorm_params(self,layers,set_overwrite=True, set_fixpoint_iter=True, collect=False):
+	def update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
 		layers_type=list(layers.keys())
 		for j, layer_type in enumerate(layers_type):
 			if 'batch_norm' in layer_type:
-				self.DNN.apply_fun_args[j]['overwrite']=set_overwrite
-				self.DNN.apply_fun_args[j]['fixpoint_iter']=set_fixpoint_iter
+				self.DNN.apply_fun_args_dyn[j]['fixpoint_iter']=set_fixpoint_iter
+				#print(self.DNN.apply_fun_args_dyn[j]['mean'])
 
-				# average data from different MPI processes 
-				if collect:
-					pass
 				
 
 
@@ -205,8 +202,8 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 6], 
-						#	 layer_2 = [6       ,  4],
+			self.shapes=dict(layer_1 = [self.L**2, 12], 
+							 layer_2 = [12       ,  6],
 						#	 layer_3 = [4       ,  2], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
@@ -233,9 +230,12 @@ class VMC(object):
 		
 
 		# jit functions
-		self.evaluate_NN_nojit=self.DNN.evaluate
-		#self.evaluate_NN=self.evaluate_NN_nojit 
-		self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
+		self.evaluate_NN_dyn=self.DNN.evaluate_dyn
+		
+		self.evaluate_NN=jit(self.DNN.evaluate)
+		#self.evaluate_NN=self.DNN.evaluate
+		
+		#self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
 		
 
 
@@ -243,13 +243,13 @@ class VMC(object):
 
 		@jit
 		def loss_log_psi(NN_params,batch,):
-			log_psi = self.DNN.evaluate_log(NN_params,batch,)#self.DNN.apply_fun_args,)
+			log_psi = self.DNN.evaluate_log(NN_params,batch,)
 			return jnp.sum(log_psi)
 			
 
 		@jit
 		def loss_phase_psi(NN_params,batch,):
-			phase_psi = self.DNN.evaluate_phase(NN_params,batch,)#self.DNN.apply_fun_args,)	
+			phase_psi = self.DNN.evaluate_phase(NN_params,batch,)	
 			return jnp.sum(phase_psi)
 
 
@@ -579,19 +579,21 @@ class VMC(object):
 	
 		ti=time.time()
 
+		#print(self.DNN.apply_fun_args_dyn[2]['mean'])
 		for i in range(N_iter):
 			
 			# draw MC sample
 			acceptance_ratio = self.MC_tool.sample(self.DNN, compute_phases=False)
-		
-			self.update_batchnorm_params(self.DNN.NN_architecture, set_overwrite=True, set_fixpoint_iter=True)
-			log_psi, phase_psi = self.evaluate_NN_nojit(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), self.DNN.apply_fun_args)
-			self.update_batchnorm_params(self.DNN.NN_architecture, set_overwrite=False, set_fixpoint_iter=False)
+			
+			self.update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=True)
+			log_psi, phase_psi = self.evaluate_NN_dyn(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
+			self.update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=False)
 
-			norm_str="i: {0:d}, min(log_psi)={1:0.4f}, max(log_psi)={2:0.4f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
+			norm_str="iter: {0:d}, min(log_psi)={1:0.8f}, max(log_psi)={2:0.8f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
 			self.logfile.write(norm_str)
 			if self.comm.Get_rank()==0:
-				print(norm_str)	
+				print(norm_str)
+		#print(self.DNN.apply_fun_args_dyn[2]['mean'], self.DNN.apply_fun_args[2]['mean'])
 
 								
 		MC_str="\nweight normalization with final MC acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio[0],time.time()-ti)
