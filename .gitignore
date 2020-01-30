@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-./simulation/submission.sh
+*submission.sh
 
 # data
 *.out

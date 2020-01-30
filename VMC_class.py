@@ -9,8 +9,9 @@ os.environ['OMP_NUM_THREADS']='1'
 os.environ["NUM_INTER_THREADS"]="1"
 os.environ["NUM_INTRA_THREADS"]="1"
 
-os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false"
+os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false "
                            "intra_op_parallelism_threads=1")
+
 
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
@@ -202,8 +203,8 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 12], 
-							 layer_2 = [12       ,  6],
+			self.shapes=dict(layer_1 = [self.L**2, 6], 
+						#	 layer_2 = [12       ,  6],
 						#	 layer_3 = [4       ,  2], 
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
@@ -462,8 +463,6 @@ class VMC(object):
 
 		# set timer
 		t_start=time.time()
-
-		
 
 
 		if self.mode=='exact':
