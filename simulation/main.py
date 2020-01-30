@@ -9,8 +9,10 @@ import yaml
 # mpiexec -n 4 python main.py 
 
 
-
-params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)
+if str(sys.argv[1])=='--test':
+    params = yaml.load(open('config_params_test.yaml'),Loader=yaml.FullLoader)
+else:
+    params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)
 
 DNN_psi=VMC(params)
 
