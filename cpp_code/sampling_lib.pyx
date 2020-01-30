@@ -391,7 +391,7 @@ cdef class Neural_Net:
             input_shape, _ = init_fun(layer_rng, input_shape)
 
             if 'batch_norm' in layer_type:
-                mean, std_mat_inv = init_beatchnorm_cpx_params(input_shape)
+                mean, std_mat_inv = init_batchnorm_cpx_params(input_shape)
                 
                 # an update in the parameters of apply_fun_args_dyn UPDATES directly the params of apply_fun_args
                 self.apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv, )        
@@ -516,27 +516,6 @@ cdef class Neural_Net:
         self.params=params
 
 
-        
-
-    '''
-    @cython.boundscheck(False)
-    def _evaluate_body(self, params, batch, apply_fun_args):
-
-        # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
-        # apply logcosh nonlinearity
-        Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
-        #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
-
-        # symmetrize
-        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
-        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
-        
-        return log_psi, phase_psi
-    '''
 
     @cython.boundscheck(False)
     def evaluate_dyn(self, params, batch,):

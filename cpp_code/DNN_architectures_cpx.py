@@ -323,7 +323,7 @@ def logcosh_imag(Ws):
 
 ##############################
 
-#@jit
+@jit
 def normalize_cpx(x, mean, std_mat_inv,):
     # mean = np.mean(x)
     # var_mat_inv = (sigma_mat)^(-1/2)
@@ -471,11 +471,11 @@ def BatchNorm_cpx_dyn(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, bet
             sigma_mean = (sigma_mean[0,...] + 1j*sigma_mean[1,...]).reshape(mean.shape)
     
             mean+=sigma_mean
-            std_mat_inv[:]=jnp.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv)
-            #np.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv,out=std_mat_inv)
+            #std_mat_inv[:]=jnp.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv)
+            np.einsum('ijp,jkp->ikp',std_mat_inv_new,std_mat_inv,out=std_mat_inv)
 
-        # else: # mean -> mean, std_mat_inv -> std_mat_inv
-        #     mean[:], std_mat_inv[:] = scale_cpx(x, comm ,axis=axis)  
+        else: # mean -> mean, std_mat_inv -> std_mat_inv
+            mean[:], std_mat_inv[:] = scale_cpx(x, comm ,axis=axis)  
         
         
         z = normalize_cpx(x, mean=mean, std_mat_inv=std_mat_inv)
@@ -491,7 +491,7 @@ def BatchNorm_cpx_dyn(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True, bet
     return init_fun, apply_fun
 
 
-def init_beatchnorm_cpx_params(input_shape):
+def init_batchnorm_cpx_params(input_shape):
 
     broadcast_shape=(Ellipsis,)
     for _ in range(len(input_shape[1:])):
