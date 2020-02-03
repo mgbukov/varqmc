@@ -139,14 +139,6 @@ class natural_gradient():
 			self.S_matrix[:] = self.OO_expt - self.O_expt2
 
 
-		self.S_norm=np.linalg.norm(self.S_matrix)
-
-		
-		# check for symmetry and positivity
-		if self.check_on and self.TDVP_type=='real':
-			self._S_matrix_checks()
-
-
 	
 
 	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
@@ -270,6 +262,14 @@ class natural_gradient():
 				with open(self.debug_file+'.pkl', 'wb') as handle:
 					pickle.dump([self.S_lastiters, self.F_lastiters, self.delta], handle, protocol=pickle.HIGHEST_PROTOCOL)
 			
+
+		# compute norm
+		self.S_norm=np.linalg.norm(self.S_matrix)
+
+		
+		# check for symmetry and positivity
+		if self.check_on and self.TDVP_type=='real':
+			self._S_matrix_checks()
 
 		#######################################################
 
