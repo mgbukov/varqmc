@@ -3,7 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-*submission.sh
+*simulation/submission.sh
+
+*simulation/data/*
+*analysis/data/*
 
 # data
 *.out
