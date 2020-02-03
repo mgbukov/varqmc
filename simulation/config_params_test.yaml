@@ -4,9 +4,9 @@ NN_dtype: cpx
 NN_shape_str: 36--6
 NN_type: DNN
 N_MC_chains: 1
-N_MC_points: 22000
-N_batch: 85
-N_iterations: 500
+N_MC_points: 200
+N_batch: 170
+N_iterations: 3
 batchnorm: false
 load_data: false
 minibatch_size: 100
@@ -14,4 +14,5 @@ mode: MC
 optimizer: NG
 save_data: true
 seed: 0
-stop_iter: 0
+start_iter: 0
+stop_iter: 66
