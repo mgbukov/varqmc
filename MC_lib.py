@@ -32,19 +32,26 @@ class MC_sampler():
 
 		self.N_accepted=np.zeros(1, dtype=np.int)
 		self.N_MC_proposals=np.zeros(1, dtype=np.int)
-		self.acceptance_ratio=np.array([0.4])
+		self.acceptance_ratio_g=np.array([0.0])
+		self.acceptance_ratio=np.zeros(shape=self.comm.Get_size(),)
+
+
 
 
 	def compute_acceptance_ratio(self,N_accepted,N_MC_proposals,mode='MC'):
 
 		if mode=='exact':
-			self.acceptance_ratio[0]=-1.0
+			self.acceptance_ratio_g[0]=-1.0
 
 		elif mode=='MC':
 			# sum up MC metaata over the MPI processes
 			self.comm.Allreduce(np.array(N_accepted,dtype=np.int), self.N_accepted,  op=MPI.SUM)
 			self.comm.Allreduce(np.array(N_MC_proposals,dtype=np.int), self.N_MC_proposals,  op=MPI.SUM)
-			self.acceptance_ratio[0]=N_accepted/N_MC_proposals 
+			self.acceptance_ratio_g[0]=self.N_accepted/self.N_MC_proposals
+
+			self.comm.Allgatherv([N_accepted/N_MC_proposals,  MPI.DOUBLE], [self.acceptance_ratio, MPI.DOUBLE])
+
+
 
 
 
@@ -73,7 +80,7 @@ class MC_sampler():
 
 		
 		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
-		self.s0_tot=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
+		self.s0_g=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
 
 
 		self._reset_global_vars()
@@ -91,9 +98,9 @@ class MC_sampler():
 
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_tot, MPI.INT])
+			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_g, MPI.INT])
 		else:
-			self.s0_tot=self.s0.copy()
+			self.s0_g=self.s0.copy()
 	'''	
 	
 	def _reset_global_vars(self):
@@ -106,11 +113,11 @@ class MC_sampler():
 		self._reset_global_vars()
 		#assert(self.spinstates_ket.max()==0)
 
-		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio,
+		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
 												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
 												)
 
-		# N_accepted, N_MC_proposals = sample(self.N_batch,self.thermalization_time,self.acceptance_ratio,
+		# N_accepted, N_MC_proposals = sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
 		# 									self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
 		# 									DNN)
 
@@ -122,10 +129,16 @@ class MC_sampler():
 		self.log_psi_shift=0.0 
 
 
+		if self.comm.Get_size()*self.N_MC_chains > 1:
+			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_g, MPI.INT])
+		else:
+			self.s0_g=self.s0.copy()
+
+
 		self.compute_acceptance_ratio(N_accepted,N_MC_proposals,mode='MC')
 			
 		
-		return self.acceptance_ratio
+		return self.acceptance_ratio_g
 
 
 

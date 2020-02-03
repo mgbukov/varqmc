@@ -9,9 +9,8 @@ os.environ['OMP_NUM_THREADS']='1'
 os.environ["NUM_INTER_THREADS"]="1"
 os.environ["NUM_INTRA_THREADS"]="1"
 
-os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false "
-                           "intra_op_parallelism_threads=1")
-
+# set XLA threads and parallelism
+os.environ["XLA_FLAGS"] = "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"
 
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="0"
@@ -172,13 +171,15 @@ class VMC(object):
 		# add variables to yaml file
 		if self.comm.Get_rank()==0:
 			
-			config_params_yaml = open('config_params.yaml', 'w')
+			config_params_yaml = open(self.data_dir + '/config_params.yaml', 'w')
 			
 			params_dict['N_batch']=self.N_batch
 			params_dict['NN_shape_str']=self.NN_shape_str
 			
 			self.params_dict=params_dict
 			yaml.dump(self.params_dict, config_params_yaml)
+
+
 
 			config_params_yaml.close()
 
@@ -351,8 +352,8 @@ class VMC(object):
 
 
 		sys_time=datetime.datetime.now()
-		#sys_data="{0:d}-{1:d}-{2:d}_{3:d}:{4:d}:{5:d}_".format(sys_time.year,sys_time.month,sys_time.day,sys_time.hour,sys_time.minute,sys_time.second)
-		sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
+		sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}_".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
+		#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
 
 		self.sys_time=sys_data + self.optimizer
 
@@ -361,6 +362,7 @@ class VMC(object):
 		logfile_dir=self.data_dir+'/log_files/'
 		self.savefile_dir=self.data_dir+'/data_files/'
 		self.savefile_dir_NN=self.data_dir+'/NN_params/'	
+		self.savefile_dir_debug=self.data_dir+'/debug_files/'
 
 		if self.comm.Get_rank()==0:
 
@@ -372,6 +374,9 @@ class VMC(object):
 
 			if not os.path.exists(self.savefile_dir_NN):
 			    os.makedirs(self.savefile_dir_NN)
+
+			if not os.path.exists(self.savefile_dir_debug):
+			    os.makedirs(self.savefile_dir_debug)
 
 		# wait for process 0 to check if directories exist
 		self.comm.Barrier()
@@ -393,6 +398,11 @@ class VMC(object):
 		logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		self.logfile = create_open_file(logfile_dir+logfile_name)
 
+
+		
+		self.NG.debug_file=self.savefile_dir_debug + 'S-F_data'+'--' + self.file_name
+		
+
 		if self.save_data:
 			# data files
 			common_str =  self.file_name + '.txt'
@@ -404,7 +414,7 @@ class VMC(object):
 			self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram--'+common_str)
 
 			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data--'+common_str)
-			self.file_RK_data= create_open_file(self.savefile_dir+'RK_data--'+common_str)
+			self.file_opt_data= create_open_file(self.savefile_dir+'opt_data--'+common_str)
 
 
 		### timing vector
@@ -442,8 +452,8 @@ class VMC(object):
 		self.file_loss.write("{0:d} : {1:0.14f} : {2:0.14f}\n".format(iteration, loss[0], loss[1]))
 		self.file_r2.write("{0:d} : {1:0.14f}\n".format(iteration, r2))
 
-		self.file_MC_data.write("{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio[0]) + ' '.join(str(s) for s in self.MC_tool.s0_tot) +"\n") #		
-		self.file_RK_data.write("{0:06d} : {1:0.10f} : {2:0.10f} : {3:0.10f} : {4:0.10f}\n".format(self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol))
+		self.file_MC_data.write("{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])   +   ' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "   +   ' '.join(str(s) for s in self.MC_tool.s0_g)+"\n") #		
+		self.file_opt_data.write("{0:06d} : {1:0.10f} : {2:0.10f} : {3:0.10f} : {4:0.10f} : {5:0.10f}\n".format(self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, self.NG.S_norm))
 
 
 		
@@ -453,7 +463,8 @@ class VMC(object):
 		# record current iteration number
 		self.params_dict['stop_iter']=iteration+1
 		
-		config_params_yaml = open('config_params.yaml', 'w')
+		# update file in data dir
+		config_params_yaml = open(self.data_dir + '/config_params.yaml', 'w')
 		yaml.dump(self.params_dict, config_params_yaml)
 		config_params_yaml.close()
 
@@ -582,7 +593,7 @@ class VMC(object):
 		for i in range(N_iter):
 			
 			# draw MC sample
-			acceptance_ratio = self.MC_tool.sample(self.DNN, compute_phases=False)
+			acceptance_ratio_g = self.MC_tool.sample(self.DNN, compute_phases=False)
 			
 			self.update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=True)
 			log_psi, phase_psi = self.evaluate_NN_dyn(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
@@ -595,7 +606,7 @@ class VMC(object):
 		#print(self.DNN.apply_fun_args_dyn[2]['mean'], self.DNN.apply_fun_args[2]['mean'])
 
 								
-		MC_str="\nweight normalization with final MC acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio[0],time.time()-ti)
+		MC_str="\nweight normalization with final MC acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
 		self.logfile.write(MC_str)
 		if self.comm.Get_rank()==0:
 			print(MC_str)
@@ -613,9 +624,9 @@ class VMC(object):
 			ti=time.time()
 			
 			# sample
-			acceptance_ratio = self.MC_tool.sample(self.DNN)
+			acceptance_ratio_g = self.MC_tool.sample(self.DNN)
 			
-			MC_str="MC with acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio[0],time.time()-ti)
+			MC_str="MC with acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
 			self.logfile.write(MC_str)
 			if self.comm.Get_rank()==0:
 				print(MC_str)
@@ -684,6 +695,12 @@ class VMC(object):
 				grads=self.NG.compute(self.DNN.params,self.batch,self.Eloc_params_dict,mode=self.mode)
 				loss=self.NG.max_grads
 				self.NG.update_params() # update NG params
+
+				S_str="NG: norm(S)={0:0.14f}\n".format(self.NG.S_norm) 		
+				if self.comm.Get_rank()==0:
+					print(S_str)
+				self.logfile.write(S_str)
+
 
 			elif self.optimizer=='adam':
 				# compute adam gradients

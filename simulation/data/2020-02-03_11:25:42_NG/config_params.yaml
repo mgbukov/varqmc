@@ -5,7 +5,7 @@ NN_shape_str: 36--6
 NN_type: DNN
 N_MC_chains: 1
 N_MC_points: 200
-N_batch: 170
+N_batch: 100
 N_iterations: 3
 batchnorm: false
 load_data: false
@@ -15,4 +15,4 @@ optimizer: NG
 save_data: true
 seed: 0
 start_iter: 0
-stop_iter: 0
+stop_iter: 2

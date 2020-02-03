@@ -9,7 +9,7 @@ from scipy.sparse.linalg import cg,cgs,bicg,bicgstab
 #from cg import cg
 from scipy.linalg import eigh,eig
 
-
+import pickle
 
 
 
@@ -59,6 +59,12 @@ class natural_gradient():
 		self.cg_maxiter=1E4
 		self.tol=1E-7 # CG tolerance
 		self.delta=100.0 # S-matrix regularizer
+		self.S_norm=0.0 # S-matrix norm
+
+		n_iter=6
+		self.S_lastiters=np.zeros([n_iter,N_varl_params,N_varl_params],dtype=np.float64) # array to store last S-matrices
+		self.F_lastiters=np.zeros([n_iter,N_varl_params,],dtype=np.float64) # array to store last F-vectors
+		self.debug_file=''
 
 		self.iteration=0
 		self.r2_cost=0.0
@@ -133,7 +139,8 @@ class natural_gradient():
 			self.S_matrix[:] = self.OO_expt - self.O_expt2
 
 
-		print('S norm', np.linalg.norm(self.S_matrix))
+		self.S_norm=np.linalg.norm(self.S_matrix)
+
 		
 		# check for symmetry and positivity
 		if self.check_on and self.TDVP_type=='real':
@@ -245,7 +252,27 @@ class natural_gradient():
 		# print(E)
 		# exit()
 
-		
+
+		####################################################### 
+		# DEBUG HELPER
+
+		# store last n_iter data points
+		self.S_lastiters[:-1,...]=self.S_lastiters[1:,...]
+		self.S_lastiters[-1,...]=self.S_matrix
+
+		self.F_lastiters[:-1,...]=self.F_lastiters[1:,...]
+		self.F_lastiters[-1,...]=self.F_vector
+
+		#print(self.F_lastiters[:,1:3])
+
+		if self.comm.Get_rank()==0:
+			if (not np.isfinite(self.S_matrix).all() ) and (not np.isfinite(self.F_vector).all() ):
+				with open(self.debug_file+'.pkl', 'wb') as handle:
+					pickle.dump([self.S_lastiters, self.F_lastiters, self.delta], handle, protocol=pickle.HIGHEST_PROTOCOL)
+			
+
+		#######################################################
+
 		# apply conjugate gradient a few times
 		info=1
 		while info>0 and self.cg_maxiter<1E5:
@@ -261,11 +288,16 @@ class natural_gradient():
 				self.cg_maxiter*=2
 				print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
 				
+
+
+
 		#print(self.nat_grad)
 		#exit()
 	
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
+
+		
 
 		# normalize gradients
 		if not self.RK_on:
