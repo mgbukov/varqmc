@@ -1,6 +1,6 @@
 #!bin/bash -l
-let "N_mpi=260" #26*N_nodes
-let "N_nodes=10"
+let "N_mpi=130" #26*N_nodes
+let "N_nodes=5"
 
 if [ -e  submission.sh ]
 then
@@ -21,7 +21,7 @@ echo "#SBATCH --nodes=${N_nodes}" >> submission.sh
 #echo "#SBATCH --tasks=4" >> submission.sh # total number of tasks
 #echo "#SBATCH --cpus-per-task=272" >> submissio.sh # #OMP processes
 
-echo "#SBATCH --tasks-per-node=32" >> submission.sh # 26/32
+echo "#SBATCH --tasks-per-node=26" >> submission.sh # 26/32
 #echo "#SBATCH --tasks-per-node=68" >> submission.sh
 
 
