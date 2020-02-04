@@ -351,10 +351,16 @@ class VMC(object):
 
 	def _create_logs(self):
 
+		sys_data=''
+		
+		if self.comm.Get_rank()==0:
+			sys_time=datetime.datetime.now()
+			sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}_".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
+			#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
 
-		sys_time=datetime.datetime.now()
-		sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}_".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
-		#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
+		# broadcast sys_data
+		sys_data = self.comm.bcast(sys_data, root=0)
+
 
 		self.sys_time=sys_data + self.optimizer
 
