@@ -503,7 +503,7 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 			
 			# check for nans and infs
-			if True: # (not np.isfinite(self.NG.S_matrix).all() ) and (not np.isfinite(self.NG.F_vector).all() ):
+			if (not np.isfinite(self.NG.S_matrix).all() ) and (not np.isfinite(self.NG.F_vector).all() ):
 				
 				with open(self.debug_file_SF+'.pkl', 'wb') as handle:
 
