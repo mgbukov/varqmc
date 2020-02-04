@@ -61,10 +61,16 @@ class natural_gradient():
 		self.delta=100.0 # S-matrix regularizer
 		self.S_norm=0.0 # S-matrix norm
 
-		n_iter=6
-		self.S_lastiters=np.zeros([n_iter,N_varl_params,N_varl_params],dtype=np.float64) # array to store last S-matrices
-		self.F_lastiters=np.zeros([n_iter,N_varl_params,],dtype=np.float64) # array to store last F-vectors
-		self.debug_file=''
+		if self.comm.Get_rank()==0:
+			n_iter=6
+			self.S_lastiters=np.zeros([n_iter,N_varl_params,N_varl_params],dtype=np.float64) # array to store last S-matrices
+			self.F_lastiters=np.zeros([n_iter,N_varl_params,],dtype=np.float64) # array to store last F-vectors
+		else:
+			self.S_lastiters=np.array([[None],[None]])
+			self.F_lastiters=np.array([[None],[None]])
+
+		self.debug_helper=None
+		self.debug_mode=True
 
 		self.iteration=0
 		self.r2_cost=0.0
@@ -246,30 +252,17 @@ class natural_gradient():
 
 
 		####################################################### 
-		# DEBUG HELPER
-
-		# store last n_iter data points
-		self.S_lastiters[:-1,...]=self.S_lastiters[1:,...]
-		self.S_lastiters[-1,...]=self.S_matrix
-
-		self.F_lastiters[:-1,...]=self.F_lastiters[1:,...]
-		self.F_lastiters[-1,...]=self.F_vector
-
-		#print(self.F_lastiters[:,1:3])
-
-		if self.comm.Get_rank()==0:
-			if (not np.isfinite(self.S_matrix).all() ) and (not np.isfinite(self.F_vector).all() ):
-				with open(self.debug_file+'.pkl', 'wb') as handle:
-					pickle.dump([self.S_lastiters, self.F_lastiters, self.delta], handle, protocol=pickle.HIGHEST_PROTOCOL)
+		
+		if self.debug_mode:
+			# run debug helper	
+			self.debug_helper()
 			
+			# check for symmetry and positivity
+			if self.check_on and self.TDVP_type=='real':
+				self._S_matrix_checks()
 
 		# compute norm
 		self.S_norm=np.linalg.norm(self.S_matrix)
-
-		
-		# check for symmetry and positivity
-		if self.check_on and self.TDVP_type=='real':
-			self._S_matrix_checks()
 
 		#######################################################
 

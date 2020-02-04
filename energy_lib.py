@@ -116,19 +116,22 @@ class Energy_estimator():
 
 
 		if Lx==4:
-			self.basis_type=np.uint16	
+			self.basis_type=np.uint16
+			self.MPI_basis_dtype=MPI.SHORT	
 			if J2==0:
 				self.E_GS= -11.228483 #-0.7017801875*self.N_sites
 			else:
 				self.E_GS= -8.45792 #-0.528620*self.N_sites
 		elif Lx==6:
 			self.basis_type=np.uint64
+			self.MPI_basis_dtype=MPI.LONG
 			if J2==0:
 				self.E_GS= -24.4393969968 #-0.6788721388*self.N_sites
 			else:
 				self.E_GS= -18.13716 #-0.503810*self.N_sites	
 		elif Lx==8:
 			self.basis_type=np.uint64
+			self.MPI_basis_dtype=MPI.LONG
 
 		
 

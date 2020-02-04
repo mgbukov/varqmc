@@ -74,11 +74,18 @@ class MC_sampler():
 		self.mod_kets=np.zeros((N_batch,),dtype=np.float64)
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
-		#self.spinstates_ket_tot=np.zeros((N_MC_points*self.N_features,),dtype=np.int8)
-		#self.mod_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
-		#self.phase_kets_tot=np.zeros((N_MC_points,),dtype=np.float64)
 
-		
+		if self.comm.Get_rank()==0:
+			n_iter=6
+			self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
+			self.mod_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
+			self.phase_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
+		else:
+			self.ints_ket_g=np.array([[None],[None]])
+			self.mod_kets_g=np.array([[None],[None]])
+			self.phase_kets_g=np.array([[None],[None]])
+
+
 		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
 		self.s0_g=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
 

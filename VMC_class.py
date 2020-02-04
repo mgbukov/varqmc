@@ -283,6 +283,7 @@ class VMC(object):
 		# initiaize natural gradient class
 			
 		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.DNN.N_varl_params,compute_grad_log_psi, self.DNN.NN_Tree )
+		self.NG.debug_helper=self.debug_helper
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
@@ -400,7 +401,10 @@ class VMC(object):
 
 
 		
-		self.NG.debug_file=self.savefile_dir_debug + 'S-F_data'+'--' + self.file_name
+		self.debug_file_SF=self.savefile_dir_debug + 'debug-SF_data'+'--' + self.file_name
+		self.debug_file_logpsi=self.savefile_dir_debug + 'debug-logpsi_data'+'--' + self.file_name
+		self.debug_file_phasepsi=self.savefile_dir_debug + 'debug-phasepsi_data'+'--' + self.file_name
+		self.debug_file_intkets=self.savefile_dir_debug + 'debug-intkets_data'+'--' + self.file_name
 		
 
 		if self.save_data:
@@ -441,7 +445,6 @@ class VMC(object):
 		# NN parameters
 		file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
-			#pickle.dump([self.DNN.params,], handle, protocol=pickle.HIGHEST_PROTOCOL)
 			pickle.dump(self.DNN.params, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
@@ -469,6 +472,64 @@ class VMC(object):
 		config_params_yaml.close()
 
 
+	def debug_helper(self):
+
+		##### update running data
+		#
+		if self.comm.Get_rank()==0:
+
+			# store last n_iter data points
+			self.MC_tool.ints_ket_g[:-1,...]=self.MC_tool.ints_ket_g[1:,...]
+			self.MC_tool.mod_kets_g[:-1,...]=self.MC_tool.mod_kets_g[1:,...]
+			self.MC_tool.phase_kets_g[:-1,...]=self.MC_tool.phase_kets_g[1:,...]
+
+			self.NG.S_lastiters[:-1,...]=self.NG.S_lastiters[1:,...]
+			self.NG.F_lastiters[:-1,...]=self.NG.F_lastiters[1:,...]
+			
+			# set last step data
+			self.NG.S_lastiters[-1,...]=self.NG.S_matrix
+			self.NG.F_lastiters[-1,...]=self.NG.F_vector
+
+		self.comm.Barrier() # Gatherv is blocking, so this is probably superfluous
+		
+		# collect data from multiple processes to root
+		self.comm.Gatherv([self.MC_tool.ints_ket,    self.E_estimator.MPI_basis_dtype], [self.MC_tool.ints_ket_g[-1,:],   self.E_estimator.MPI_basis_dtype], root=0)
+		self.comm.Gatherv([self.MC_tool.mod_kets,    MPI.DOUBLE], [self.MC_tool.mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
+		self.comm.Gatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
+
+
+		##### store data
+		# 
+		if self.comm.Get_rank()==0:
+			
+			# check for nans and infs
+			if True: # (not np.isfinite(self.NG.S_matrix).all() ) and (not np.isfinite(self.NG.F_vector).all() ):
+				
+				with open(self.debug_file_SF+'.pkl', 'wb') as handle:
+
+					pickle.dump([self.NG.S_lastiters, self.NG.F_lastiters, self.NG.delta,], 
+									handle, protocol=pickle.HIGHEST_PROTOCOL
+								)
+
+				with open(self.debug_file_logpsi+'.pkl', 'wb') as handle:
+
+					pickle.dump([self.MC_tool.mod_kets_g, ], 
+									handle, protocol=pickle.HIGHEST_PROTOCOL
+								)
+
+				with open(self.debug_file_phasepsi+'.pkl', 'wb') as handle:
+
+					pickle.dump([self.MC_tool.phase_kets_g, ], 
+									handle, protocol=pickle.HIGHEST_PROTOCOL
+								)
+
+				with open(self.debug_file_intkets+'.pkl', 'wb') as handle:
+
+					pickle.dump([self.MC_tool.ints_ket_g, ], 
+									handle, protocol=pickle.HIGHEST_PROTOCOL
+								)
+		self.comm.Barrier()
+	
 
 	def train(self, start=0):
 
@@ -525,14 +586,11 @@ class VMC(object):
 			
 			#### update model parameters
 			if iteration<self.N_iterations-1:
-			
+				
+				# update weights
 				loss, r2 = self.update_NN_params(iteration)
 
 				##### store data
-				
-				#combine results from all cores
-				#self.MC_tool.Allgather()
-
 				phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.MC_tool.mod_kets)
 
 				phase_hist_tot=np.zeros_like(phase_hist)
