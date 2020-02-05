@@ -29,7 +29,7 @@ params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_20000-Npr
 fig, axs = plt.subplots(2,6,figsize=(15,5))
 
 
-iteration=311
+iteration=300
 
 
 

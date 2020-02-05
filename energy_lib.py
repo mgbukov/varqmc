@@ -219,11 +219,18 @@ class Energy_estimator():
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
 		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
 
-		self.E_diff_real_tot=np.zeros(N_MC_points,dtype=np.float64)
-		self.E_diff_imag_tot=np.zeros_like(self.E_diff_real_tot)
+		if self.comm.Get_rank()==0:
+			n_iter=6
+			self.Eloc_real_g=np.zeros((n_iter,N_MC_points),dtype=np.float64)
+			self.Eloc_imag_g=np.zeros_like(self.Eloc_real_g)
+		else:
+			self.Eloc_real_g=np.array([[None],[None]])
+			self.Eloc_imag_g=np.array([[None],[None]])
 
-		self.SdotS_real_tot=np.zeros(N_MC_points,dtype=np.float64)
-		self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
+		#self.SdotS_real_tot=np.zeros(N_MC_points,dtype=np.float64)
+		#self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
+
+		#self.Eloc_real_g=np.zeros()
 
 
 

@@ -411,6 +411,7 @@ class VMC(object):
 		self.debug_file_logpsi=self.savefile_dir_debug + 'debug-logpsi_data'+'--' + self.file_name
 		self.debug_file_phasepsi=self.savefile_dir_debug + 'debug-phasepsi_data'+'--' + self.file_name
 		self.debug_file_intkets=self.savefile_dir_debug + 'debug-intkets_data'+'--' + self.file_name
+		self.debug_file_Eloc=self.savefile_dir_debug + 'debug-Eloc_data'+'--' + self.file_name
 		
 
 		if self.save_data:
@@ -489,6 +490,9 @@ class VMC(object):
 			self.MC_tool.mod_kets_g[:-1,...]=self.MC_tool.mod_kets_g[1:,...]
 			self.MC_tool.phase_kets_g[:-1,...]=self.MC_tool.phase_kets_g[1:,...]
 
+			self.E_estimator.Eloc_real_g[:-1,...]=self.E_estimator.Eloc_real_g[1:,...]
+			self.E_estimator.Eloc_imag_g[:-1,...]=self.E_estimator.Eloc_imag_g[1:,...]
+
 			self.NG.S_lastiters[:-1,...]=self.NG.S_lastiters[1:,...]
 			self.NG.F_lastiters[:-1,...]=self.NG.F_lastiters[1:,...]
 			
@@ -502,6 +506,10 @@ class VMC(object):
 		self.comm.Gatherv([self.MC_tool.ints_ket,    self.E_estimator.MPI_basis_dtype], [self.MC_tool.ints_ket_g[-1,:],   self.E_estimator.MPI_basis_dtype], root=0)
 		self.comm.Gatherv([self.MC_tool.mod_kets,    MPI.DOUBLE], [self.MC_tool.mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
 		self.comm.Gatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
+
+
+		self.comm.Gatherv([self.E_estimator.Eloc_real,  MPI.DOUBLE], [self.E_estimator.Eloc_real_g[-1,:], MPI.DOUBLE], root=0)
+		self.comm.Gatherv([self.E_estimator.Eloc_imag,  MPI.DOUBLE], [self.E_estimator.Eloc_imag_g[-1,:], MPI.DOUBLE], root=0)
 
 
 		##### store data
@@ -534,6 +542,13 @@ class VMC(object):
 					pickle.dump([self.MC_tool.ints_ket_g, ], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
+
+				with open(self.debug_file_Eloc+'.pkl', 'wb') as handle:
+
+					pickle.dump([self.E_estimator.Eloc_real_g, self.E_estimator.Eloc_imag_g, ], 
+									handle, protocol=pickle.HIGHEST_PROTOCOL
+								)
+
 		self.comm.Barrier()
 	
 
