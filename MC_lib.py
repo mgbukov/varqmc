@@ -133,7 +133,20 @@ class MC_sampler():
 			self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), )#._value
 
 		
-		self.log_psi_shift=0.0 
+		### normalize all kets
+		#
+		self.log_psi_shift=0.0
+		self.mod_psi_norm=1.0
+		if self.comm.Get_rank()==0:
+			self.log_psi_shift=np.log(self.mod_kets[0])
+			self.mod_psi_norm=self.mod_kets[0]
+		# broadcast sys_data
+		self.log_psi_shift = self.comm.bcast(self.log_psi_shift, root=0)
+		self.mod_psi_norm = self.comm.bcast(self.mod_psi_norm, root=0)
+		#
+		# normalize
+		self.mod_kets/=self.mod_psi_norm
+
 
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:

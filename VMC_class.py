@@ -408,7 +408,7 @@ class VMC(object):
 
 		
 		self.debug_file_SF=self.savefile_dir_debug + 'debug-SF_data'+'--' + self.file_name
-		self.debug_file_logpsi=self.savefile_dir_debug + 'debug-logpsi_data'+'--' + self.file_name
+		self.debug_file_modpsi=self.savefile_dir_debug + 'debug-modpsi_data'+'--' + self.file_name
 		self.debug_file_phasepsi=self.savefile_dir_debug + 'debug-phasepsi_data'+'--' + self.file_name
 		self.debug_file_intkets=self.savefile_dir_debug + 'debug-intkets_data'+'--' + self.file_name
 		self.debug_file_Eloc=self.savefile_dir_debug + 'debug-Eloc_data'+'--' + self.file_name
@@ -525,7 +525,7 @@ class VMC(object):
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
-				with open(self.debug_file_logpsi+'.pkl', 'wb') as handle:
+				with open(self.debug_file_modpsi+'.pkl', 'wb') as handle:
 
 					pickle.dump([self.MC_tool.mod_kets_g, ], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
