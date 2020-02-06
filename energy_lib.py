@@ -325,7 +325,6 @@ class Energy_estimator():
 				batch, batch_idx = next(batches)
 				
 				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
-
 				
 				# with disable_jit():
 				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
@@ -337,6 +336,8 @@ class Energy_estimator():
 			log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
 			phase_psi_bras=phase_psi_bras[inv_index]
 
+			#print(log_psi_bras)
+
 
 		else:
 
@@ -347,17 +348,8 @@ class Energy_estimator():
 
 
 		#######
-		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites))
-		# log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
-		# phase_psi_bras=phase_psi_bras[inv_index]._value
 
-		
-
-		# log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn].reshape(nn,self.N_symm,self.N_sites))
-		# log_psi_bras=log_psi_bras._value - log_psi_shift
-		# phase_psi_bras=phase_psi_bras._value
-
-		psi_str="\nmin(log_psi_bras)={0:0.8f}, max(log_psi_bras)={1:0.8f}.\n".format(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)) )
+		psi_str="\nmin(log_psi_bras)={0:0.8f}, max(log_psi_bras)={1:0.8f}, mean(log_psi_bras)={2:0.8f}, var(log_psi_bras)={3:0.8f}.\n".format(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)), np.mean(np.abs(log_psi_bras)), np.std(np.abs(log_psi_bras)) )
 		if self.comm.Get_rank()==0:
 			print(psi_str)
 		
@@ -369,6 +361,13 @@ class Energy_estimator():
 
 		cos_phase_kets=np.cos(phase_kets)/mod_kets
 		sin_phase_kets=np.sin(phase_kets)/mod_kets
+
+		# print(cos_phase_kets)
+		# print(sin_phase_kets)
+		# print(self._Eloc_cos)
+		# print(self._Eloc_sin)
+		# print(self._Eloc_cos*cos_phase_kets)
+		# exit()
 
 
 		self.Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets

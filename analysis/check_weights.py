@@ -31,8 +31,6 @@ fig, axs = plt.subplots(2,6,figsize=(15,5))
 
 iteration=300
 
-
-
 file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
 
 with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:

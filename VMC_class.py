@@ -57,7 +57,7 @@ np.set_printoptions(threshold=np.inf)
 
 class VMC(object):
 
-	def __init__(self,params_dict):
+	def __init__(self,params_dict,train=True,):
 
 
 		# initialize communicator
@@ -165,11 +165,12 @@ class VMC(object):
 			self._create_file_name(model_params)
 
 		# create log file and directory
-		self._create_logs()
+		if self.save_data:
+			self._create_logs()
 
 
 		# add variables to yaml file
-		if self.comm.Get_rank()==0:
+		if self.comm.Get_rank()==0 and self.save_data:
 			
 			config_params_yaml = open(self.data_dir + '/config_params.yaml', 'w')
 			
@@ -185,7 +186,8 @@ class VMC(object):
 
 			
 		# train net
-		self.train(self.start_iter)
+		if train:
+			self.train(self.start_iter)
 		
 
 	def update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
@@ -486,6 +488,7 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 
 			# store last n_iter data points
+			self.MC_tool.log_psi_shift_g[:-1]=self.MC_tool.log_psi_shift_g[1:]
 			self.MC_tool.ints_ket_g[:-1,...]=self.MC_tool.ints_ket_g[1:,...]
 			self.MC_tool.mod_kets_g[:-1,...]=self.MC_tool.mod_kets_g[1:,...]
 			self.MC_tool.phase_kets_g[:-1,...]=self.MC_tool.phase_kets_g[1:,...]
@@ -497,6 +500,7 @@ class VMC(object):
 			self.NG.F_lastiters[:-1,...]=self.NG.F_lastiters[1:,...]
 			
 			# set last step data
+			self.MC_tool.log_psi_shift_g[-1]=self.MC_tool.log_psi_shift
 			self.NG.S_lastiters[-1,...]=self.NG.S_matrix
 			self.NG.F_lastiters[-1,...]=self.NG.F_vector
 
@@ -515,7 +519,7 @@ class VMC(object):
 		##### store data
 		# 
 		if self.comm.Get_rank()==0:
-			
+	
 			# check for nans and infs
 			if (not np.isfinite(self.NG.S_matrix).all() ) and (not np.isfinite(self.NG.F_vector).all() ):
 				
@@ -527,7 +531,7 @@ class VMC(object):
 
 				with open(self.debug_file_modpsi+'.pkl', 'wb') as handle:
 
-					pickle.dump([self.MC_tool.mod_kets_g, ], 
+					pickle.dump([self.MC_tool.mod_kets_g, self.MC_tool.log_psi_shift_g], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 

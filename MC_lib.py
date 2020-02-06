@@ -75,8 +75,9 @@ class MC_sampler():
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 
+		n_iter=6
+		self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
 		if self.comm.Get_rank()==0:
-			n_iter=6
 			self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
 			self.mod_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
 			self.phase_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
@@ -137,9 +138,15 @@ class MC_sampler():
 		#
 		self.log_psi_shift=0.0
 		self.mod_psi_norm=1.0
+
+		# compute global max
+		local_max=np.max(self.mod_kets).astype(np.float64)
+		global_max=np.zeros(1, dtype=np.float64)
+		self.comm.Reduce(local_max, global_max, op=MPI.MAX) # broadcast to root=0
+		
 		if self.comm.Get_rank()==0:
-			self.log_psi_shift=np.log(self.mod_kets[0])
-			self.mod_psi_norm=self.mod_kets[0]
+			self.log_psi_shift=np.log(global_max[0])
+			self.mod_psi_norm=global_max[0]
 		# broadcast sys_data
 		self.log_psi_shift = self.comm.bcast(self.log_psi_shift, root=0)
 		self.mod_psi_norm = self.comm.bcast(self.mod_psi_norm, root=0)
@@ -148,6 +155,7 @@ class MC_sampler():
 		self.mod_kets/=self.mod_psi_norm
 
 
+		### gather seeds
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:
 			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_g, MPI.INT])
@@ -155,6 +163,7 @@ class MC_sampler():
 			self.s0_g=self.s0.copy()
 
 
+		### compute acceptance ratio
 		self.compute_acceptance_ratio(N_accepted,N_MC_proposals,mode='MC')
 			
 		
