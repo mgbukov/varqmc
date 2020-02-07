@@ -437,6 +437,7 @@ void offdiag_sum(int Ns,
 	)
 {
 	int n_cum=0;
+	double aux=0.0;
 
 	for(int l=0;l<Ns;l++){
 
@@ -447,9 +448,11 @@ void offdiag_sum(int Ns,
 			int j=n_cum+i;
 			
 			//cout << l << " , "<< i << " , "<< n << " , "<<j<< " , " << Eloc_cos[ket_ind[j]] << " , " << ket_ind[j] << " , " << psi_bras[j] << " , " << std::cos(phase_psi_bras[j]) << endl;
-			 
-			Eloc_cos[ket_ind[j]] += MEs[j] * std::exp(log_psi_bras[j]) * std::cos(phase_psi_bras[j]);
-			Eloc_sin[ket_ind[j]] += MEs[j] * std::exp(log_psi_bras[j]) * std::sin(phase_psi_bras[j]);
+			
+			aux=MEs[j] * std::exp(log_psi_bras[j]);
+
+			Eloc_cos[ket_ind[j]] += aux * std::cos(phase_psi_bras[j]);
+			Eloc_sin[ket_ind[j]] += aux * std::sin(phase_psi_bras[j]);
 		}
 
 		n_cum+=n;

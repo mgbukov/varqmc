@@ -35,6 +35,8 @@ class MC_sampler():
 		self.acceptance_ratio_g=np.array([0.0])
 		self.acceptance_ratio=np.zeros(shape=self.comm.Get_size(),)
 
+		self.thermal=False
+
 
 
 
@@ -122,12 +124,8 @@ class MC_sampler():
 		#assert(self.spinstates_ket.max()==0)
 
 		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
-												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
+												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0, self.thermal,
 												)
-
-		# N_accepted, N_MC_proposals = sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
-		# 									self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0,
-		# 									DNN)
 
 
 		if compute_phases:

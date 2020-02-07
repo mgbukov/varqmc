@@ -406,7 +406,7 @@ class VMC(object):
 		# logfile name
 		logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		self.logfile = create_open_file(logfile_dir+logfile_name)
-
+		self.E_estimator.logfile=self.logfile
 
 		
 		self.debug_file_SF=self.savefile_dir_debug + 'debug-SF_data'+'--' + self.file_name
@@ -556,6 +556,18 @@ class VMC(object):
 		self.comm.Barrier()
 	
 
+	def discard_outliars(self,):
+
+		inds=self.E_estimator.inds_outliers
+
+		self.MC_tool.spinstates_ket[inds,...]=0
+		self.MC_tool.mod_kets[inds]=0.0
+		self.MC_tool.phase_kets[inds]=0.0
+
+		self.E_estimator.Eloc_real[inds]=0.0
+		self.E_estimator.Eloc_imag[inds]=0.0
+
+
 	def train(self, start=0):
 
 		# set timer
@@ -589,6 +601,9 @@ class VMC(object):
 			##### evaluate model
 			self.get_training_data(self.DNN.params)
 			#self.get_Stot_data(self.DNN.params)
+
+			# set MC sampler to re-use initial state
+			self.MC_tool.thermal=True
 
 			
 			##### check c++ and python DNN evaluation
@@ -682,10 +697,13 @@ class VMC(object):
 			log_psi, phase_psi = self.evaluate_NN_dyn(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
 			self.update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=False)
 
-			norm_str="iter: {0:d}, min(log_psi)={1:0.8f}, max(log_psi)={2:0.8f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
-			self.logfile.write(norm_str)
+			#norm_str="iter: {0:d}, min(log_psi)={1:0.8f}, max(log_psi)={2:0.8f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
+			psi_str="log_psi_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
+		
+
+			self.logfile.write(psi_str)
 			if self.comm.Get_rank()==0:
-				print(norm_str)
+				print(psi_str)
 		#print(self.DNN.apply_fun_args_dyn[2]['mean'], self.DNN.apply_fun_args[2]['mean'])
 
 								
@@ -738,7 +756,12 @@ class VMC(object):
 			self.Eloc_params_dict['overlap']=overlap
 		
 		elif self.mode=='MC':
-			self.Eloc_params_dict=dict(N_MC_points=self.N_MC_points)	
+			self.Eloc_params_dict=dict(N_MC_points=self.N_MC_points)
+
+			# discard outliers
+			if len(self.E_estimator.inds_outliers)>0:
+				print('discarding outliars...\n')
+				self.discard_outliars()	
 
 		
 		self.Eloc_mean_g, self.Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(mode=self.mode,Eloc_params_dict=self.Eloc_params_dict)

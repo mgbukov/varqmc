@@ -26,13 +26,14 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
 
 class Energy_estimator():
 
-	def __init__(self,comm,J2,N_MC_points,N_batch,L,N_symm,NN_type):
+	def __init__(self,comm,J2,N_MC_points,N_batch,L,N_symm,NN_type,):
 
 		# MPI commuicator
 		self.comm=comm
 		self.N_MC_points=N_MC_points
 		self.N_batch=N_batch
 		self.NN_type=NN_type
+		self.logfile=None
 
 
 		###### define model parameters ######
@@ -114,7 +115,7 @@ class Energy_estimator():
 		# self._static_list_diag=static_list_diag_SdotS
 
 
-
+		self.E_GS_density_approx=-0.5
 		if Lx==4:
 			self.basis_type=np.uint16
 			self.MPI_basis_dtype=MPI.SHORT	
@@ -302,7 +303,9 @@ class Energy_estimator():
 		nn_uq=_ints_bra_uq.shape[0]
 
 
-		print("{0:d}/{1:d} unique configs; using minibatch size {2:d}.".format(nn_uq, nn, minibatch_size) )
+		unique_str="{0:d}/{1:d} unique configs; using minibatch size {2:d}.\n".format(nn_uq, nn, minibatch_size)
+		if self.logfile!=None:
+			self.logfile.write(unique_str)
 
 
 		### evaluate network using minibatches
@@ -336,8 +339,6 @@ class Energy_estimator():
 			log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
 			phase_psi_bras=phase_psi_bras[inv_index]
 
-			#print(log_psi_bras)
-
 
 		else:
 
@@ -347,9 +348,20 @@ class Energy_estimator():
 			phase_psi_bras=phase_psi_bras[inv_index]._value
 
 
+
+		# Eloc_cos=self._MEs[:nn]*np.exp(log_psi_bras)*np.cos(phase_psi_bras)
+		# Eloc_sin=self._MEs[:nn]*np.exp(log_psi_bras)*np.sin(phase_psi_bras)
+		
+		# cos_phase_kets=np.cos(phase_kets)/mod_kets
+		# sin_phase_kets=np.sin(phase_kets)/mod_kets
+
+		#print(log_psi_bras)
+
 		#######
 
-		psi_str="\nmin(log_psi_bras)={0:0.8f}, max(log_psi_bras)={1:0.8f}, mean(log_psi_bras)={2:0.8f}, var(log_psi_bras)={3:0.8f}.\n".format(np.min(np.abs(log_psi_bras)), np.max(np.abs(log_psi_bras)), np.mean(np.abs(log_psi_bras)), np.std(np.abs(log_psi_bras)) )
+		psi_str="log_psi_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
+		if self.logfile!=None:
+			self.logfile.write(psi_str)
 		if self.comm.Get_rank()==0:
 			print(psi_str)
 		
@@ -362,13 +374,6 @@ class Energy_estimator():
 		cos_phase_kets=np.cos(phase_kets)/mod_kets
 		sin_phase_kets=np.sin(phase_kets)/mod_kets
 
-		# print(cos_phase_kets)
-		# print(sin_phase_kets)
-		# print(self._Eloc_cos)
-		# print(self._Eloc_sin)
-		# print(self._Eloc_cos*cos_phase_kets)
-		# exit()
-
 
 		self.Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets
 		self.Eloc_imag = self._Eloc_sin*cos_phase_kets - self._Eloc_cos*sin_phase_kets
@@ -380,6 +385,13 @@ class Energy_estimator():
 			update_diag_ME(ints_ket,self.Eloc_real,opstr,indx,J) 
 
 		
+		# check variance of E_loc and discard states: allowed spread: 4 times Energy of GS
+		self.Eloc_real[0]=100.0
+		self.Eloc_real[-1]=-100.0
+		self.inds_outliers=np.where(np.abs(self.Eloc_real)>4.0*np.abs(self.E_GS_density_approx)*self.L**2)[0]
+		print('outliers:', self.inds_outliers)
+
+
 		if SdotS:
 			self.SdotS_real=2.0*self.Eloc_real # double off-diagonal contribution
 			self.SdotS_real=self.Eloc_real+0.75*self.N_sites # diagonal contribution

@@ -13,6 +13,7 @@ from jax import jit, grad, random, device_put, partial
 from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
 
 
+
 cimport cython
 import numpy as np
 cimport numpy as np
@@ -46,10 +47,13 @@ cdef extern from *:
 
 IF _L==4:
     ctypedef np.uint16_t basis_type
+    basis_type_py=np.uint16
 IF _L==6:
     ctypedef np.uint64_t basis_type
+    basis_type_py=np.uint64
 IF _L==8:
     ctypedef np.uint64_t basis_type
+    basis_type_py=np.uint64
 
 
 N_sites=_L*_L
@@ -260,6 +264,7 @@ cdef class Neural_Net:
     cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
     cdef func_type spin_config
+    cdef basis_type[::1] sf_vec
 
     
     cdef vector[np.uint16_t] sites
@@ -430,6 +435,8 @@ cdef class Neural_Net:
 
         self.mod_psi_s=np.zeros(self.N_MC_chains,dtype=np.float64)
         self.mod_psi_t=np.zeros(self.N_MC_chains,dtype=np.float64)
+
+        self.sf_vec=np.zeros(self.N_MC_chains,dtype=basis_type_py)
 
         ###############################################################
 
@@ -629,7 +636,8 @@ cdef class Neural_Net:
                     basis_type[::1] ket_states,
                     np.float64_t[::1] mod_kets,
                     #
-                    basis_type[::1] s0_vec
+                    basis_type[::1] s0_vec,
+                    bool thermal
                     ):
 
         cdef int N_accepted=0
@@ -663,8 +671,8 @@ cdef class Neural_Net:
                                            #
                                            chain_n,
                                            self.RNGs[chain_n],
-                                           False,
-                                           0
+                                           thermal,
+                                           self.sf_vec[chain_n]
                                         )
 
             # take care of left-over, continue chain_n = 0
@@ -696,7 +704,7 @@ cdef class Neural_Net:
         # exit()
 
         # print('thread seeds', self.MPI_rank, self.thread_seeds)
-
+        # print('sfvec', np.array(self.sf_vec))
 
         return N_accepted, np.sum(N_MC_proposals);
    
@@ -740,7 +748,9 @@ cdef class Neural_Net:
         cdef basis_type one=1;
         cdef int l;
             
-        if not thermal:
+        if thermal:
+            s=s0;
+        else:
             s=(one<<(self.N_sites//2))-one;
             for l in range(self.N_sites):
                 t=s;
@@ -753,9 +763,8 @@ cdef class Neural_Net:
            
             # store initial state
             s0_vec[chain_n] = s;
-        else:
-            s=s0;
 
+            
         
         # compute initial spin config and its amplitude value
         self.spin_config(self.N_sites,s,&spinstate_s[0]);
@@ -821,6 +830,10 @@ cdef class Neural_Net:
                 k+=1;
                 
             N_MC_proposals[0]+=1;
+
+
+        # record last configuration
+        self.sf_vec[chain_n]=ket_states[k-1]
 
 
         return N_accepted;
