@@ -396,9 +396,6 @@ class Energy_estimator():
 			print(outliers_str)
 
 
-		A=np.divide(1.0,0.0)
-
-
 		if SdotS:
 			self.SdotS_real=2.0*self.Eloc_real # double off-diagonal contribution
 			self.SdotS_real=self.Eloc_real+0.75*self.N_sites # diagonal contribution
