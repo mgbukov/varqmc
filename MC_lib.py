@@ -32,7 +32,7 @@ class MC_sampler():
 
 		self.N_accepted=np.zeros(1, dtype=np.int)
 		self.N_MC_proposals=np.zeros(1, dtype=np.int)
-		self.acceptance_ratio_g=np.array([0.0])
+		self.acceptance_ratio_g=np.array([1.0])
 		self.acceptance_ratio=np.zeros(shape=self.comm.Get_size(),)
 
 		self.thermal=False

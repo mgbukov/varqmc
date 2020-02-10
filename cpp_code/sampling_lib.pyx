@@ -649,7 +649,7 @@ cdef class Neural_Net:
         
         #print(N_MC_points, n_MC_points,n_MC_points_leftover)
         #
-        cdef int auto_correlation_time = 0.4/np.max([0.05, acceptance_ratio])*self.N_sites
+        cdef int auto_correlation_time = 0.35/np.max([0.05, acceptance_ratio])*self.N_sites
 
         with nogil:
 

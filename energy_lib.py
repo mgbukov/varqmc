@@ -355,7 +355,8 @@ class Energy_estimator():
 		# cos_phase_kets=np.cos(phase_kets)/mod_kets
 		# sin_phase_kets=np.sin(phase_kets)/mod_kets
 
-		#print(log_psi_bras)
+		# print(log_psi_bras)
+		# exit()
 
 		#######
 
@@ -385,11 +386,17 @@ class Energy_estimator():
 			update_diag_ME(ints_ket,self.Eloc_real,opstr,indx,J) 
 
 		
-		# check variance of E_loc and discard states: allowed spread: 4 times Energy of GS
-		self.Eloc_real[0]=100.0
-		self.Eloc_real[-1]=-100.0
-		self.inds_outliers=np.where(np.abs(self.Eloc_real)>4.0*np.abs(self.E_GS_density_approx)*self.L**2)[0]
-		print('outliers:', self.inds_outliers)
+		# check variance of E_loc and discard states: allowed spread: 1000 times Energy of GS
+		self.inds_outliers=np.where(np.abs(np.abs(self.Eloc_real) - np.abs(self.E_GS_density_approx)*self.L**2) > 1000.0)[0]
+		outliers_str='Eloc outlier inds:\n   {}\n'.format(self.inds_outliers)
+
+		if self.logfile!=None:
+			self.logfile.write(outliers_str)
+		if self.comm.Get_rank()==0:
+			print(outliers_str)
+
+
+		A=np.divide(1.0,0.0)
 
 
 		if SdotS:

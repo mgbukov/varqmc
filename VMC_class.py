@@ -1,4 +1,4 @@
-import sys,os
+import sys,os,warnings
 from mpi4py import MPI
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
@@ -407,6 +407,11 @@ class VMC(object):
 		logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		self.logfile = create_open_file(logfile_dir+logfile_name)
 		self.E_estimator.logfile=self.logfile
+
+		# redircet warnings to log
+		def customwarn(message, category, filename, lineno, file=None, line=None):
+			self.logfile.write('\n'+warnings.formatwarning(message, category, filename, lineno)+'\n')
+		warnings.showwarning = customwarn
 
 		
 		self.debug_file_SF=self.savefile_dir_debug + 'debug-SF_data'+'--' + self.file_name

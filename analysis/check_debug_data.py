@@ -21,6 +21,8 @@ plt.tick_params(labelsize=20)
 
 ################
 
+from aux_funcs import *
+
 sys.path.append("..")
 
 from cpp_code import integer_to_spinstate
@@ -29,14 +31,33 @@ import yaml
 
 ################
 
-n=-3 # steps before final blow-up
-max_iter=313 #160 #313 # last iteration with saved data
+# n=-3 #-3 # steps before final blow-up
+# max_iter=313 #313 # last iteration with saved data
+# data_name='2020-02-04_19:20:06_NG/'
+
+
+###################
+# discard_outliears: FALSE
+# MC_thermal: TRUE
+
+# n=-4 # steps before final blow-up
+# max_iter=329 # last iteration with saved data
+# data_name='2020-02-07_18:29:39_NG/' # 
+
+
+###################
+# discard_outliears: TRUE
+# MC_thermal: TRUE
+
+n=-2 # steps before final blow-up
+max_iter=338 # last iteration with saved data
+data_name='2020-02-08_05:53:59_NG/' # 
+
+
+###################
 
 
 #### load debug data
-
-#data_name='2020-02-05_01:18:37_NG/'
-data_name='2020-02-04_19:20:06_NG/'
 
 
 load_dir='data/' + data_name 
@@ -51,7 +72,8 @@ with open(load_dir + 'debug_files/' + 'debug-' + 'SF_data--' + params_str + '.pk
 	S_lastiters, F_lastiters, delta = pickle.load(handle)
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'modpsi_data--' + params_str + '.pkl', 'rb') as handle:
-	modpsi_kets, = pickle.load(handle)
+	modpsi_kets, log_psi_shift = pickle.load(handle)
+	#modpsi_kets, = pickle.load(handle)
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'phasepsi_data--' + params_str + '.pkl', 'rb') as handle:
 	phasepsi_kets, = pickle.load(handle)
@@ -69,177 +91,69 @@ with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
 	NN_params = pickle.load(handle)
 
 
+######################
+
+print('\niteration number: {0:d} with {1:d} unique spin configs.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0]))
+
+uq=np.unique(int_kets[n,:])
+print(uq.shape)
+
+print(Eloc_real[n,:20])
+
+print(modpsi_kets[n,:20])
+
+print(phasepsi_kets[n,:20])
+
+exit()
+
+
+
+
+######################
+
+# print(int_kets[n,:10])
+# MC_tool = MC_sample(NN_params,N_MC_points=10)
+# print(MC_tool.ints_ket)
+
 
 ######################
 
 
-def int_to_spinconfig(s):
-	S=np.array(list("{0:036b}".format(s)))
-	print(S.reshape(6,6))
-
-
-
-#print(np.max(np.abs(Eloc_real[n,:])))
 
 #inds=np.where(np.abs(Eloc_real[n,:])>32000.0)[0]
-inds=np.where(np.abs(Eloc_real[n,:])>500.0)[0]
+inds=np.where(np.abs(Eloc_real[n,:])>50.0)[0]
+
+
+print(inds)
+#print(int_kets[n,inds])
+print(Eloc_real[n,inds])
+exit()
 
 #inds=np.where(np.logical_and(np.abs(Eloc_real[n,:])>=16.5, np.abs(Eloc_real[n,:])<=16.8))[0]
 
 
 
-# for ind in inds:
-# 	s=int_kets[n,:][ind]
-# 	print(s, Eloc_real[n,:][ind], modpsi_kets[n,:][ind])
-# 	int_to_spinconfig(s)
-# 	print()
-
-
-########
-
-
-#N_MC_points=1 
-N_MC_points=inds.shape[0]
-
-params=dict(
-		J2= 0.5,
-		L= 6,
-		NN_dtype= 'cpx',
-		NN_shape_str= '36--6',
-		NN_type= 'DNN',
-		N_MC_chains= 1,
-		N_MC_points= N_MC_points,
-		N_batch= N_MC_points,
-		N_iterations= 3,
-		batchnorm= False,
-		load_data= False,
-		minibatch_size= 100,
-		mode= 'MC',
-		optimizer= 'NG',
-		save_data= False,
-		seed= 0,
-		start_iter= 0,
-		stop_iter= 0,
-	)
-			
-
-DNN_psi=VMC(params,train=False)
-
-# update parameters
-DNN_psi.DNN.update_params(NN_params)
-
-
-# data
-data_ints_ket = int_kets[n,inds]
-#data_ints_ket = np.array([53285923963,],dtype=np.uint64)
-
-
-spinstates_ket=np.zeros((DNN_psi.N_MC_points*DNN_psi.MC_tool.N_features,),dtype=np.int8)
-
-integer_to_spinstate(data_ints_ket, spinstates_ket, DNN_psi.N_features, NN_type=DNN_psi.DNN.NN_type)
-
-#spinstates_ket.reshape(DNN_psi.N_MC_points*DNN_psi.MC_tool.N_symm,DNN_psi.MC_tool.N_sites)
-
-
-log_psi, phase_psi = DNN_psi.evaluate_NN(NN_params, spinstates_ket.reshape(DNN_psi.N_MC_points*DNN_psi.MC_tool.N_symm,DNN_psi.MC_tool.N_sites), DNN_psi.DNN.apply_fun_args)
-
-phasepsi=np.array(phase_psi._value)
-
-modpsi=np.exp(np.array(log_psi._value))
-log_psi_shift=0.0
-
-log_psi_shift=np.log(modpsi[0])
-modpsi/=modpsi[0]
-
+log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,int_kets[n,inds], log_psi_shift=0.0)
+Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,int_kets[n,inds], log_psi_batch, phase_psi_batch, log_psi_shift=0.0)
 
 # print(log_psi, phase_psi)
 # print(np.log(modpsi_kets[n,inds]), phasepsi_kets[n,inds])
 # exit()
 
-
-DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,data_ints_ket,modpsi,phasepsi,log_psi_shift,DNN_psi.minibatch_size)
-		
-
-print(DNN_psi.E_estimator.Eloc_real)
+print(Eloc_real_batch)
 print(Eloc_real[n,inds])
 
-print(np.mean(Eloc_real), np.std(Eloc_real), np.mean(DNN_psi.E_estimator.Eloc_real), np.std(DNN_psi.E_estimator.Eloc_real))
-exit()
+#exit()
 
 
-#############################
+################
 
 
-N_MC_points=10
+spin_state_ints=data_ints_ket = np.array([int_kets[n,inds[0]-20],],dtype=np.uint64)
 
-params=dict(
-		J2= 0.5,
-		L= 6,
-		NN_dtype= 'cpx',
-		NN_shape_str= '36--6',
-		NN_type= 'DNN',
-		N_MC_chains= 4,
-		N_MC_points= N_MC_points,
-		N_batch= N_MC_points,
-		N_iterations= 3,
-		batchnorm= False,
-		load_data= False,
-		minibatch_size= 100,
-		mode= 'MC',
-		optimizer= 'NG',
-		save_data= False,
-		seed= 0,
-		start_iter= 0,
-		stop_iter= 0,
-	)
-			
+log_psi_batch, phase_psi_batch =  evaluate_DNN(NN_params,spin_state_ints, log_psi_shift=0.0)
+Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,spin_state_ints, log_psi_batch, phase_psi_batch, log_psi_shift=0.0)
 
-DNN_psi_MC=VMC(params,train=False)
+print(Eloc_real_batch)
 
-# update parameters
-DNN_psi_MC.DNN.update_params(NN_params)
-
-acceptance_ratio_g = DNN_psi_MC.MC_tool.sample(DNN_psi_MC.DNN)
-
-
-print('acc ratio:', acceptance_ratio_g)
-
-
-print('match', np.where(DNN_psi_MC.MC_tool.ints_ket==data_ints_ket[0])[0] )
-print( np.log(DNN_psi_MC.MC_tool.mod_kets) + DNN_psi_MC.MC_tool.log_psi_shift - log_psi_shift )
-
-
-print( np.log(modpsi_kets[n,:4]) - log_psi_shift )
-print( np.log(modpsi_kets[n,inds]) - log_psi_shift )
-
-
-
-#DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,data_ints_ket,modpsi,phasepsi,log_psi_shift,DNN_psi.minibatch_size)
-
-
-#data_ints_ket = np.array([DNN_psi_MC.MC_tool.ints_ket[0],],dtype=np.uint64)
-data_ints_ket = np.array([int_kets[n,inds[0]-20],],dtype=np.uint64)
-
-
-spinstates_ket=np.zeros((DNN_psi.N_MC_points*DNN_psi.MC_tool.N_features,),dtype=np.int8)
-
-integer_to_spinstate(data_ints_ket, spinstates_ket, DNN_psi.N_features, NN_type=DNN_psi.DNN.NN_type)
-
-
-
-log_psi, phase_psi = DNN_psi.evaluate_NN(NN_params, spinstates_ket.reshape(DNN_psi.N_MC_points*DNN_psi.MC_tool.N_symm,DNN_psi.MC_tool.N_sites), DNN_psi.DNN.apply_fun_args)
-phasepsi=np.array(phase_psi._value)
-
-#modpsi=np.exp(np.array(log_psi._value - log_psi_shift))
-
-modpsi=np.exp(np.array(log_psi._value))
-log_psi_shift=0.0
-
-log_psi_shift=np.log(modpsi[0])
-modpsi/=modpsi[0]
-
-
-
-DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,data_ints_ket,modpsi,phasepsi,log_psi_shift,DNN_psi.minibatch_size)
-print(DNN_psi.E_estimator.Eloc_real)
 
