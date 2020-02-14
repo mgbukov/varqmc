@@ -50,7 +50,7 @@ import datetime
 import time
 np.set_printoptions(threshold=np.inf)
 
-# import weights
+
 #from misc.MC_weights import *
 
 
@@ -88,6 +88,7 @@ class VMC(object):
 		self.start_iter=params_dict['start_iter']
 
 		### MC sampler
+		self.thermal=params_dict['MC_thermal']
 		self.N_MC_points=params_dict['N_MC_points']
 		self.N_MC_chains = params_dict['N_MC_chains'] # number of MC chains to run in parallel
 
@@ -104,7 +105,7 @@ class VMC(object):
 			if self.comm.Get_size()>1:
 				print('only one MPI process allowed for "exact" simulation.')
 				exit()
-		else:
+		elif self.mode=='MC':
 
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 			
@@ -118,6 +119,8 @@ class VMC(object):
 			# if self.N_batch//self.N_MC_chains != self.N_batch/self.N_MC_chains:
 			# 	print('number of MC chains incompatible with the total number of points:', self.N_batch//self.N_MC_chains, self.N_batch/self.N_MC_chains)
 			# 	exit()
+		else:
+			print('unrecognized operation mode!')
 			
 
 		# define batch size for GPU evaluation of local energy
@@ -285,7 +288,7 @@ class VMC(object):
 		# initiaize natural gradient class
 			
 		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.DNN.N_varl_params,compute_grad_log_psi, self.DNN.NN_Tree )
-		self.NG.debug_helper=self.debug_helper
+		self.NG.run_debug_helper=self.run_debug_helper
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
@@ -333,10 +336,10 @@ class VMC(object):
 		self.E_estimator.init_global_params(self.N_MC_points)
 		self.N_features=self.DNN.N_sites*self.DNN.N_symm
 
-	def _create_MC_sampler(self):
+	def _create_MC_sampler(self, ):
 		### initialize MC sampler variables
 		self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type)
+		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype)
 		self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
 		
 		
@@ -459,7 +462,7 @@ class VMC(object):
 		# NN parameters
 		file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
-			pickle.dump(self.DNN.params, handle, protocol=pickle.HIGHEST_PROTOCOL)
+			pickle.dump([self.DNN.params,self.DNN.apply_fun_args,self.MC_tool.log_psi_shift], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 		# data
@@ -486,47 +489,14 @@ class VMC(object):
 		config_params_yaml.close()
 
 
-	def debug_helper(self):
-
-		##### update running data
+	def run_debug_helper(self, run=False):
 		#
-		if self.comm.Get_rank()==0:
-
-			# store last n_iter data points
-			self.MC_tool.log_psi_shift_g[:-1]=self.MC_tool.log_psi_shift_g[1:]
-			self.MC_tool.ints_ket_g[:-1,...]=self.MC_tool.ints_ket_g[1:,...]
-			self.MC_tool.mod_kets_g[:-1,...]=self.MC_tool.mod_kets_g[1:,...]
-			self.MC_tool.phase_kets_g[:-1,...]=self.MC_tool.phase_kets_g[1:,...]
-
-			self.E_estimator.Eloc_real_g[:-1,...]=self.E_estimator.Eloc_real_g[1:,...]
-			self.E_estimator.Eloc_imag_g[:-1,...]=self.E_estimator.Eloc_imag_g[1:,...]
-
-			self.NG.S_lastiters[:-1,...]=self.NG.S_lastiters[1:,...]
-			self.NG.F_lastiters[:-1,...]=self.NG.F_lastiters[1:,...]
-			
-			# set last step data
-			self.MC_tool.log_psi_shift_g[-1]=self.MC_tool.log_psi_shift
-			self.NG.S_lastiters[-1,...]=self.NG.S_matrix
-			self.NG.F_lastiters[-1,...]=self.NG.F_vector
-
-		self.comm.Barrier() # Gatherv is blocking, so this is probably superfluous
-		
-		# collect data from multiple processes to root
-		self.comm.Gatherv([self.MC_tool.ints_ket,    self.E_estimator.MPI_basis_dtype], [self.MC_tool.ints_ket_g[-1,:],   self.E_estimator.MPI_basis_dtype], root=0)
-		self.comm.Gatherv([self.MC_tool.mod_kets,    MPI.DOUBLE], [self.MC_tool.mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
-		self.comm.Gatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
-
-
-		self.comm.Gatherv([self.E_estimator.Eloc_real,  MPI.DOUBLE], [self.E_estimator.Eloc_real_g[-1,:], MPI.DOUBLE], root=0)
-		self.comm.Gatherv([self.E_estimator.Eloc_imag,  MPI.DOUBLE], [self.E_estimator.Eloc_imag_g[-1,:], MPI.DOUBLE], root=0)
-
-
 		##### store data
 		# 
 		if self.comm.Get_rank()==0:
 	
 			# check for nans and infs
-			if (not np.isfinite(self.NG.S_matrix).all() ) and (not np.isfinite(self.NG.F_vector).all() ):
+			if run or ((not np.isfinite(self.NG.S_matrix).all() ) and (not np.isfinite(self.NG.F_vector).all() )):
 				
 				with open(self.debug_file_SF+'.pkl', 'wb') as handle:
 
@@ -604,25 +574,16 @@ class VMC(object):
 
 
 			##### evaluate model
-			self.get_training_data(self.DNN.params)
+			self.get_training_data(iteration,self.DNN.params)
 			#self.get_Stot_data(self.DNN.params)
 
-			# set MC sampler to re-use initial state
-			self.MC_tool.thermal=True
-
-			
-			##### check c++ and python DNN evaluation
-			# if iteration==0:
-			# 	self.MC_tool.check_consistency(self.evaluate_NN,self.DNN.params)
-			# 	if self.mode=='exact':
-			# 		np.testing.assert_allclose(self.Eloc_mean_g.real, self.E_estimator.H.expt_value(self.psi[self.inv_index]))
-
-
 			#####
-			E_str="E={0:0.14f}, E_std={1:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g ) 		
+			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g ) 		
 			if self.comm.Get_rank()==0:
 				print(E_str)
 			self.logfile.write(E_str)
+			
+
 			#exit()
 
 			if self.mode=='exact':
@@ -676,7 +637,8 @@ class VMC(object):
 			timing_matrix_filename = '/simulation_time--' + self.file_name + '.txt'
 			np.savetxt(self.data_dir+timing_matrix_filename,timing_matrix.T,delimiter=',')
 			
-
+		# store data from last 6 iterations
+		self.run_debug_helper(run=True)
 
 		# close files
 		self.logfile.close()
@@ -720,7 +682,7 @@ class VMC(object):
 
 			
 
-	def get_training_data(self,NN_params):
+	def get_training_data(self,iteration,NN_params):
 
 		##### get spin configs #####
 		if self.mode=='exact':
@@ -736,6 +698,9 @@ class VMC(object):
 			self.logfile.write(MC_str)
 			if self.comm.Get_rank()==0:
 				print(MC_str)
+
+			if iteration==0:
+				self.MC_tool.thermal=self.thermal # set MC sampler to re-use initial state
 		
 		#exit()
 
@@ -759,14 +724,18 @@ class VMC(object):
 			self.Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
 			overlap=np.abs(self.psi[self.inv_index].dot(self.E_estimator.psi_GS_exact))**2
 			self.Eloc_params_dict['overlap']=overlap
+
+			#outliers_str='mod_psi*Eloc outliers:\n   {}\n'.format(self.E_estimator.Eloc_real[self.E_estimator.inds_outliers]*abs_psi_2[self.E_estimator.inds_outliers],)
+			#print(outliers_str)
 		
 		elif self.mode=='MC':
 			self.Eloc_params_dict=dict(N_MC_points=self.N_MC_points)
 
-			# discard outliers
-			if len(self.E_estimator.inds_outliers)>0:
-				print('discarding outliars...\n')
-				self.discard_outliars()	
+
+		#discard outliers
+		# if len(self.E_estimator.inds_outliers)>0:
+		# 	print('discarding outliars...\n')
+		# 	self.discard_outliars()	
 
 		
 		self.Eloc_mean_g, self.Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(mode=self.mode,Eloc_params_dict=self.Eloc_params_dict)

@@ -11,6 +11,7 @@ batchnorm: false
 load_data: false
 minibatch_size: 100
 mode: MC
+MC_thermal: true
 optimizer: NG
 save_data: true
 seed: 0

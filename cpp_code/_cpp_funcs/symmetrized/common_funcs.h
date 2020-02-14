@@ -219,6 +219,75 @@ void int_to_spinstate(const int N,I s,J out[])
 
 
 
+template<class I>
+npy_uint32 cyclicity(const int N,I t)
+{	
+	
+	//t=ref_state(t);
+
+	int counter=0;
+	bool encountered=0;
+	
+	std::vector<I> Ts(cyclicity_factor,0);
+	Ts[counter]=t;
+	
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+
+				for(int l=0;l<2;l++){
+
+					for(int m=0;m<_L;m++){
+
+						for(int n=0;n<_L;n++){
+
+							
+						
+							t = shift_x(t);
+
+							// check if state has been encountered
+							for(int _k=0;_k<counter+1;_k++){
+								if(t==Ts[_k]){
+									encountered=1;
+									break;
+								}
+							}
+
+							// break loop if state has been encountered
+							if(encountered){
+								encountered=0;
+								break;
+							}
+							else{
+								Ts[counter]=t;
+								counter++;
+								
+							}
+
+
+								
+						}
+						t = shift_y(t);
+					}
+
+					t = inv_spin(t);
+				}
+
+				t = flip_x(t);
+			}
+			t = flip_y(t);
+		}
+		t = flip_d(t);
+	}	
+
+	return counter;	
+	
+		
+}
+
+
+
+
 template<class I, class J>
 I rep_int_to_spinstate_conv(const int N,I s,J out[])
 {	

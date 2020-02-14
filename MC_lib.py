@@ -57,14 +57,14 @@ class MC_sampler():
 
 
 
-	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,basis_type):
+	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,basis_type,MPI_basis_dtype):
 
 		self.N_batch=N_batch
 		self.N_sites=L**2
 		self.N_symm=N_symm
 		self.N_features=self.N_symm*self.N_sites	
 		self.basis_type=basis_type
-		
+		self.MPI_basis_dtype=MPI_basis_dtype
 
 		self.thermalization_time=10*self.N_sites
 		#self.auto_correlation_time=self.N_sites  # min(0.05, 0.4/acc_ratio * N_site_
@@ -95,6 +95,27 @@ class MC_sampler():
 
 		self._reset_global_vars()
 		
+	def debug_helper(self):
+
+		if self.comm.Get_rank()==0:
+
+			self.log_psi_shift_g[:-1]=self.log_psi_shift_g[1:]
+			self.ints_ket_g[:-1,...]=self.ints_ket_g[1:,...]
+			self.mod_kets_g[:-1,...]=self.mod_kets_g[1:,...]
+			self.phase_kets_g[:-1,...]=self.phase_kets_g[1:,...]
+
+			self.log_psi_shift_g[-1]=self.log_psi_shift
+			
+		self.comm.Barrier()
+
+		# collect data from multiple processes to root
+		self.comm.Gatherv([self.ints_ket,    self.MPI_basis_dtype], [self.ints_ket_g[-1,:],   self.MPI_basis_dtype], root=0)
+		self.comm.Gatherv([self.mod_kets,    MPI.DOUBLE], [self.mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
+		self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
+
+
+
+
 	'''
 	def Allgather(self):
 
@@ -165,6 +186,8 @@ class MC_sampler():
 		self.compute_acceptance_ratio(N_accepted,N_MC_proposals,mode='MC')
 			
 		
+		self.debug_helper()
+
 		return self.acceptance_ratio_g
 
 
@@ -173,7 +196,7 @@ class MC_sampler():
 
 	def exact(self,evaluate_NN,DNN):
 
-		log_psi, phase_kets = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), )
+		log_psi, phase_kets = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), DNN.apply_fun_args )
 		
 		#print(log_psi)
 		#exit()
@@ -182,6 +205,16 @@ class MC_sampler():
 		self.mod_kets[:] = jnp.exp((log_psi-self.log_psi_shift)).block_until_ready()#._value
 		#self.mod_kets = np.exp(log_psi._value)
 		self.phase_kets[:]= phase_kets#._value
+
+
+		# for j, spin_config in enumerate(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)):
+		# 	print(spin_config[0,...].reshape(4,4))
+		# 	print()
+		
+		# print(log_psi)
+		# print()
+		# exit()
+
 
 		self.compute_acceptance_ratio(0,0,mode='exact')
 

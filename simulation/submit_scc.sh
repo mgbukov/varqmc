@@ -1,7 +1,7 @@
 #!bin/bash
 let "N_mpi=130"
 let "N_omp=1"
-let "N_tot=448"
+let "N_tot=140"
 
 if [ -e  submission.sh ]
 then

@@ -1,6 +1,7 @@
 #include "numpy/ndarraytypes.h"
 #include "perm_ops.h"
 
+#define cyclicity_factor 256 //4*4*2*2*2*2
 
 
 const uint ld_bits = 4;

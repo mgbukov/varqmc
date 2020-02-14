@@ -12,6 +12,17 @@ from jax import jit, disable_jit
 import jax.numpy as jnp
 
 
+def compute_outliers(data):
+
+	q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
+	iqr = q75 - q25
+	# calculate the outlier cutoff
+	cut_off = iqr * 1.5
+	lower, upper = q25 - cut_off, q75 + cut_off
+	
+	return (lower, upper), (q25, q75, iqr)
+
+
 
 def data_stream(data,minibatch_size,sample_size,N_minibatches):
     #rng = np.random.RandomState(0)
@@ -172,7 +183,6 @@ class Energy_estimator():
 											block_order=['zblock','pdblock','pyblock','pxblock','kyblock','kxblock']
 										)
 		self.basis = spin_basis_general(self.N_sites, pauli=False, Nup=self.N_sites//2)
-
 		
 		self.H=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis,dtype=np.float64) #
 		
@@ -231,8 +241,17 @@ class Energy_estimator():
 		#self.SdotS_real_tot=np.zeros(N_MC_points,dtype=np.float64)
 		#self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
 
-		#self.Eloc_real_g=np.zeros()
 
+	def debug_helper(self):
+
+		if self.comm.Get_rank()==0:
+			self.Eloc_real_g[:-1,...]=self.Eloc_real_g[1:,...]
+			self.Eloc_imag_g[:-1,...]=self.Eloc_imag_g[1:,...]
+
+		self.comm.Barrier() # Gatherv is blocking, so this is probably superfluous
+		
+		self.comm.Gatherv([self.Eloc_real,  MPI.DOUBLE], [self.Eloc_real_g[-1,:], MPI.DOUBLE], root=0)
+		self.comm.Gatherv([self.Eloc_imag,  MPI.DOUBLE], [self.Eloc_imag_g[-1,:], MPI.DOUBLE], root=0)
 
 
 	def _reset_locenergy_params(self,SdotS=False):
@@ -386,15 +405,38 @@ class Energy_estimator():
 			update_diag_ME(ints_ket,self.Eloc_real,opstr,indx,J) 
 
 		
-		# check variance of E_loc and discard states: allowed spread: 1000 times Energy of GS
-		self.inds_outliers=np.where(np.abs(np.abs(self.Eloc_real) - np.abs(self.E_GS_density_approx)*self.L**2) > 1000.0)[0]
-		outliers_str='Eloc outlier inds:\n   {}\n'.format(self.inds_outliers)
+		#################################
+		#
+		# check variance of E_loc 
+		self.debug_helper()
+
+
+		"""
+		lower, upper = 0.0,0.0
+		q25, q75, iqr = 0.0, 0.0, 0.0
+		if self.comm.Get_rank()==0:
+			(lower, upper), (q25, q75, iqr) = compute_outliers(self.Eloc_real_g[-1,...])
+		lower = self.comm.bcast(lower, root=0)
+		upper = self.comm.bcast(upper, root=0)
+		q25 = self.comm.bcast(q25, root=0)
+		q75 = self.comm.bcast(q75, root=0)
+		iqr = self.comm.bcast(iqr, root=0)
+
+		# identify outliers
+		#outliers = [Eloc_s for Eloc_s in self.Eloc_real if Eloc_s < lower or Eloc_s > upper]
+		self.inds_outliers=np.where( np.logical_or(self.Eloc_real < lower , self.Eloc_real > upper) )[0]
+
+		#outliers_str='Eloc outliers:\n   {0}\nwith inds:\n   {1}\n'.format(self.Eloc_real[self.inds_outliers],self.inds_outliers)
+		outliers_stats_str='Percentiles: 25th={0:.3f}, 75th={1:.3f}, IQR={2:.3f}.\n'.format(q25, q75, iqr, )
+		outliers_str='Eloc outliers:\n   {}\n'.format(self.Eloc_real[self.inds_outliers],)
 
 		if self.logfile!=None:
+			self.logfile.write(outliers_stats_str)
 			self.logfile.write(outliers_str)
-		if self.comm.Get_rank()==0:
-			print(outliers_str)
-
+	
+		print(outliers_stats_str)
+		print(outliers_str)
+		"""
 
 		if SdotS:
 			self.SdotS_real=2.0*self.Eloc_real # double off-diagonal contribution
@@ -446,6 +488,9 @@ class Energy_estimator():
 			E_diff_real=self.Eloc_real-Eloc_mean_g.real
 			E_diff_imag=self.Eloc_imag-Eloc_mean_g.imag
 
+
+		self.Eloc_mean_g=Eloc_mean_g
+		self.Eloc_var_g=Eloc_var_g
 
 		return Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag
 

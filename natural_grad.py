@@ -69,7 +69,7 @@ class natural_gradient():
 			self.S_lastiters=np.array([[None],[None]])
 			self.F_lastiters=np.array([[None],[None]])
 
-		self.debug_helper=None
+		self.run_debug_helper=None
 		self.debug_mode=True
 
 		self.iteration=0
@@ -87,6 +87,22 @@ class natural_gradient():
 		self.counter=0
 		
 		
+	def debug_helper(self):
+
+		if self.comm.Get_rank()==0:
+
+			# store last n_iter data points
+			
+			self.S_lastiters[:-1,...]=self.S_lastiters[1:,...]
+			self.F_lastiters[:-1,...]=self.F_lastiters[1:,...]
+			
+			# set last step data
+			self.S_lastiters[-1,...]=self.S_matrix
+			self.F_lastiters[-1,...]=self.F_vector
+
+		self.comm.Barrier() # Gatherv is blocking, so this is probably superfluous
+		
+
 	
 	def compute_fisher_metric(self,mode='MC',Eloc_params_dict=None):
 		
@@ -155,7 +171,7 @@ class natural_gradient():
 			abs_psi_2=Eloc_params_dict['abs_psi_2'].copy()
 			self.E_diff_weighted*=abs_psi_2
 			self.F_vector[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
-						 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
+						     + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
 
 		elif mode=='MC':
 			# self.F_vector[:] = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real)/self.N_MC_points \
@@ -224,10 +240,7 @@ class natural_gradient():
 
 
 			exit()
-		
 
-
-		#exit()
 
 
 	def compute(self,NN_params,batch,Eloc_params_dict,mode='MC',):
@@ -237,12 +250,16 @@ class natural_gradient():
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 
+
 		### compute natural_gradients using cg
 		# regularize Fisher metric
-		#self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
-		
-		#if self.TDVP_type=='real':
-		self.S_matrix += self.delta*np.eye(self.S_matrix.shape[0]) # better regularization properties
+		# S_str="NG: norm(S)={0:0.14f}, norm(diag(S))={1:0.14f}\n".format(np.linalg.norm(self.S_matrix),self.delta*np.linalg.norm(np.diag(self.S_matrix)))
+		# print(S_str)
+
+		self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
+		#self.S_matrix += self.delta*np.linalg.norm(self.S_matrix)*np.eye(self.S_matrix.shape[0]) 
+
+		self.debug_helper()
 
 		#self.nat_grad=np.linalg.inv(self.S_matrix).dot(self.F_vector)
 
@@ -255,7 +272,7 @@ class natural_gradient():
 		
 		if self.debug_mode:
 			# run debug helper	
-			self.debug_helper()
+			self.run_debug_helper()
 			
 			# check for symmetry and positivity
 			if self.check_on and self.TDVP_type=='real':
@@ -273,8 +290,8 @@ class natural_gradient():
 			#self.nat_grad, info, iter_ = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
 			if self.TDVP_type=='real':
 				self.nat_grad, info = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
-			elif self.TDVP_type=='cpx':
-				self.nat_grad, info = bicg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
+			# elif self.TDVP_type=='cpx':
+			# 	self.nat_grad, info = bicg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
 			 
 			# 
 			if info>0:
@@ -283,10 +300,6 @@ class natural_gradient():
 				
 
 
-
-		#print(self.nat_grad)
-		#exit()
-	
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
 
@@ -311,7 +324,6 @@ class natural_gradient():
 
 		if self.delta>self.tol:
 			self.delta *= np.exp(-0.075*self_time)
-			#self.delta *= np.exp(-0.075)
 		# else:
 		# 	self.delta=0.0
 

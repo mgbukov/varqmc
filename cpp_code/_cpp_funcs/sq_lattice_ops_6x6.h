@@ -1,6 +1,6 @@
 #include "numpy/ndarraytypes.h"
 
-//#define cyclicity_factor 576 //6*6*2*2*2*2
+#define cyclicity_factor 576 //6*6*2*2*2*2
 //#define N_symms 288 //6*6*2*2*2 // no Z symemtry
 
 

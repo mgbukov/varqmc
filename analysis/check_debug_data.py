@@ -49,9 +49,21 @@ import yaml
 # discard_outliears: TRUE
 # MC_thermal: TRUE
 
-n=-2 # steps before final blow-up
-max_iter=338 # last iteration with saved data
-data_name='2020-02-08_05:53:59_NG/' # 
+# n=-2 # steps before final blow-up
+# max_iter=338 # last iteration with saved data
+# data_name='2020-02-08_05:53:59_NG/' # 
+
+
+###################
+
+
+###################
+# discard_outliears: TRUE
+# MC_thermal: TRUE
+
+n=-5 # steps before final blow-up
+max_iter=349 # last iteration with saved data
+data_name='2020-02-11_09:19:46_NG/' # 
 
 
 ###################
@@ -61,7 +73,8 @@ data_name='2020-02-08_05:53:59_NG/' #
 
 
 load_dir='data/' + data_name 
-params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_20000-Nprss_130-NMCchains_1'
+#params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_20000-Nprss_130-NMCchains_1'
+params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_200-Nprss_2-NMCchains_1'
 
 
 
@@ -95,16 +108,15 @@ with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
 
 print('\niteration number: {0:d} with {1:d} unique spin configs.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0]))
 
-uq=np.unique(int_kets[n,:])
-print(uq.shape)
 
-print(Eloc_real[n,:20])
+# print(Eloc_real[n,:20])
 
-print(modpsi_kets[n,:20])
+# print(modpsi_kets[n,:20])
 
-print(phasepsi_kets[n,:20])
+# print(phasepsi_kets[n,:20])
 
-exit()
+
+#exit()
 
 
 
@@ -121,12 +133,43 @@ exit()
 
 
 #inds=np.where(np.abs(Eloc_real[n,:])>32000.0)[0]
-inds=np.where(np.abs(Eloc_real[n,:])>50.0)[0]
+#inds=np.where(np.abs(Eloc_real[n,:])>50.0)[0]
+inds=np.where(np.abs(Eloc_real[n,:]+18.0)>4.0)[0]
 
 
-print(inds)
+#print(inds)
 #print(int_kets[n,inds])
-print(Eloc_real[n,inds])
+#print(Eloc_real[n,inds])
+
+
+ind_c=np.ones(Eloc_real[n,:].shape[0],dtype=bool)
+ind_c[inds]=False
+
+print(inds.shape, Eloc_real[n,inds])
+
+print(np.mean(Eloc_real[n,:]),np.std(Eloc_real[n,:]),) 
+print(np.mean(Eloc_real[n,ind_c]),np.std(Eloc_real[n,ind_c]) )
+
+
+
+
+data=Eloc_real[n,:]
+
+q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
+iqr = q75 - q25
+print('Percentiles: 25th=%.3f, 75th=%.3f, IQR=%.3f' % (q25, q75, iqr))
+# calculate the outlier cutoff
+cut_off = iqr * 1.5
+lower, upper = q25 - cut_off, q75 + cut_off
+# identify outliers
+outliers = [x for x in data if x < lower or x > upper]
+reamainers = [x for x in data if x >= lower and x <= upper]
+
+print(outliers)
+
+print(np.mean(reamainers), np.mean(data))
+
+
 exit()
 
 #inds=np.where(np.logical_and(np.abs(Eloc_real[n,:])>=16.5, np.abs(Eloc_real[n,:])<=16.8))[0]

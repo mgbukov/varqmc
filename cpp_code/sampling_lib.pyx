@@ -134,6 +134,8 @@ cdef extern from "sample.h":
     void int_to_spinstate[T,J](const int,T ,J []) nogil
     void int_to_spinstate_conv[T,J](const int,T ,J []) nogil
 
+    T cyclicity[T](const int,T) nogil
+
     T rep_int_to_spinstate[T,J](const int,T ,J []) nogil
     T rep_int_to_spinstate_conv[T,J](const int,T ,J []) nogil
 
@@ -169,6 +171,17 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
         for i in range (Ns):
             spin_config(Nsites,states[i],&out[i*N_features])
 
+
+@cython.boundscheck(False)
+def integer_cyclicity(basis_type[:] states,np.npy_uint32[::1] cycl):
+    cdef int i;
+    cdef int Ns=states.shape[0];
+    cdef int Nsites=N_sites;
+    
+
+    with nogil:
+        for i in range (Ns):
+            cycl[i]=cyclicity(Nsites,states[i])
 
 
 @cython.boundscheck(False)
@@ -436,7 +449,7 @@ cdef class Neural_Net:
         self.mod_psi_s=np.zeros(self.N_MC_chains,dtype=np.float64)
         self.mod_psi_t=np.zeros(self.N_MC_chains,dtype=np.float64)
 
-        self.sf_vec=np.zeros(self.N_MC_chains,dtype=basis_type_py)
+        self.sf_vec=((1<<(self.N_sites//2))-1) * np.ones(self.N_MC_chains,dtype=basis_type_py)
 
         ###############################################################
 
@@ -752,7 +765,7 @@ cdef class Neural_Net:
             s=s0;
         else:
             s=(one<<(self.N_sites//2))-one;
-            for l in range(self.N_sites):
+            for l in range(4*self.N_sites):
                 t=s;
                 while(t==s):
                     _i = self.random_int(rng)
@@ -761,8 +774,8 @@ cdef class Neural_Net:
                 s=t;
 
            
-            # store initial state
-            s0_vec[chain_n] = s;
+        # store initial state for reproducibility
+        s0_vec[chain_n] = s;
 
             
         

@@ -93,5 +93,10 @@ def load_params():
 	return NN_params
 
 
-#print(NN_params)
+# print(load_params()[0][0].shape)
+# exit()
+
+#Energie=-8.4508979
+#Varianz=0.03984668378
+
 
