@@ -60,6 +60,7 @@ class natural_gradient():
 		self.tol=1E-7 # CG tolerance
 		self.delta=100.0 # S-matrix regularizer
 		self.S_norm=0.0 # S-matrix norm
+		self.F_norm=0.0 # S-matrix norm
 
 		if self.comm.Get_rank()==0:
 			n_iter=6
@@ -253,9 +254,6 @@ class natural_gradient():
 
 		### compute natural_gradients using cg
 		# regularize Fisher metric
-		# S_str="NG: norm(S)={0:0.14f}, norm(diag(S))={1:0.14f}\n".format(np.linalg.norm(self.S_matrix),self.delta*np.linalg.norm(np.diag(self.S_matrix)))
-		# print(S_str)
-
 		self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
 		#self.S_matrix += self.delta*np.linalg.norm(self.S_matrix)*np.eye(self.S_matrix.shape[0]) 
 
@@ -280,6 +278,7 @@ class natural_gradient():
 
 		# compute norm
 		self.S_norm=np.linalg.norm(self.S_matrix)
+		self.F_norm=np.linalg.norm(self.F_vector)
 
 		#######################################################
 

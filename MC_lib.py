@@ -177,7 +177,7 @@ class MC_sampler():
 		### gather seeds
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_g, MPI.INT])
+			self.comm.Allgatherv([self.s0,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
 		else:
 			self.s0_g=self.s0.copy()
 

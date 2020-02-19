@@ -20,9 +20,11 @@ plt.tick_params(labelsize=20)
 
 ################
 
-load_dir='data/2020-02-03_12:43:02_NG/'
+#load_dir='data/2020-02-03_12:43:02_NG/' # 36x6
+load_dir='data/2020-02-14_22:57:49_NG/' # 36x8
 
-params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_20000-Nprss_130-NMCchains_1'
+#params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_20000-Nprss_130-NMCchains_1'
+params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--8-MCpts_20000-Nprss_130-NMCchains_1'
 
 
 
@@ -34,7 +36,7 @@ iteration=300
 file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
 
 with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
-	NN_params = pickle.load(handle)
+	NN_params, _, _ = pickle.load(handle)
 
 mins=[]
 maxs=[]

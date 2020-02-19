@@ -462,7 +462,7 @@ class VMC(object):
 		# NN parameters
 		file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
-			pickle.dump([self.DNN.params,self.DNN.apply_fun_args,self.MC_tool.log_psi_shift], handle, protocol=pickle.HIGHEST_PROTOCOL)
+			pickle.dump([self.DNN.params,self.DNN.apply_fun_args,self.MC_tool.log_psi_shift,self.params_update], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 		# data
@@ -473,7 +473,7 @@ class VMC(object):
 		self.file_r2.write("{0:d} : {1:0.14f}\n".format(iteration, r2))
 
 		self.file_MC_data.write("{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])   +   ' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "   +   ' '.join(str(s) for s in self.MC_tool.s0_g)+"\n") #		
-		self.file_opt_data.write("{0:06d} : {1:0.10f} : {2:0.10f} : {3:0.10f} : {4:0.10f} : {5:0.10f}\n".format(self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, self.NG.S_norm))
+		self.file_opt_data.write("{0:06d} : {1:0.10f} : {2:0.10f} : {3:0.10f} : {4:0.10f} : {5:0.10f} : {6:0.10f}\n".format(self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, self.NG.S_norm, self.NG.F_norm))
 
 
 		
@@ -578,8 +578,9 @@ class VMC(object):
 			#self.get_Stot_data(self.DNN.params)
 
 			#####
-			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g ) 		
+			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g, ) 		
 			if self.comm.Get_rank()==0:
+				E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g).shape[0] )
 				print(E_str)
 			self.logfile.write(E_str)
 			
@@ -767,6 +768,7 @@ class VMC(object):
 			# compute updated NN parameters
 			self.DNN.update_params(self.NG.Runge_Kutta(self.DNN.params,self.batch,self.Eloc_params_dict,self.mode,self.get_training_data))
 			loss=self.NG.max_grads
+			grads=self.NG.dy_star - 1.0/6.0*(self.NG.dy-self.NG.dy_star)
 
 		else:
 			##### compute gradients
@@ -776,7 +778,7 @@ class VMC(object):
 				loss=self.NG.max_grads
 				self.NG.update_params() # update NG params
 
-				S_str="NG: norm(S)={0:0.14f}\n".format(self.NG.S_norm) 		
+				S_str="NG: norm(S)={0:0.14f}, norm(F)={0:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm) 		
 				if self.comm.Get_rank()==0:
 					print(S_str)
 				self.logfile.write(S_str)
@@ -799,6 +801,8 @@ class VMC(object):
 			
 		##### compute loss
 		r2=self.NG.r2_cost
+
+		self.params_update=grads
 
 		#print(self.DNN.params[2][0])
 		#print(self.DNN.params[2][1])

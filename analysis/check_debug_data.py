@@ -61,20 +61,46 @@ import yaml
 # discard_outliears: TRUE
 # MC_thermal: TRUE
 
-n=-5 # steps before final blow-up
-max_iter=349 # last iteration with saved data
-data_name='2020-02-11_09:19:46_NG/' # 
+# n=-5 # steps before final blow-up
+# max_iter=349 # last iteration with saved data
+# data_name='2020-02-11_09:19:46_NG/' # 
 
 
 ###################
 
+# discard_outliears: FALSE
+# MC_thermal: TRUE
+
+
+# n=-4 # steps before final blow-up
+# max_iter=328 # last iteration with saved data
+# data_name='2020-02-14_22:57:49_NG/' # 36x8
+# L=6
+
+###################
+
+# discard_outliears: FALSE
+# MC_thermal: TRUE
+
+
+n=-6 # steps before final blow-up
+max_iter=259 # last iteration with saved data
+data_name='2020-02-18_15:34:03_NG/' # 16x6
+L=4
+
+###################
 
 #### load debug data
 
 
 load_dir='data/' + data_name 
+
+params_str='model_DNNcpx-mode_MC-L_4-J2_0.5-opt_NG-NNstrct_16--6-MCpts_20000-Nprss_130-NMCchains_1'
 #params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_20000-Nprss_130-NMCchains_1'
-params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_200-Nprss_2-NMCchains_1'
+
+#params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--8-MCpts_20000-Nprss_130-NMCchains_1'
+
+#params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_200-Nprss_2-NMCchains_1'
 
 
 
@@ -101,20 +127,24 @@ iteration=max_iter+n+1
 file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
 
 with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
-	NN_params = pickle.load(handle)
+	NN_params, apply_fun_args, apply_fun_args_dyn = pickle.load(handle)
 
 
 ######################
 
-print('\niteration number: {0:d} with {1:d} unique spin configs.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0]))
+print('\niteration number: {0:d} with {1:d} unique spin configs & {2:d} unique Elocs.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0], np.unique(Eloc_real[n,:].round(decimals=10)).shape[0]))
+
+
+print(np.min(F_lastiters[n,:]), np.max(F_lastiters[n,:]), )
+print(np.min(S_lastiters[n,:]), np.max(S_lastiters[n,:]), ) 
+#exit()
+
 
 
 # print(Eloc_real[n,:20])
-
 # print(modpsi_kets[n,:20])
-
 # print(phasepsi_kets[n,:20])
-
+# print()
 
 #exit()
 
@@ -127,6 +157,7 @@ print('\niteration number: {0:d} with {1:d} unique spin configs.\n'.format(itera
 # MC_tool = MC_sample(NN_params,N_MC_points=10)
 # print(MC_tool.ints_ket)
 
+# exit()
 
 ######################
 
@@ -134,7 +165,7 @@ print('\niteration number: {0:d} with {1:d} unique spin configs.\n'.format(itera
 
 #inds=np.where(np.abs(Eloc_real[n,:])>32000.0)[0]
 #inds=np.where(np.abs(Eloc_real[n,:])>50.0)[0]
-inds=np.where(np.abs(Eloc_real[n,:]+18.0)>4.0)[0]
+#inds=np.where(np.abs(Eloc_real[n,:]+18.0)>4.0)[0]
 
 
 #print(inds)
@@ -142,20 +173,20 @@ inds=np.where(np.abs(Eloc_real[n,:]+18.0)>4.0)[0]
 #print(Eloc_real[n,inds])
 
 
-ind_c=np.ones(Eloc_real[n,:].shape[0],dtype=bool)
-ind_c[inds]=False
+# ind_c=np.ones(Eloc_real[n,:].shape[0],dtype=bool)
+# ind_c[inds]=False
 
-print(inds.shape, Eloc_real[n,inds])
+# print(inds.shape, Eloc_real[n,inds])
 
-print(np.mean(Eloc_real[n,:]),np.std(Eloc_real[n,:]),) 
-print(np.mean(Eloc_real[n,ind_c]),np.std(Eloc_real[n,ind_c]) )
+# print(np.mean(Eloc_real[n,:]),np.std(Eloc_real[n,:]),) 
+# print(np.mean(Eloc_real[n,ind_c]),np.std(Eloc_real[n,ind_c]) )
 
 
 
 
 data=Eloc_real[n,:]
 
-q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
+q25, q75 = np.percentile(data, 5), np.percentile(data, 95)
 iqr = q75 - q25
 print('Percentiles: 25th=%.3f, 75th=%.3f, IQR=%.3f' % (q25, q75, iqr))
 # calculate the outlier cutoff
@@ -165,8 +196,11 @@ lower, upper = q25 - cut_off, q75 + cut_off
 outliers = [x for x in data if x < lower or x > upper]
 reamainers = [x for x in data if x >= lower and x <= upper]
 
-print(outliers)
+print(np.array(outliers).shape)
 
+#print(np.min(outliers), np.max(outliers))
+
+print(np.sort(outliers))
 print(np.mean(reamainers), np.mean(data))
 
 
@@ -174,19 +208,56 @@ exit()
 
 #inds=np.where(np.logical_and(np.abs(Eloc_real[n,:])>=16.5, np.abs(Eloc_real[n,:])<=16.8))[0]
 
+# kets=np.array([65280, 65152, 65088, 65040, 65032, 65028, 65025, 64704, 64672, 64656, 64648, 64644,
+#  64642, 64641, 64560, 64552, 64548, 64546, 64545, 64524, 64522, 64521, 64515, 64160,
+#  64136, 64132, 64130, 64080, 64072, 64068, 64065, 64010, 64005, 63712, 63696, 63684,
+#  63682, 63681, 63656, 63652, 63650, 63600, 63592, 63585, 63576, 63570, 61680, 61057,
+#  60993, 60945, 60804, 60802, 60801, 60744, 60738, 60737, 60705, 60690, 60577, 60562,
+#  60561, 60513, 60498, 60497, 60483, 60468, 60466, 60465, 60453, 60451, 60438, 60435,
+#  60290, 60225, 60180, 60097, 60065, 60052, 60050, 60037, 60035, 59992, 59988, 59985,
+#  59977, 59973, 59930, 59925, 59812, 59752, 59745, 59730, 59715, 59700, 59685, 59570,
+#  59505, 58788, 58785, 58545, 57825, 52275, 51795, 51765, 51510, 50115, 42405,],dtype=np.uint16)
 
 
-log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,int_kets[n,inds], log_psi_shift=0.0)
-Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,int_kets[n,inds], log_psi_batch, phase_psi_batch, log_psi_shift=0.0)
+kets, inds, inv_index, count=np.unique(int_kets[n,:].astype(np.uint16), return_index=True, return_inverse=True, return_counts=True)
+	
+
+kets=np.array([43940],dtype=np.uint16)
+
+print(np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0])
+
+print(Eloc_real[n,np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0]] )
+print(modpsi_kets[n,np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0]])
+
+int_to_spinconfig(kets[0],L)
+
+exit()	
+
+
+#inds=np.arange(107).astype(np.uint16)
+
+
+# log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,int_kets[n,inds], log_psi_shift=0.0, L=L)
+# Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,int_kets[n,inds], log_psi_batch, phase_psi_batch, log_psi_shift=0.0, L=L)
+
+log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,kets, log_psi_shift=log_psi_shift[n], L=L)
+# print(log_psi_batch)
+# print()
+# exit()
+Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,kets, log_psi_batch, phase_psi_batch, log_psi_shift=log_psi_shift[n], L=L)
+
 
 # print(log_psi, phase_psi)
 # print(np.log(modpsi_kets[n,inds]), phasepsi_kets[n,inds])
 # exit()
 
-print(Eloc_real_batch)
-print(Eloc_real[n,inds])
 
-#exit()
+print(np.min(Eloc_real_batch), np.max(Eloc_real_batch),)
+
+# print(Eloc_real_batch[:10])
+# print(Eloc_real[n,inds][:10])
+
+exit()
 
 
 ################
@@ -194,8 +265,8 @@ print(Eloc_real[n,inds])
 
 spin_state_ints=data_ints_ket = np.array([int_kets[n,inds[0]-20],],dtype=np.uint64)
 
-log_psi_batch, phase_psi_batch =  evaluate_DNN(NN_params,spin_state_ints, log_psi_shift=0.0)
-Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,spin_state_ints, log_psi_batch, phase_psi_batch, log_psi_shift=0.0)
+log_psi_batch, phase_psi_batch =  evaluate_DNN(NN_params,spin_state_ints, log_psi_shift=0.0, L=L)
+Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,spin_state_ints, log_psi_batch, phase_psi_batch, log_psi_shift=0.0, L=L)
 
 print(Eloc_real_batch)
 

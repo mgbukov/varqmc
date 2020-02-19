@@ -3,10 +3,10 @@ L: 6
 NN_dtype: cpx
 #NN_shape_str: 36--6
 NN_type: DNN
-N_MC_chains: 1
+N_MC_chains: 2
 N_MC_points: 200
 #N_batch: 170
-N_iterations: 3
+N_iterations: 3 #500
 batchnorm: false
 load_data: false
 minibatch_size: 100

@@ -374,7 +374,10 @@ class Energy_estimator():
 		# cos_phase_kets=np.cos(phase_kets)/mod_kets
 		# sin_phase_kets=np.sin(phase_kets)/mod_kets
 
+
+		# print(np.exp(log_psi_bras)/mod_kets)
 		# print(log_psi_bras)
+		# print(np.log(mod_kets))
 		# exit()
 
 		#######
@@ -397,6 +400,11 @@ class Energy_estimator():
 
 		self.Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets
 		self.Eloc_imag = self._Eloc_sin*cos_phase_kets - self._Eloc_cos*sin_phase_kets
+
+
+		#print(self._Eloc_cos*cos_phase_kets)
+		#print(np.max(self._Eloc_sin*sin_phase_kets))
+		#exit()
 
 		# diag matrix elements, only real part
 		for opstr,indx,J in static_list_diag:
