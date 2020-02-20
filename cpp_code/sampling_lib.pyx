@@ -33,10 +33,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -323,7 +323,8 @@ cdef class Neural_Net:
             # define DNN
             self.NN_architecture = {
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                #    'nonlin_1': Poly_cpx,
+                                    'nonlin_1': Poly_cpx,
+                                    'norm_1': Norm_real(),
                                 #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
                                 #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
                                 #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
@@ -543,10 +544,11 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
-        # apply logcosh nonlinearity
-        Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
-        #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        # Re_Ws, Im_Ws = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
+        # #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        Re_z, Im_z = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
 
         # symmetrize
         log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -565,10 +567,11 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
-        # apply logcosh nonlinearity
-        Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
-        #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
+        # # apply logcosh nonlinearity
+        # Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
+        # #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
+        Re_z, Im_z = self.apply_layer(params,batch,kwargs=apply_fun_args)
 
         # symmetrize
         log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -593,11 +596,11 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
-        # apply logcosh nonlinearity
-        Re_z = poly_real((Re_Ws, Im_Ws))
-        #Re_z = logcosh_real((Re_Ws, Im_Ws))
-
+        # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        # # apply logcosh nonlinearity
+        # Re_z = poly_real((Re_Ws, Im_Ws))
+        # #Re_z = logcosh_real((Re_Ws, Im_Ws))
+        Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
        
         # symmetrize
         log_psi = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
@@ -619,11 +622,11 @@ cdef class Neural_Net:
         batch=batch.reshape(self.input_shape)
 
         # apply dense layer
-        Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
-        # apply logcosh nonlinearity
-        Im_z = poly_imag((Re_Ws, Im_Ws))
-        #Im_z = logcosh_imag((Re_Ws, Im_Ws))
- 
+        # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        # # apply logcosh nonlinearity
+        # Im_z = poly_imag((Re_Ws, Im_Ws))
+        # #Im_z = logcosh_imag((Re_Ws, Im_Ws))
+        Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
 
         # symmetrize
         phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])

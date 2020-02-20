@@ -248,7 +248,7 @@ def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
 
 # nonlinearities
 
-#@jit
+@jit
 def poly_cpx(x):
     x_real, x_imag = x
     Re = 0.5*x_real**2 - 0.0833333*x_real**4 + 0.0222222*x_real**6 - 0.5*x_imag**2 + 0.5*x_real**2*x_imag**2 - 0.333333*x_real**4*x_imag**2 - 0.0833333*x_imag**4 + 0.333333*x_real**2*x_imag**4 - 0.0222222*x_imag**6
@@ -256,14 +256,14 @@ def poly_cpx(x):
     return Re, Im
 
 
-#@jit
+@jit
 def poly_real(x):
     x_real, x_imag = x
     Re_z = 0.5*x_real**2 - 0.0833333*x_real**4 + 0.0222222*x_real**6 - 0.5*x_imag**2 + 0.5*x_real**2*x_imag**2 - 0.333333*x_real**4*x_imag**2 - 0.0833333*x_imag**4 + 0.333333*x_real**2*x_imag**4 - 0.0222222*x_imag**6
     return Re_z
 
 
-#@jit
+@jit
 def poly_imag(x):
     x_real, x_imag = x
     Im_z = x_real*x_imag - 0.333333*x_real**3*x_imag + 0.133333*x_real**5*x_imag + 0.333333*x_real*x_imag**3 - 0.444444*x_real**3*x_imag**3 + 0.133333*x_real*x_imag**5
@@ -504,6 +504,42 @@ def init_batchnorm_cpx_params(input_shape):
 
 
 
+def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
+    """Layer construction function for a batch normalization layer."""
+    _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
+    _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
+    
+    def init_fun(rng, input_shape):
+        shape = (1,)
+        k1, k2 = random.split(rng)
+        k2, k3 = random.split(k2)
+
+        a = _a_init(k1, shape)
+        b = _b_init(k2, shape)+10.0
+        c = _a_init(k3, shape)
+        
+        return input_shape, (a,b,c)
+
+    def apply_fun(params, x, a=1.0, b=+10.0, c=1.0, **kwargs):
+        #a,b,c   = params
+        x_real, x_imag = x
+
+        a=jnp.abs(a)
+        x_real= c*(jnp.where(x_real < b, a*(x_real-b), -jnp.expm1(-a*(x_real-b)), ) + a*b)
+
+        #x_real=0.1*jnp.tanh(a*x_real)
+        
+        #x_real=-jnp.log(jnp.cosh(x_real-1.0))
+        #x_real/=6*128.
+
+        # print(x_real)
+        # exit()
+
+        return (x_real, x_imag)
+        
+    return init_fun, apply_fun
+
+
 
 ###############
 
@@ -552,7 +588,7 @@ def elementwise(fun, **fun_kwargs):
 
 LogCosh_cpx=elementwise(logcosh_cpx)
 Poly_cpx=elementwise(poly_cpx)
-Normalize_cpx=elementwise(normalize_cpx)
+#Normalize_cpx=elementwise(normalize_cpx)
 
 
 
