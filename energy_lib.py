@@ -301,7 +301,6 @@ class Energy_estimator():
 			indx=np.asarray(indx,dtype=np.int32)
 			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J,self.N_symm,self.NN_type)
 			
-
 			self._MEs[nn:nn+n]=self._MEs_holder[self._ints_ket_ind_holder[:n]]
 			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[self._ints_ket_ind_holder[:n]]
 			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[self._ints_ket_ind_holder[:n]]
@@ -341,7 +340,6 @@ class Energy_estimator():
 			# preallocate data
 			log_psi_bras=np.zeros(nn_uq,dtype=np.float64)
 			phase_psi_bras=np.zeros(nn_uq,dtype=np.float64)
-
 
 			for j in range(N_minibatches):
 

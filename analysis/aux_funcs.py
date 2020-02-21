@@ -17,30 +17,34 @@ def int_to_spinconfig(s,L):
 	print(S.reshape(L,L))
 
 
-def MC_sample(NN_params,N_MC_points=10,L=6 ):
+def MC_sample(load_dir,NN_params,N_MC_points=10,):
 
-	params=dict(
-			J2= 0.5,
-			L= L,
-			NN_dtype= 'cpx',
-			NN_shape_str= '36--6',
-			NN_type= 'DNN',
-			N_MC_chains= 4,
-			N_MC_points= N_MC_points,
-			N_batch= N_MC_points,
-			N_iterations= 3,
-			batchnorm= False,
-			load_data= False,
-			minibatch_size= 100,
-			mode= 'MC',
-			grad_update_mode= 'normal',
-			MC_thermal= True,
-			optimizer= 'NG',
-			save_data= False,
-			seed= 0,
-			start_iter= 0,
-			stop_iter= 0,
-		)			
+	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
+	params['N_MC_points']=N_MC_points
+	params['save_data']=False
+
+	# params=dict(
+	# 		J2= 0.5,
+	# 		L= L,
+	# 		NN_dtype= 'cpx',
+	# 		NN_shape_str= '36--6',
+	# 		NN_type= 'DNN',
+	# 		N_MC_chains= 4,
+	# 		N_MC_points= N_MC_points,
+	# 		N_batch= N_MC_points,
+	# 		N_iterations= 3,
+	# 		batchnorm= False,
+	# 		load_data= False,
+	# 		minibatch_size= 100,
+	# 		mode= 'MC',
+	# 		grad_update_mode= 'normal',
+	# 		MC_thermal= True,
+	# 		optimizer= 'NG',
+	# 		save_data= False,
+	# 		seed= 0,
+	# 		start_iter= 0,
+	# 		stop_iter= 0,
+	# 	)			
 
 	DNN_psi_MC=VMC(params,train=False)
 	DNN_psi_MC.DNN.update_params(NN_params)
@@ -51,32 +55,11 @@ def MC_sample(NN_params,N_MC_points=10,L=6 ):
 	return DNN_psi_MC.MC_tool
 
 
-def evaluate_DNN(NN_params, spin_configs, log_psi_shift=0.0,L=6):
+def evaluate_DNN(load_dir,NN_params, spin_configs, log_psi_shift=0.0,):
 
-	N_MC_points=spin_configs.shape[0]
-
-	params=dict(
-		J2= 0.5,
-		L= L,
-		NN_dtype= 'cpx',
-		NN_shape_str= '36--6',
-		NN_type= 'DNN',
-		N_MC_chains= 1,
-		N_MC_points= N_MC_points,
-		N_batch= N_MC_points,
-		N_iterations= 3,
-		batchnorm= False,
-		load_data= False,
-		minibatch_size= 100,
-		mode= 'MC',
-		grad_update_mode= 'normal',
-		MC_thermal= True,
-		optimizer= 'NG',
-		save_data= False,
-		seed= 0,
-		start_iter= 0,
-		stop_iter= 0,
-	)	
+	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
+	params['N_MC_points']=spin_configs.shape[0]
+	params['save_data']=False
 
 	DNN_psi=VMC(params,train=False)
 	DNN_psi.DNN.update_params(NN_params)
@@ -91,32 +74,34 @@ def evaluate_DNN(NN_params, spin_configs, log_psi_shift=0.0,L=6):
 	return log_psi._value - log_psi_shift,   phase_psi._value
 
 
-def compute_Eloc(NN_params,spin_configs,log_psi,phase_psi,log_psi_shift=0.0,L=6):
+def compute_Eloc(load_dir,NN_params,ints_ket,log_psi,phase_psi,log_psi_shift=0.0,):
 
-	N_MC_points=log_psi.shape[0]
+	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
+	params['N_MC_points']=log_psi.shape[0]
+	params['save_data']=False
 
-	params=dict(
-		J2= 0.5,
-		L= L,
-		NN_dtype= 'cpx',
-		NN_shape_str= '36--6',
-		NN_type= 'DNN',
-		N_MC_chains= 1,
-		N_MC_points= N_MC_points,
-		N_batch= N_MC_points,
-		N_iterations= 3,
-		batchnorm= False,
-		load_data= False,
-		minibatch_size= 100,
-		mode= 'MC',
-		MC_thermal= True,
-		grad_update_mode= 'normal',
-		optimizer= 'NG',
-		save_data= False,
-		seed= 0,
-		start_iter= 0,
-		stop_iter= 0,
-	)	
+	# params=dict(
+	# 	J2= 0.5,
+	# 	L= L,
+	# 	NN_dtype= 'cpx',
+	# 	NN_shape_str= '36--6',
+	# 	NN_type= 'DNN',
+	# 	N_MC_chains= 1,
+	# 	N_MC_points= N_MC_points,
+	# 	N_batch= N_MC_points,
+	# 	N_iterations= 3,
+	# 	batchnorm= False,
+	# 	load_data= False,
+	# 	minibatch_size= 100,
+	# 	mode= 'MC',
+	# 	MC_thermal= True,
+	# 	grad_update_mode= 'normal',
+	# 	optimizer= 'NG',
+	# 	save_data= False,
+	# 	seed= 0,
+	# 	start_iter= 0,
+	# 	stop_iter= 0,
+	# )	
 
 	DNN_psi=VMC(params,train=False)
 	DNN_psi.DNN.update_params(NN_params)
@@ -125,11 +110,10 @@ def compute_Eloc(NN_params,spin_configs,log_psi,phase_psi,log_psi_shift=0.0,L=6)
 
 
 	phase_psi=np.array(phase_psi)
-	mod_psi=np.exp(np.array(log_psi))
+	log_psi=np.array(log_psi)
 
 
-
-	DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,DNN_psi.DNN.params,spin_configs,mod_psi,phase_psi,log_psi_shift,DNN_psi.minibatch_size)
+	DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,DNN_psi.DNN.params,ints_ket,log_psi,phase_psi,log_psi_shift,DNN_psi.minibatch_size)
 
 	return DNN_psi.E_estimator.Eloc_real, DNN_psi.E_estimator.Eloc_imag
 

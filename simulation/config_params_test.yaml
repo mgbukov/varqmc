@@ -4,13 +4,13 @@ NN_dtype: cpx
 #NN_shape_str: 36--6
 NN_type: DNN
 N_MC_chains: 2
-N_MC_points: 107 # 20000 #
+N_MC_points: 107 # 200 #
 #N_batch: 170
 N_iterations: 500
 batchnorm: false
 load_data: false
 minibatch_size: 100
-mode: exact # MC #  
+mode: exact #  MC # 
 grad_update_mode: normal # phase  # alternating #  log_mod
 MC_thermal: true
 optimizer: NG

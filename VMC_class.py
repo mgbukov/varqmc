@@ -102,8 +102,7 @@ class VMC(object):
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
 			assert(self.L==4)
-			assert(self.N_MC_points==107) # 107 states in the symmetry reduced sector for L=4
-
+			
 			self.N_batch=self.N_MC_points#
 			if self.comm.Get_size()>1:
 				print('only one MPI process allowed for "exact" simulation.')
@@ -509,7 +508,7 @@ class VMC(object):
 
 		
 		self.debug_file_SF=self.savefile_dir_debug + 'debug-SF_data'+'--' + self.file_name
-		self.debug_file_logpsi=self.savefile_dir_debug + 'debug-modpsi_data'+'--' + self.file_name
+		self.debug_file_logpsi=self.savefile_dir_debug + 'debug-logpsi_data'+'--' + self.file_name
 		self.debug_file_phasepsi=self.savefile_dir_debug + 'debug-phasepsi_data'+'--' + self.file_name
 		self.debug_file_intkets=self.savefile_dir_debug + 'debug-intkets_data'+'--' + self.file_name
 		self.debug_file_Eloc=self.savefile_dir_debug + 'debug-Eloc_data'+'--' + self.file_name
@@ -672,6 +671,8 @@ class VMC(object):
 
 
 		if self.mode=='exact':
+			assert(self.N_MC_points==107) # 107 states in the symmetry reduced sector for L=4
+
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.DNN.NN_type)
 

@@ -199,6 +199,9 @@ class MC_sampler():
 		# exit()
 
 
+		self.debug_helper()
+
+
 		self.compute_acceptance_ratio(0,0,mode='exact')
 
 
