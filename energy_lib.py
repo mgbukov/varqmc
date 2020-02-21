@@ -190,6 +190,7 @@ class Energy_estimator():
 
 		ref_states, index, inv_index, count=np.unique(self.basis_symm.representative(self.basis.states), return_index=True, return_inverse=True, return_counts=True)
 		self.ref_states=ref_states
+		self.count=count
 
 		# j=1#5
 		# y=np.zeros(self.H.Ns)
@@ -278,7 +279,7 @@ class Energy_estimator():
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)	
 
 
-	def compute_local_energy(self,evaluate_NN,DNN,NN_params,ints_ket,mod_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
+	def compute_local_energy(self,evaluate_NN,DNN,NN_params,ints_ket,log_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
 		
 
 		if SdotS:
@@ -345,7 +346,6 @@ class Energy_estimator():
 			for j in range(N_minibatches):
 
 				batch, batch_idx = next(batches)
-				
 				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
 				
 				# with disable_jit():
@@ -368,17 +368,26 @@ class Energy_estimator():
 
 
 
-		# Eloc_cos=self._MEs[:nn]*np.exp(log_psi_bras)*np.cos(phase_psi_bras)
-		# Eloc_sin=self._MEs[:nn]*np.exp(log_psi_bras)*np.sin(phase_psi_bras)
+		# Eloc_cos=self._MEs[:nn]*np.exp(log_psi_bras-log_kets)*np.cos(phase_psi_bras)
+		# Eloc_sin=self._MEs[:nn]*np.exp(log_psi_bras-log_kets)*np.sin(phase_psi_bras)
 		
-		# cos_phase_kets=np.cos(phase_kets)/mod_kets
-		# sin_phase_kets=np.sin(phase_kets)/mod_kets
+		# cos_phase_kets=np.cos(phase_kets)
+		# sin_phase_kets=np.sin(phase_kets)
 
+		# indxs=(np.exp(log_psi_bras-log_kets)>1.0)
 
-		# print(np.exp(log_psi_bras)/mod_kets)
+		# print(np.exp(log_psi_bras-log_kets))
+		# print()
 		# print(log_psi_bras)
-		# print(np.log(mod_kets))
-		# exit()
+		# print()
+		# print( (Eloc_cos*cos_phase_kets) )
+		# print()
+		# print( (Eloc_cos*cos_phase_kets)[indxs] )
+		# print()
+		# print(Eloc_cos.sum()*cos_phase_kets, Eloc_sin.sum()*sin_phase_kets)
+		# print()
+		# print(np.log(log_kets))
+		#exit()
 
 		#######
 
@@ -391,16 +400,17 @@ class Energy_estimator():
 
 		# compute real and imaginary part of local energy
 		self._n_per_term=self._n_per_term[self._n_per_term>0]
-		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term,self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras)
+		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term,self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras,log_kets)
 		
 
-		cos_phase_kets=np.cos(phase_kets)/mod_kets
-		sin_phase_kets=np.sin(phase_kets)/mod_kets
+		cos_phase_kets=np.cos(phase_kets)
+		sin_phase_kets=np.sin(phase_kets)
 
 
 		self.Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets
 		self.Eloc_imag = self._Eloc_sin*cos_phase_kets - self._Eloc_cos*sin_phase_kets
 
+		#print(self.Eloc_real)
 
 		# diag matrix elements, only real part
 		for opstr,indx,J in static_list_diag:
@@ -409,6 +419,9 @@ class Energy_estimator():
 			update_diag_ME(ints_ket,self.Eloc_real,opstr,indx,J) 
 
 		
+		#print(self.Eloc_real)
+		#exit()
+
 		#################################
 		#
 		# check variance of E_loc 

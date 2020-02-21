@@ -73,7 +73,7 @@ class MC_sampler():
 	
 		self.ints_ket=np.zeros((N_batch,),dtype=self.basis_type)
 		#self.ints_ket_reps=np.zeros_like(self.ints_ket)
-		self.mod_kets=np.zeros((N_batch,),dtype=np.float64)
+		self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 
@@ -81,11 +81,11 @@ class MC_sampler():
 		self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
 		if self.comm.Get_rank()==0:
 			self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
-			self.mod_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
+			self.log_mod_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
 			self.phase_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
 		else:
 			self.ints_ket_g=np.array([[None],[None]])
-			self.mod_kets_g=np.array([[None],[None]])
+			self.log_mod_kets_g=np.array([[None],[None]])
 			self.phase_kets_g=np.array([[None],[None]])
 
 
@@ -101,7 +101,7 @@ class MC_sampler():
 
 			self.log_psi_shift_g[:-1]=self.log_psi_shift_g[1:]
 			self.ints_ket_g[:-1,...]=self.ints_ket_g[1:,...]
-			self.mod_kets_g[:-1,...]=self.mod_kets_g[1:,...]
+			self.log_mod_kets_g[:-1,...]=self.log_mod_kets_g[1:,...]
 			self.phase_kets_g[:-1,...]=self.phase_kets_g[1:,...]
 
 			self.log_psi_shift_g[-1]=self.log_psi_shift
@@ -110,29 +110,11 @@ class MC_sampler():
 
 		# collect data from multiple processes to root
 		self.comm.Gatherv([self.ints_ket,    self.MPI_basis_dtype], [self.ints_ket_g[-1,:],   self.MPI_basis_dtype], root=0)
-		self.comm.Gatherv([self.mod_kets,    MPI.DOUBLE], [self.mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
+		self.comm.Gatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
 		self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
 
 
 
-
-	'''
-	def Allgather(self):
-
-		self.mod_kets_tot*=0.0
-
-		
-		
-		#self.comm.Allgatherv([self.spinstates_ket,  MPI.DOUBLE], [self.spinstates_ket_tot, MPI.DOUBLE])
-		self.comm.Allgatherv([self.mod_kets,    MPI.DOUBLE], [self.mod_kets_tot,   MPI.DOUBLE])
-		self.comm.Allgatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_tot, MPI.DOUBLE])
-
-
-		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_g, MPI.INT])
-		else:
-			self.s0_g=self.s0.copy()
-	'''	
 	
 	def _reset_global_vars(self):
 		self.spinstates_ket=np.zeros((self.N_batch*self.N_features,),dtype=np.int8)
@@ -145,9 +127,11 @@ class MC_sampler():
 		#assert(self.spinstates_ket.max()==0)
 
 		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
-												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0, self.thermal,
+												self.spinstates_ket,self.ints_ket,self.log_mod_kets,self.s0, self.thermal,
 												)
 
+		#print(self.ints_ket)
+		#exit()
 
 		if compute_phases:
 			self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), )#._value
@@ -156,22 +140,19 @@ class MC_sampler():
 		### normalize all kets
 		#
 		self.log_psi_shift=0.0
-		self.mod_psi_norm=1.0
-
+		
 		# compute global max
-		local_max=np.max(self.mod_kets).astype(np.float64)
+		local_max=np.max(self.log_mod_kets).astype(np.float64)
 		global_max=np.zeros(1, dtype=np.float64)
 		self.comm.Reduce(local_max, global_max, op=MPI.MAX) # broadcast to root=0
 		
 		if self.comm.Get_rank()==0:
-			self.log_psi_shift=np.log(global_max[0])
-			self.mod_psi_norm=global_max[0]
+			self.log_psi_shift=global_max[0]
 		# broadcast sys_data
 		self.log_psi_shift = self.comm.bcast(self.log_psi_shift, root=0)
-		self.mod_psi_norm = self.comm.bcast(self.mod_psi_norm, root=0)
 		#
 		# normalize
-		self.mod_kets/=self.mod_psi_norm
+		self.log_mod_kets-=self.log_psi_shift
 
 
 		### gather seeds
@@ -194,17 +175,19 @@ class MC_sampler():
 
 
 
-	def exact(self,evaluate_NN,DNN):
+	def exact(self,evaluate_NN,DNN, E_estimator,):
 
-		log_psi, phase_kets = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), DNN.apply_fun_args )
+		self.log_mod_kets[:], self.phase_kets[:] = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), DNN.apply_fun_args )
 		
-		#print(log_psi)
+		#print(self.log_mod_kets)
 		#exit()
 
-		self.log_psi_shift=log_psi[0]._value
-		self.mod_kets[:] = jnp.exp((log_psi-self.log_psi_shift)).block_until_ready()#._value
-		#self.mod_kets = np.exp(log_psi._value)
-		self.phase_kets[:]= phase_kets#._value
+		#print("MEAN log_psi: ",  np.sum(E_estimator.count*self.log_mod_kets)/E_estimator.basis.Ns,  np.max(self.log_mod_kets)  )
+		#exit()
+
+		self.log_psi_shift=np.max(self.log_mod_kets[:])#._value
+		self.log_mod_kets[:] -= self.log_psi_shift 
+		
 
 
 		# for j, spin_config in enumerate(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)):
@@ -219,42 +202,3 @@ class MC_sampler():
 		self.compute_acceptance_ratio(0,0,mode='exact')
 
 
-	'''
-	def check_consistency(self,evaluate_NN,NN_params):
-
-		# reshape
-		spinstates_ket=self.spinstates_ket.reshape(-1,self.N_symm,self.N_sites)
-		
-		# combine results from all cores
-		mod_kets_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-		phase_kets_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-
-		log_psi_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-		phase_psi_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-		
-		self.comm.Allgather([self.mod_kets,  MPI.DOUBLE], [mod_kets_tot, MPI.DOUBLE])
-		self.comm.Allgather([self.phase_kets,  MPI.DOUBLE], [phase_kets_tot, MPI.DOUBLE])
-		
-
-		# evaluate network in python
-		log_psi, phase_psi = evaluate_NN(NN_params,spinstates_ket) 
-		log_psi-=self.log_psi_shift
-
-		self.comm.Allgather([log_psi._value,  MPI.DOUBLE], [log_psi_tot, MPI.DOUBLE])
-		self.comm.Allgather([phase_psi._value,  MPI.DOUBLE], [phase_psi_tot, MPI.DOUBLE])
-		
-
-
-		# print(phase_kets_tot)
-		# print(phase_psi)
-		# # print()
-		# print(mod_kets_tot)
-		# print(np.exp(log_psi))
-		# print(mod_kets_tot-np.exp(log_psi))
-		# exit()
-
-		
-		# test results for consistency
-		np.testing.assert_allclose(phase_psi_tot, phase_kets_tot)
-		np.testing.assert_allclose(np.exp(log_psi_tot), mod_kets_tot)
-	'''

@@ -502,7 +502,8 @@ void offdiag_sum(int Ns,
 				npy_uint32 ket_ind[],
 				double MEs[],
 				const double log_psi_bras[],
-				const double phase_psi_bras[]
+				const double phase_psi_bras[],
+				const double log_psi_kets[]
 	)
 {
 	int n_cum=0;
@@ -518,7 +519,7 @@ void offdiag_sum(int Ns,
 			
 			//cout << l << " , "<< i << " , "<< n << " , "<<j<< " , " << Eloc_cos[ket_ind[j]] << " , " << ket_ind[j] << " , " << psi_bras[j] << " , " << std::cos(phase_psi_bras[j]) << endl;
 			
-			aux=MEs[j] * std::exp(log_psi_bras[j]);
+			aux=MEs[j] * std::exp(log_psi_bras[j]-log_psi_kets[ket_ind[j]]);
 
 			Eloc_cos[ket_ind[j]] += aux * std::cos(phase_psi_bras[j]);
 			Eloc_sin[ket_ind[j]] += aux * std::sin(phase_psi_bras[j]);

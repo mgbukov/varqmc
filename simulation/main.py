@@ -6,7 +6,7 @@ import yaml
 
 # export KMP_DUPLICATE_LIB_OK=TRUE
 # export OMP_NUM_THREADS=4
-# mpiexec -n 2 python main.py --test
+# mpiexec -n 4 python main.py --test
 
 if len(sys.argv) < 2:
     params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)

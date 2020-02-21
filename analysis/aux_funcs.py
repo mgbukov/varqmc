@@ -33,6 +33,7 @@ def MC_sample(NN_params,N_MC_points=10,L=6 ):
 			load_data= False,
 			minibatch_size= 100,
 			mode= 'MC',
+			grad_update_mode= 'normal',
 			MC_thermal= True,
 			optimizer= 'NG',
 			save_data= False,
@@ -68,6 +69,7 @@ def evaluate_DNN(NN_params, spin_configs, log_psi_shift=0.0,L=6):
 		load_data= False,
 		minibatch_size= 100,
 		mode= 'MC',
+		grad_update_mode= 'normal',
 		MC_thermal= True,
 		optimizer= 'NG',
 		save_data= False,
@@ -108,6 +110,7 @@ def compute_Eloc(NN_params,spin_configs,log_psi,phase_psi,log_psi_shift=0.0,L=6)
 		minibatch_size= 100,
 		mode= 'MC',
 		MC_thermal= True,
+		grad_update_mode= 'normal',
 		optimizer= 'NG',
 		save_data= False,
 		seed= 0,
@@ -126,7 +129,7 @@ def compute_Eloc(NN_params,spin_configs,log_psi,phase_psi,log_psi_shift=0.0,L=6)
 
 
 
-	DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,spin_configs,mod_psi,phase_psi,log_psi_shift,DNN_psi.minibatch_size)
+	DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,DNN_psi.DNN.params,spin_configs,mod_psi,phase_psi,log_psi_shift,DNN_psi.minibatch_size)
 
 	return DNN_psi.E_estimator.Eloc_real, DNN_psi.E_estimator.Eloc_imag
 

@@ -17,6 +17,7 @@ from jax.nn import (relu, log_softmax, softmax, softplus, sigmoid, elu,
                     leaky_relu, selu, gelu, normalize)
 from jax.nn.initializers import glorot_normal, normal, ones, zeros
 
+
 # aliases for backwards compatibility
 #glorot = glorot_normal
 #randn = normal
@@ -515,22 +516,26 @@ def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float
         k2, k3 = random.split(k2)
 
         a = _a_init(k1, shape)
-        b = _b_init(k2, shape)+10.0
+        b = -0.01 + _b_init(k2, shape)
         c = _a_init(k3, shape)
         
-        return input_shape, (a,b,c)
+        return input_shape, (b,)
 
-    def apply_fun(params, x, a=1.0, b=+10.0, c=1.0, **kwargs):
-        #a,b,c   = params
+    def apply_fun(params, x, a=1.0, b=+0.0, c=1.0, **kwargs):
+        b,   = params
         x_real, x_imag = x
 
-        a=jnp.abs(a)
-        x_real= c*(jnp.where(x_real < b, a*(x_real-b), -jnp.expm1(-a*(x_real-b)), ) + a*b)
 
-        #x_real=0.1*jnp.tanh(a*x_real)
+        print('MEAN', np.mean(x_real), np.std(x_real), x_real.shape)
+
+
+        #a=jnp.abs(a)
+        #x_real= c*(jnp.where(x_real < b, a*(x_real-b), -jnp.expm1(-a*(x_real-b)), ) + a*b)
+
+        x_real=a*jnp.tanh((x_real-b)/a) + b
         
-        #x_real=-jnp.log(jnp.cosh(x_real-1.0))
-        #x_real/=6*128.
+        print('MEAN post', np.mean(x_real), np.std(x_real), x_real.shape)
+
 
         # print(x_real)
         # exit()

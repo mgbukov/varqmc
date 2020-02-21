@@ -83,22 +83,31 @@ import yaml
 # MC_thermal: TRUE
 
 
-n=-6 # steps before final blow-up
-max_iter=259 # last iteration with saved data
-data_name='2020-02-18_15:34:03_NG/' # 16x6
-L=4
+# n=-6 # steps before final blow-up
+# max_iter=259 # last iteration with saved data
+# data_name='2020-02-18_15:34:03_NG/' # 16x6
+# L=4
 
 ###################
+
+# discard_outliears: FALSE
+# MC_thermal: TRUE
+
+
+n=-5 # steps before final blow-up
+max_iter=455 # last iteration with saved data
+data_name='2020-02-19_20:15:07_NG/' # 36x8
+L=6
 
 #### load debug data
 
 
 load_dir='data/' + data_name 
 
-params_str='model_DNNcpx-mode_MC-L_4-J2_0.5-opt_NG-NNstrct_16--6-MCpts_20000-Nprss_130-NMCchains_1'
+#params_str='model_DNNcpx-mode_MC-L_4-J2_0.5-opt_NG-NNstrct_16--6-MCpts_20000-Nprss_130-NMCchains_1'
 #params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_20000-Nprss_130-NMCchains_1'
 
-#params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--8-MCpts_20000-Nprss_130-NMCchains_1'
+params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--8-MCpts_20000-Nprss_130-NMCchains_1'
 
 #params_str='model_DNNcpx-mode_MC-L_6-J2_0.5-opt_NG-NNstrct_36--6-MCpts_200-Nprss_2-NMCchains_1'
 
@@ -111,7 +120,7 @@ with open(load_dir + 'debug_files/' + 'debug-' + 'SF_data--' + params_str + '.pk
 	S_lastiters, F_lastiters, delta = pickle.load(handle)
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'modpsi_data--' + params_str + '.pkl', 'rb') as handle:
-	modpsi_kets, log_psi_shift = pickle.load(handle)
+	modpsi_kets, _ = pickle.load(handle)
 	#modpsi_kets, = pickle.load(handle)
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'phasepsi_data--' + params_str + '.pkl', 'rb') as handle:
@@ -119,6 +128,10 @@ with open(load_dir + 'debug_files/' + 'debug-' + 'phasepsi_data--' + params_str 
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str + '.pkl', 'rb') as handle:
 	int_kets, = pickle.load(handle)
+	if L==4:
+		int_kets.astype(np.uint16)
+	else:
+		int_kets.astype(np.uint64) 
 
 
 ######################
@@ -127,7 +140,7 @@ iteration=max_iter+n+1
 file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
 
 with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
-	NN_params, apply_fun_args, apply_fun_args_dyn = pickle.load(handle)
+	NN_params, apply_fun_args, log_psi_shift = pickle.load(handle)
 
 
 ######################
@@ -135,8 +148,12 @@ with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
 print('\niteration number: {0:d} with {1:d} unique spin configs & {2:d} unique Elocs.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0], np.unique(Eloc_real[n,:].round(decimals=10)).shape[0]))
 
 
-print(np.min(F_lastiters[n,:]), np.max(F_lastiters[n,:]), )
-print(np.min(S_lastiters[n,:]), np.max(S_lastiters[n,:]), ) 
+# print("norm_layer", NN_params[-1])
+
+
+
+print("F_vector:", np.min(F_lastiters[n,:]), np.max(F_lastiters[n,:]), )
+print("S_matrix:", np.min(S_lastiters[n,:]), np.max(S_lastiters[n,:]), ) 
 #exit()
 
 
@@ -186,7 +203,9 @@ print(np.min(S_lastiters[n,:]), np.max(S_lastiters[n,:]), )
 
 data=Eloc_real[n,:]
 
-q25, q75 = np.percentile(data, 5), np.percentile(data, 95)
+#q25, q75 = np.percentile(data, 5), np.percentile(data, 99.6)
+#q25, q75 = np.percentile(data, 0.05), np.percentile(data, 99.95)
+q25, q75 = np.percentile(data, 0.3), np.percentile(data, 99.62)
 iqr = q75 - q25
 print('Percentiles: 25th=%.3f, 75th=%.3f, IQR=%.3f' % (q25, q75, iqr))
 # calculate the outlier cutoff
@@ -198,15 +217,15 @@ reamainers = [x for x in data if x >= lower and x <= upper]
 
 print(np.array(outliers).shape)
 
-#print(np.min(outliers), np.max(outliers))
+print(np.min(outliers), np.max(outliers))
 
-print(np.sort(outliers))
+#print(np.sort(outliers))
 print(np.mean(reamainers), np.mean(data))
 
 
-exit()
+#exit()
 
-#inds=np.where(np.logical_and(np.abs(Eloc_real[n,:])>=16.5, np.abs(Eloc_real[n,:])<=16.8))[0]
+#############
 
 # kets=np.array([65280, 65152, 65088, 65040, 65032, 65028, 65025, 64704, 64672, 64656, 64648, 64644,
 #  64642, 64641, 64560, 64552, 64548, 64546, 64545, 64524, 64522, 64521, 64515, 64160,
@@ -219,32 +238,48 @@ exit()
 #  59505, 58788, 58785, 58545, 57825, 52275, 51795, 51765, 51510, 50115, 42405,],dtype=np.uint16)
 
 
-kets, inds, inv_index, count=np.unique(int_kets[n,:].astype(np.uint16), return_index=True, return_inverse=True, return_counts=True)
-	
+#kets, inds, inv_index, count=np.unique(int_kets[n,:].astype(np.uint16), return_index=True, return_inverse=True, return_counts=True)
+#kets=np.array([43940],dtype=np.uint16)
 
-kets=np.array([43940],dtype=np.uint16)
+# print(np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0])
 
-print(np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0])
+# print(Eloc_real[n,np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0]] )
+# print(modpsi_kets[n,np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0]])
 
-print(Eloc_real[n,np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0]] )
-print(modpsi_kets[n,np.where(int_kets[n,:].astype(np.uint16)==kets[0])[0]])
+# int_to_spinconfig(kets[0],L)
 
-int_to_spinconfig(kets[0],L)
+# exit()
 
-exit()	
+# log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,kets, log_psi_shift=log_psi_shift[n], L=L)
+# Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,kets, log_psi_batch, phase_psi_batch, log_psi_shift=log_psi_shift[n], L=L)
 
+
+##############
+#inds=np.where(np.logical_and(np.abs(Eloc_real[n,:])>=16.5, np.abs(Eloc_real[n,:])<=16.8))[0]
+inds=[np.where(np.in1d(Eloc_real[n,:], outliers)) [0][-1]]
+
+print(modpsi_kets[n,inds[0]-70:inds[0]+2])
+
+print(int_kets[n,inds[0]-70:inds[0]+2])
+
+int_to_spinconfig(int_kets[n,inds][0],L)
+
+print(np.max(modpsi_kets[n,:]), np.mean(modpsi_kets[n,:]))
+
+#print(np.sort(modpsi_kets[n,:])[:-3])
+
+print(inds[0]+2)
+
+print(modpsi_kets[n,:])
+
+#exit()
 
 #inds=np.arange(107).astype(np.uint16)
 
 
-# log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,int_kets[n,inds], log_psi_shift=0.0, L=L)
-# Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,int_kets[n,inds], log_psi_batch, phase_psi_batch, log_psi_shift=0.0, L=L)
+log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,int_kets[n,inds], log_psi_shift=0, L=L)
+Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,int_kets[n,inds], log_psi_batch, phase_psi_batch, log_psi_shift=0, L=L)
 
-log_psi_batch, phase_psi_batch = evaluate_DNN(NN_params,kets, log_psi_shift=log_psi_shift[n], L=L)
-# print(log_psi_batch)
-# print()
-# exit()
-Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,kets, log_psi_batch, phase_psi_batch, log_psi_shift=log_psi_shift[n], L=L)
 
 
 # print(log_psi, phase_psi)
@@ -254,8 +289,8 @@ Eloc_real_batch,Eloc_imag_batch = compute_Eloc(NN_params,kets, log_psi_batch, ph
 
 print(np.min(Eloc_real_batch), np.max(Eloc_real_batch),)
 
-# print(Eloc_real_batch[:10])
-# print(Eloc_real[n,inds][:10])
+#print(Eloc_real_batch[:10])
+#print(Eloc_real[n,inds][:10])
 
 exit()
 

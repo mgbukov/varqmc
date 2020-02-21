@@ -212,7 +212,7 @@ class VMC(object):
 
 		
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 6], 
+			self.shapes=dict(layer_1 = [self.L**2, 8], 
 						#	 layer_2 = [12       ,  6],
 						#	 layer_3 = [4       ,  2], 
 						)
@@ -242,8 +242,8 @@ class VMC(object):
 		# jit functions
 		self.evaluate_NN_dyn=self.DNN.evaluate_dyn
 		
-		self.evaluate_NN=jit(self.DNN.evaluate)
-		#self.evaluate_NN=self.DNN.evaluate
+		#self.evaluate_NN=jit(self.DNN.evaluate)
+		self.evaluate_NN=self.DNN.evaluate
 		
 		#self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
 		
@@ -509,7 +509,7 @@ class VMC(object):
 
 		
 		self.debug_file_SF=self.savefile_dir_debug + 'debug-SF_data'+'--' + self.file_name
-		self.debug_file_modpsi=self.savefile_dir_debug + 'debug-modpsi_data'+'--' + self.file_name
+		self.debug_file_logpsi=self.savefile_dir_debug + 'debug-modpsi_data'+'--' + self.file_name
 		self.debug_file_phasepsi=self.savefile_dir_debug + 'debug-phasepsi_data'+'--' + self.file_name
 		self.debug_file_intkets=self.savefile_dir_debug + 'debug-intkets_data'+'--' + self.file_name
 		self.debug_file_Eloc=self.savefile_dir_debug + 'debug-Eloc_data'+'--' + self.file_name
@@ -521,9 +521,9 @@ class VMC(object):
 			common_str =  self.file_name + '.txt'
 
 			self.file_energy= create_open_file(self.savefile_dir+'energy--'+common_str)
-			self.file_energy_std= create_open_file(self.savefile_dir+'energy_std--'+common_str)
+			#self.file_energy_std= create_open_file(self.savefile_dir+'energy_std--'+common_str)
 			self.file_loss= create_open_file(self.savefile_dir+'loss--'+common_str)
-			self.file_r2= create_open_file(self.savefile_dir+'r2--'+common_str)
+			#self.file_r2= create_open_file(self.savefile_dir+'r2--'+common_str)
 			self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram--'+common_str)
 
 			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data--'+common_str)
@@ -535,34 +535,46 @@ class VMC(object):
 		
 
 		
-	def _compute_phase_hist(self, phases, amplds):
-
+	def _compute_phase_hist(self, phases, weigths):
+								
 		# compute histogram
 		n_bins=40
+	
 		#binned_phases=np.linspace(-np.pi,np.pi, n_bins, endpoint=True)
 
-		# shift phases
+		# shift phases to (-pi,pi)
 		phases = (phases+np.pi)%(2*np.pi) - np.pi
-		hist, bin_edges = np.histogram(phases ,bins=n_bins,range=(-np.pi,np.pi), density=False, weights=amplds**2)
-		phase_hist = hist*np.diff(bin_edges)
+		#
+		# density=False: normalization for MC happens after MPI gathers all data
+		if self.mode=='exact':
+			phase_hist, bin_edges = np.histogram(phases ,bins=n_bins,range=(-np.pi,np.pi), density=False, weights=weigths)
+		elif self.mode=='MC':
+			phase_hist, bin_edges = np.histogram(phases ,bins=n_bins,range=(-np.pi,np.pi), density=False, )
+			#phase_hist = phase_hist*np.diff(bin_edges)
 
-		return phase_hist
+
+		phase_hist_tot=np.zeros_like(phase_hist).astype(np.float64)
+		self.comm.Allreduce(phase_hist.astype(np.float64), phase_hist_tot, op=MPI.SUM)
+		phase_hist_tot/=phase_hist_tot.sum() # normalize histogram
+		
+		return phase_hist_tot
 
 
-	def check_point(self, iteration, loss, r2, phase_hist):
+	def check_point(self, iteration,):
 			
 		# NN parameters
 		file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
 			pickle.dump([self.DNN.params,self.DNN.apply_fun_args,self.MC_tool.log_psi_shift,], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+	def save_sim_data(self, iteration, loss, r2, phase_hist):
 
 		# data
-		self.file_energy.write("{0:d} : {1:0.14f} : {2:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag))
-		self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
+		self.file_energy.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.E_MC_std_g))
+		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
 		
-		self.file_loss.write("{0:d} : {1:0.14f} : {2:0.14f}\n".format(iteration, loss[0], loss[1]))
-		self.file_r2.write("{0:d} : {1:0.14f}\n".format(iteration, r2))
+		self.file_loss.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f}\n".format(iteration, loss[0], loss[1], r2))
+		#self.file_r2.write("{0:d} : {1:0.14f}\n".format(iteration, r2))
 
 		self.file_MC_data.write("{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])   +   ' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "   +   ' '.join(str(s) for s in self.MC_tool.s0_g)+"\n") #		
 		self.file_opt_data.write("{0:d} : {1:05d} : {2:0.10f} : {3:0.10f} : {4:0.10f} : {5:0.10f} : {6:0.10f} : {7:0.10f} : {8:0.10f} : {9:0.10f}\n".format(iteration, self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm,))
@@ -606,9 +618,9 @@ class VMC(object):
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
-				with open(self.debug_file_modpsi+'.pkl', 'wb') as handle:
+				with open(self.debug_file_logpsi+'.pkl', 'wb') as handle:
 
-					pickle.dump([self.MC_tool.mod_kets_g, self.MC_tool.log_psi_shift_g], 
+					pickle.dump([self.MC_tool.log_mod_kets_g, self.MC_tool.log_psi_shift_g], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
@@ -646,7 +658,7 @@ class VMC(object):
 		inds=self.E_estimator.inds_outliers
 
 		self.MC_tool.spinstates_ket[inds,...]=0
-		self.MC_tool.mod_kets[inds]=0.0
+		self.MC_tool.log_mod_kets[inds]=0.0
 		self.MC_tool.phase_kets[inds]=0.0
 
 		self.E_estimator.Eloc_real[inds]=0.0
@@ -700,22 +712,30 @@ class VMC(object):
 				self.logfile.write('overlap = {0:0.4f}.\n\n'.format(self.Eloc_params_dict['overlap']) )
 
 			
-			#### update model parameters
+			
 			if iteration<self.N_iterations-1:
-				
-				# update weights
+
+
+				#### check point DNN parameters
+				if self.comm.Get_rank()==0 and self.save_data:
+					self.check_point(iteration)
+
+
+				#### update DNN parameters
 				loss, r2 = self.update_NN_params(iteration)
 
-				##### store data
-				phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.MC_tool.mod_kets)
 
-				phase_hist_tot=np.zeros_like(phase_hist)
-				self.comm.Allreduce(phase_hist, phase_hist_tot, op=MPI.SUM)
-				phase_hist_tot/=phase_hist_tot.sum()
+				##### store simulation data
+				if self.mode=='exact':		
+					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.Eloc_params_dict['abs_psi_2'])
+				else:
+					mod_psi_2=np.exp(2.0*(self.MC_tool.log_mod_kets-self.MC_tool.log_psi_shift))
+					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,mod_psi_2)
 
 
 				if self.comm.Get_rank()==0 and self.save_data:
-					self.check_point(iteration,loss,r2,phase_hist)
+					self.save_sim_data(iteration,loss,r2,phase_hist)
+
 
 			
 			prss_time=time.time()-ti
@@ -753,9 +773,9 @@ class VMC(object):
 		# close files
 		self.logfile.close()
 		self.file_energy.close()
-		self.file_energy_std.close()
+		#self.file_energy_std.close()
 		self.file_loss.close()
-		self.file_r2.close()
+		#self.file_r2.close()
 		self.file_phase_hist.close()
 
 
@@ -796,7 +816,7 @@ class VMC(object):
 
 		##### get spin configs #####
 		if self.mode=='exact':
-			self.MC_tool.exact(self.evaluate_NN,self.DNN)
+			self.MC_tool.exact(self.evaluate_NN,self.DNN, self.E_estimator)
 			
 		elif self.mode=='MC':
 			ti=time.time()
@@ -817,7 +837,7 @@ class VMC(object):
 
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.evaluate_NN,self.DNN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.minibatch_size)
+		self.E_estimator.compute_local_energy(self.evaluate_NN,self.DNN,NN_params,self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.minibatch_size)
 		
 		Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		self.logfile.write(Eloc_str)
@@ -826,17 +846,20 @@ class VMC(object):
 
 
 		if self.mode=='exact':
-			#print(self.MC_tool.mod_kets)
-			self.psi = self.MC_tool.mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(self.MC_tool.mod_kets[self.inv_index])
+			mod_kets=np.exp(self.MC_tool.log_mod_kets)
+			self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
 			abs_psi_2=self.count*np.abs(self.psi)**2
-			#print(abs_psi_2)
-			#exit()
+
+			# print('abs_psi_2')
+			# print(mod_kets)
+			# print(abs_psi_2)
+			# print(np.sum(abs_psi_2), np.linalg.norm(mod_kets[self.inv_index]), self.MC_tool.log_psi_shift, np.mean(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.min(self.MC_tool.log_mod_kets))
+
 			self.Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
 			overlap=np.abs(self.psi[self.inv_index].dot(self.E_estimator.psi_GS_exact))**2
 			self.Eloc_params_dict['overlap']=overlap
 
-			#outliers_str='mod_psi*Eloc outliers:\n   {}\n'.format(self.E_estimator.Eloc_real[self.E_estimator.inds_outliers]*abs_psi_2[self.E_estimator.inds_outliers],)
-			#print(outliers_str)
+
 		
 		elif self.mode=='MC':
 			self.Eloc_params_dict=dict(N_MC_points=self.N_MC_points)
@@ -865,7 +888,7 @@ class VMC(object):
 
 	def get_Stot_data(self,NN_params): 
 		# check SU(2) conservation
-		self.E_estimator.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,SdotS=True)
+		self.E_estimator.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,SdotS=True)
 		self.SdotSloc_mean, SdotS_var, SdotS_diff_real, SdotS_diff_imag = self.E_estimator.process_local_energies(mode=self.mode,Eloc_params_dict=self.Eloc_params_dict,SdotS=True)
 		self.SdotS_MC_std=np.sqrt(SdotS_var/self.N_MC_points)
 
@@ -912,9 +935,10 @@ class VMC(object):
 
 		self.debug_helper(grads)
 
+	
+		print("(a,b,c): ", self.DNN.params[-1])
 
-		#print(self.DNN.params[-1])
-
+		
 		return loss, r2
 
 

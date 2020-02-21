@@ -20,6 +20,7 @@ cimport numpy as np
 from libcpp.vector cimport vector
 from libc.stdlib cimport rand, srand, RAND_MAX
 from libcpp cimport bool
+from libc.math cimport exp #, sin, cos, acos, sqrt, fabs, M_PI, floor, ceil
 
 from cython.parallel cimport prange, threadid, parallel
 cimport openmp
@@ -129,7 +130,7 @@ cdef extern from "sample.h":
     
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
-    void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[]) nogil
+    void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[],const double[]) nogil
 
     void int_to_spinstate[T,J](const int,T ,J []) nogil
     void int_to_spinstate_conv[T,J](const int,T ,J []) nogil
@@ -227,13 +228,15 @@ def c_offdiag_sum(
                 int[::1] n_per_term,
                 np.uint32_t[::1] ket_indx,
                 double[::1] MEs,
-                const double[::1] psi_bras,
-                const double[::1] phase_psi_bras):
+                const double[::1] log_psi_bras,
+                const double[::1] phase_psi_bras,
+                const double[::1] log_psi_kets
+                ):
     
     cdef int Ns = n_per_term.shape[0]
     
     with nogil:
-        offdiag_sum(Ns,&n_per_term[0],&Eloc_cos[0],&Eloc_sin[0],&ket_indx[0],&MEs[0],&psi_bras[0],&phase_psi_bras[0])
+        offdiag_sum(Ns,&n_per_term[0],&Eloc_cos[0],&Eloc_sin[0],&ket_indx[0],&MEs[0],&log_psi_bras[0],&phase_psi_bras[0],&log_psi_kets[0])
         
 
 
@@ -273,7 +276,8 @@ cdef class Neural_Net:
 
     cdef object evaluate_phase, evaluate_log
 
-    cdef vector[double] mod_psi_s, mod_psi_t
+    cdef vector[double] log_psi_s, log_psi_t
+    
     cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
     cdef func_type spin_config
@@ -447,8 +451,9 @@ cdef class Neural_Net:
         self.spinstate_s_py=np.asarray(self.spinstate_s).reshape(spinstate_shape)
         self.spinstate_t_py=np.asarray(self.spinstate_t).reshape(spinstate_shape)
 
-        self.mod_psi_s=np.zeros(self.N_MC_chains,dtype=np.float64)
-        self.mod_psi_t=np.zeros(self.N_MC_chains,dtype=np.float64)
+        self.log_psi_s=np.zeros(self.N_MC_chains,dtype=np.float64)
+        self.log_psi_t=np.zeros(self.N_MC_chains,dtype=np.float64)
+
 
         self.sf_vec=((1<<(self.N_sites//2))-1) * np.ones(self.N_MC_chains,dtype=basis_type_py)
 
@@ -650,7 +655,7 @@ cdef class Neural_Net:
                     #
                     np.int8_t[::1] spin_states,
                     basis_type[::1] ket_states,
-                    np.float64_t[::1] mod_kets,
+                    np.float64_t[::1] log_mod_kets,
                     #
                     basis_type[::1] s0_vec,
                     bool thermal
@@ -679,7 +684,7 @@ cdef class Neural_Net:
                                            #
                                            &spin_states[chain_n*n_MC_points*self.N_symm*self.N_sites],
                                            &ket_states[chain_n*n_MC_points],
-                                           &mod_kets[chain_n*n_MC_points],
+                                           &log_mod_kets[chain_n*n_MC_points],
                                            &s0_vec[0],
                                            # 
                                            &self.spinstate_s[chain_n*self.N_spinconfigelmts],
@@ -702,7 +707,7 @@ cdef class Neural_Net:
                                            #
                                            &spin_states[self.N_MC_chains*n_MC_points*self.N_symm*self.N_sites],
                                            &ket_states[self.N_MC_chains*n_MC_points],
-                                           &mod_kets[self.N_MC_chains*n_MC_points],
+                                           &log_mod_kets[self.N_MC_chains*n_MC_points],
                                            &s0_vec[0],
                                            # 
                                            &self.spinstate_s[0],
@@ -733,7 +738,7 @@ cdef class Neural_Net:
                             #
                             np.int8_t * spin_states,
                             basis_type * ket_states,
-                            double * mod_kets,
+                            double * log_mod_kets,
                             basis_type[] s0_vec,
                             #
                             np.int8_t * spinstate_s,
@@ -749,6 +754,8 @@ cdef class Neural_Net:
         cdef int N_accepted=0;
         cdef int thread_id = threadid();
         
+
+        cdef double mod_psi_s=0.0, mod_psi_t=0.0;
         cdef double eps; # acceptance random float
 
         cdef basis_type t;
@@ -779,12 +786,10 @@ cdef class Neural_Net:
            
         # store initial state for reproducibility
         s0_vec[chain_n] = s;
-
             
         
         # compute initial spin config and its amplitude value
         self.spin_config(self.N_sites,s,&spinstate_s[0]);
-
 
 
         # set omp barrier
@@ -792,11 +797,12 @@ cdef class Neural_Net:
         # evaluate DNN on GPU
         if thread_id==0:
             with gil:
-                self.mod_psi_s=jnp.exp(self.evaluate_log(self.params, self.spinstate_s_py));
+                self.log_psi_s=self.evaluate_log(self.params, self.spinstate_s_py);
         # set barrier
         OMP_BARRIER_PRAGMA()
+        mod_psi_s=exp(self.log_psi_s[chain_n]);
 
-     
+
         while(k < N_MC_points):
             
             # propose a new state until a nontrivial configuration is drawn
@@ -816,21 +822,23 @@ cdef class Neural_Net:
             # evaluate DNN on GPU
             if thread_id==0:
                 with gil:
-                    self.mod_psi_t=jnp.exp(self.evaluate_log(self.params, self.spinstate_t_py));
+                    self.log_psi_t=self.evaluate_log(self.params, self.spinstate_t_py);
             # set barrier
             OMP_BARRIER_PRAGMA()
+            mod_psi_t=exp(self.log_psi_t[chain_n]);
 
 
             # MC accept/reject step
             eps = self.random_float(rng);
-            if( (eps*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] <= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n]) & \
-                (500*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] >= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n])      ): # accept
-
+            if( (eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t) & (500*mod_psi_s*mod_psi_s >= mod_psi_t*mod_psi_t) ): # accept
+                
                 s = t;
-                self.mod_psi_s[chain_n] = self.mod_psi_t[chain_n];
+                self.log_psi_s[chain_n] = self.log_psi_t[chain_n];
+                mod_psi_s = mod_psi_t;
                 # set spin configs
                 for i in range(self.N_symm*self.N_sites):
                     spinstate_s[i] = spinstate_t[i];
+                
                 N_accepted+=1;
     
 
@@ -840,8 +848,7 @@ cdef class Neural_Net:
                     spin_states[k*self.N_sites*self.N_symm + i] = spinstate_s[i];
 
                 ket_states[k] = s;
-                mod_kets[k]=self.mod_psi_s[chain_n];
-
+                log_mod_kets[k]=self.log_psi_s[chain_n];
 
                 k+=1;
                 
