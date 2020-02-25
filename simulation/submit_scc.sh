@@ -8,7 +8,7 @@ then
 rm submission.sh
 fi
 
-echo "#!/bin/bash -login" >> submission.sh
+echo "#!/bin/bash -login" > submission.sh
 echo "#$ -P f-dmrg" >> submission.sh
 echo "#$ -N job_VMC" >> submission.sh # Specify parameters in the job name. Don't specify the labels for k and SGE_TASK_ID 
 echo "#$ -l h_rt=11:00:00" >> submission.sh
@@ -27,11 +27,10 @@ echo "module load miniconda/4.7.5" >> submission.sh
 echo "module load hdf5/1.8.21" >> submission.sh
 echo "conda activate jax-noGPU" >> submission.sh
 
-### GPU
-#echo mpirun -np ${N_mpi} /projectnb/f-dmrg/mbukov/.conda/envs/jax/bin/python main.py >> submission.sh
+data_dir="$(~/.conda/envs/jax-noGPU/bin/python make_data_file.py)"
 
 ### CPU
-#echo mpirun -np ${N_mpi} ~/.conda/envs/jax-noGPU/bin/python ./main.py >> submission.sh
-echo mpiexec -np ${N_mpi} ~/.conda/envs/jax-noGPU/bin/python ./main.py >> submission.sh
+#echo mpirun -np ${N_mpi} ~/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+echo mpiexec -np ${N_mpi} ~/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
 qsub submission.sh

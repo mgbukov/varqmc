@@ -7,7 +7,7 @@ then
 rm submission.sh
 fi
 
-echo "#!/bin/bash -login" >> submission.sh
+echo "#!/bin/bash -login" > submission.sh
 
 #echo "#SBATCH --account = <NERSC Repository>" >> submission.sh
 #echo "#SBATCH --qos=debug" >> submission.sh
@@ -35,11 +35,14 @@ echo "module load cray-hdf5" >> submission.sh
 echo "source activate jax-noGPU" >> submission.sh
 
 
-### CPU
-#echo ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
+data_dir="$(~/miniconda3/envs/jax-noGPU/bin/python make_data_file.py)"
 
-echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
-#echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py --test >> submission.sh
+
+### CPU
+#echo ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+
+echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+
 
 
 sbatch submission.sh

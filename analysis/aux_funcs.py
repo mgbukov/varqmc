@@ -46,7 +46,7 @@ def MC_sample(load_dir,NN_params,N_MC_points=10,):
 	# 		stop_iter= 0,
 	# 	)			
 
-	DNN_psi_MC=VMC(params,train=False)
+	DNN_psi_MC=VMC(load_dir,params_dict=params,train=False)
 	DNN_psi_MC.DNN.update_params(NN_params)
 
 	acceptance_ratio_g = DNN_psi_MC.MC_tool.sample(DNN_psi_MC.DNN)
@@ -61,7 +61,7 @@ def evaluate_DNN(load_dir,NN_params, spin_configs, log_psi_shift=0.0,):
 	params['N_MC_points']=spin_configs.shape[0]
 	params['save_data']=False
 
-	DNN_psi=VMC(params,train=False)
+	DNN_psi=VMC(load_dir,params_dict=params,train=False)
 	DNN_psi.DNN.update_params(NN_params)
 
 
@@ -103,7 +103,7 @@ def compute_Eloc(load_dir,NN_params,ints_ket,log_psi,phase_psi,log_psi_shift=0.0
 	# 	stop_iter= 0,
 	# )	
 
-	DNN_psi=VMC(params,train=False)
+	DNN_psi=VMC(load_dir,params_dict=params,train=False)
 	DNN_psi.DNN.update_params(NN_params)
 
 	#DNN_psi.E_estimator.get_exact_kets()

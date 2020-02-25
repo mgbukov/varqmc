@@ -57,7 +57,13 @@ np.set_printoptions(threshold=np.inf)
 
 class VMC(object):
 
-	def __init__(self,params_dict,train=True,):
+	def __init__(self,data_dir,params_dict=None,train=True,):
+
+		if params_dict is None:
+			self.data_dir=data_dir
+			params_dict = yaml.load(open(self.data_dir+'/config_params_init.yaml'),Loader=yaml.FullLoader)
+		else:
+			self.data_dir=data_dir
 
 
 		# initialize communicator
@@ -77,6 +83,7 @@ class VMC(object):
 		self.optimizer=params_dict['optimizer']
 		self.NN_type=params_dict['NN_type'] # DNN vs CNN
 		self.NN_dtype=params_dict['NN_dtype'] # 'real' # # cpx vs real network parameters
+		self.NN_shape_str=params_dict['NN_shape_str']
 		 
 		self.save_data=params_dict['save_data']
 		self.load_data=params_dict['load_data']
@@ -209,13 +216,23 @@ class VMC(object):
 
 	def _create_NN(self, load_data=False):
 
-		
+		neurons=[]
+		for neuron in self.NN_shape_str.split('--'):
+			neurons.append(int(neuron))
+
+		assert(neurons[0]==self.L**2)
+
+		self.shapes={}		
+	
 		if self.NN_type == 'DNN':
-			self.shapes=dict(layer_1 = [self.L**2, 8], 
-						#	 layer_2 = [12       ,  6],
-						#	 layer_3 = [4       ,  2], 
-						)
-			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
+			for j in range(len(neurons)-1):
+				self.shapes['layer_{0:d}'.format(j+1)]=[neurons[j],neurons[j+1]]
+		
+			# self.shapes=dict(layer_1 = [self.L**2, 8], 
+			# 			#	 layer_2 = [12       ,  6],
+			# 			#	 layer_3 = [4       ,  2], 
+			# 			)
+			# self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
 
 
 		elif self.NN_type == 'CNN':
@@ -225,6 +242,8 @@ class VMC(object):
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}-{1:d}-{2:d}'.format(value['out_chan'],value['filter_shape'][0],value['strides'][0]) for value in self.shapes.values() )
 
 		
+		
+
 
 		### create Neural network
 		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
@@ -446,20 +465,20 @@ class VMC(object):
 
 	def _create_logs(self):
 
-		sys_data=''
+		# sys_data=''
 		
-		if self.comm.Get_rank()==0:
-			sys_time=datetime.datetime.now()
-			sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}_".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
-			#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
+		# if self.comm.Get_rank()==0:
+		# 	sys_time=datetime.datetime.now()
+		# 	sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}_".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
+		# 	#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
 
-		# broadcast sys_data
-		sys_data = self.comm.bcast(sys_data, root=0)
+		# # broadcast sys_data
+		# sys_data = self.comm.bcast(sys_data, root=0)
 
 
-		self.sys_time=sys_data + self.optimizer
+		# self.sys_time=sys_data + self.optimizer
 
-		self.data_dir=os.getcwd()+'/data/'+self.sys_time
+		# self.data_dir=os.getcwd()+'/data/'+self.sys_time
 
 		logfile_dir=self.data_dir+'/log_files/'
 		self.savefile_dir=self.data_dir+'/data_files/'
@@ -665,6 +684,7 @@ class VMC(object):
 
 
 	def train(self, start=0):
+
 
 		# set timer
 		t_start=time.time()

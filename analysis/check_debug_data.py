@@ -29,90 +29,6 @@ from cpp_code import integer_to_spinstate
 from VMC_class import VMC
 import yaml 
 
-################
-
-# n=-3 #-3 # steps before final blow-up
-# max_iter=313 #313 # last iteration with saved data
-# data_name='2020-02-04_19:20:06_NG/'
-
-
-###################
-# discard_outliears: FALSE
-# MC_thermal: TRUE
-
-# n=-4 # steps before final blow-up
-# max_iter=329 # last iteration with saved data
-# data_name='2020-02-07_18:29:39_NG/' # 
-
-
-###################
-# discard_outliears: TRUE
-# MC_thermal: TRUE
-
-# n=-2 # steps before final blow-up
-# max_iter=338 # last iteration with saved data
-# data_name='2020-02-08_05:53:59_NG/' # 
-
-
-###################
-
-
-###################
-# discard_outliears: TRUE
-# MC_thermal: TRUE
-
-# n=-5 # steps before final blow-up
-# max_iter=349 # last iteration with saved data
-# data_name='2020-02-11_09:19:46_NG/' # 
-
-
-###################
-
-# discard_outliears: FALSE
-# MC_thermal: TRUE
-
-
-# n=-4 # steps before final blow-up
-# max_iter=328 # last iteration with saved data
-# data_name='2020-02-14_22:57:49_NG/' # 36x8
-# L=6
-
-###################
-
-# discard_outliears: FALSE
-# MC_thermal: TRUE
-
-
-# n=-6 # steps before final blow-up
-# max_iter=259 # last iteration with saved data
-# data_name='2020-02-18_15:34:03_NG/' # 16x6
-# L=4
-
-###################
-
-# discard_outliears: FALSE
-# MC_thermal: TRUE
-
-
-# n=-5 # steps before final blow-up
-# max_iter=455 # last iteration with saved data
-# data_name='2020-02-19_20:15:07_NG/' # 36x8
-# L=6
-
-###################
-
-n=-6 # steps before final blow-up
-max_iter=499 # last iteration with saved data
-L=4
-J2=0.5
-opt='NG'
-mode='exact'
-NN_shape_str='16--8'
-N_MC_points=107
-N_prss=1
-NMCchains=2
-data_name='2020-02-21_09:22:35_{0:s}/'.format(opt) 
-
 
 ###################
 
@@ -121,17 +37,33 @@ data_name='2020-02-21_09:22:35_{0:s}/'.format(opt)
 # L=4
 # J2=0.5
 # opt='NG'
-# mode='MC'
+# mode='exact'
 # NN_shape_str='16--8'
-# N_MC_points=200
-# N_prss=4
+# N_MC_points=107
+# N_prss=1
 # NMCchains=2
-# data_name='2020-02-21_08:51:56_{0:s}/'.format(opt) 
+# sys_time='2020-02-21_09:22:35'
+
+
+###################
+
+n=-6 # steps before final blow-up
+max_iter=499 # last iteration with saved data
+L=4
+J2=0.5
+opt='NG'
+mode='MC'
+NN_shape_str='16--8'
+N_MC_points=200
+N_prss=4
+NMCchains=2
+sys_time='2020-02-21_08:51:56'
 
 
 #### load debug data
 
 
+data_name = sys_time + '--{0:s}-L_{1:d}-{2:s}/'.format(opt,L,mode)
 load_dir='data/' + data_name 
 data_params=(mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 params_str='model_DNNcpx-mode_{0:s}-L_{1:d}-J2_{2:0.1f}-opt_{3:s}-NNstrct_{4:s}-MCpts_{5:d}-Nprss_{6:d}-NMCchains_{7:d}'.format(*data_params)

@@ -515,18 +515,18 @@ def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float
         k1, k2 = random.split(rng)
         k2, k3 = random.split(k2)
 
-        a = _a_init(k1, shape)
-        b = -0.01 + _b_init(k2, shape)
-        c = _a_init(k3, shape)
+        #a = _a_init(k1, shape)
+        b = _b_init(k2, shape) - 0.01
+        #c = _a_init(k3, shape)
         
         return input_shape, (b,)
 
-    def apply_fun(params, x, a=1.0, b=+0.0, c=1.0, **kwargs):
+    def apply_fun(params, x, a=4.0, b=+0.0, c=1.0, **kwargs):
         b,   = params
         x_real, x_imag = x
 
 
-        print('MEAN', np.mean(x_real), np.std(x_real), x_real.shape)
+        print('MEAN', np.mean(x_real), np.std(x_real), np.min(x_real), np.max(x_real), x_real.shape)
 
 
         #a=jnp.abs(a)
@@ -534,7 +534,7 @@ def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float
 
         x_real=a*jnp.tanh((x_real-b)/a) + b
         
-        print('MEAN post', np.mean(x_real), np.std(x_real), x_real.shape)
+        print('MEAN post', np.mean(x_real), np.std(x_real), np.min(x_real), np.max(x_real), x_real.shape)
 
 
         # print(x_real)

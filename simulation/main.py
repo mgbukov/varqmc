@@ -1,4 +1,7 @@
-import sys
+import os,sys
+
+from make_data_file import create_params_file
+
 sys.path.append("..")
 
 from VMC_class import VMC
@@ -8,12 +11,16 @@ import yaml
 # export OMP_NUM_THREADS=4
 # mpiexec -n 4 python main.py --test
 
-if len(sys.argv) < 2:
-    params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)
-elif str(sys.argv[1])=='--test':
-    params = yaml.load(open('config_params_test.yaml'),Loader=yaml.FullLoader)
 
-DNN_psi=VMC(params)
+if '--test' in sys.argv:
+    params = yaml.load(open('config_params_test.yaml'),Loader=yaml.FullLoader)
+    data_dir=create_params_file(params)
+else:
+	#params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)
+	data_dir=sys.argv[1]
+
+
+DNN_psi=VMC(data_dir)
 
 
 
