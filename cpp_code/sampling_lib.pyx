@@ -325,10 +325,12 @@ cdef class Neural_Net:
             self.N_symm=_L*_L*2*2*2 # no Z symmetry
           
             # define DNN
+            shape_last_layer=shapes['layer_1']
             self.NN_architecture = {
                                     'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
                                     'nonlin_1': Poly_cpx,
-                                    'norm_1': Norm_real(),
+                                    'reg_1': Regularization((shape_last_layer[1],)),
+                                    #'norm_1': Norm_real(),
                                 #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
                                 #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
                                 #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
@@ -350,17 +352,24 @@ cdef class Neural_Net:
             # determine shape variables
             input_shape=(1,self.N_sites)
             output_shape, self.params = init_params(rng,input_shape)
-            self._init_apply_fun_args(rng,input_shape)
-
+            
 
 
             self.input_shape  = (-1,self.N_sites) # reshape input data batch
-            self.reduce_shape = (-1,self.N_symm,output_shape[1]) # tuple to reshape output before symmetrization
-            self.output_shape = (-1,) + output_shape[1:]
+            #self.reduce_shape = (-1,self.N_symm,output_shape[1]) # tuple to reshape output before symmetrization
+            #self.output_shape = (-1,) + output_shape[1:]
+
+            self.reduce_shape = (-1,self.N_symm,shape_last_layer[1]) 
+            self.output_shape = (-1,shape_last_layer[1],)
+  
            
           
             self.NN_Tree = NN_Tree(self.params)
             self.N_varl_params=self.NN_Tree.N_varl_params 
+
+
+            self._init_apply_fun_args(rng,input_shape)
+
 
 
         elif NN_type=='CNN':
@@ -419,6 +428,11 @@ cdef class Neural_Net:
                 self.apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv, )        
                 self.apply_fun_args_dyn[j]=dict(fixpoint_iter=False, mean=mean, std_mat_inv=std_mat_inv, comm=self.comm, )
         
+            if 'reg' in layer_type:
+                D=dict(reduce_shape=self.reduce_shape, output_shape=self.output_shape)
+                self.apply_fun_args[j]=D
+                self.apply_fun_args_dyn[j]=D
+
 
     def _init_evaluate(self):
 
@@ -548,19 +562,23 @@ cdef class Neural_Net:
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
-        # apply dense layer
+        # # apply dense layer
         # Re_Ws, Im_Ws = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
         # # apply logcosh nonlinearity
         # Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
         # #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
 
-        # symmetrize
-        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
-        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+        # Re_z, Im_z = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
+
+        # # symmetrize
+        # log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # # 
+        # log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
+        # phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+
+
+        log_psi, phase_psi = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
         
         return log_psi, phase_psi
 
@@ -571,19 +589,22 @@ cdef class Neural_Net:
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
-        # apply dense layer
+        # # apply dense layer
         # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
         # # apply logcosh nonlinearity
         # Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
         # #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer(params,batch,kwargs=apply_fun_args)
+        
+        # Re_z, Im_z = self.apply_layer(params,batch,kwargs=apply_fun_args)
 
-        # symmetrize
-        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
-        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+        # # symmetrize
+        # log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # # 
+        # log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
+        # phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+
+        log_psi, phase_psi = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
         
         return log_psi, phase_psi
 
@@ -600,17 +621,20 @@ cdef class Neural_Net:
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
-        # apply dense layer
+        # # apply dense layer
         # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         # # apply logcosh nonlinearity
         # Re_z = poly_real((Re_Ws, Im_Ws))
         # #Re_z = logcosh_real((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        
+        # Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
        
-        # symmetrize
-        log_psi = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        log_psi = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
+        # # symmetrize
+        # log_psi = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # # sum over hidden units
+        # log_psi = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
+
+        log_psi, phase_psi = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
         
         return log_psi
 
@@ -626,17 +650,20 @@ cdef class Neural_Net:
         # reshaping required inside evaluate func because of per-sample gradients
         batch=batch.reshape(self.input_shape)
 
-        # apply dense layer
+        # # apply dense layer
         # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         # # apply logcosh nonlinearity
         # Im_z = poly_imag((Re_Ws, Im_Ws))
         # #Im_z = logcosh_imag((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        
+        # Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
 
-        # symmetrize
-        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+        # # symmetrize
+        # phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
+        # # 
+        # phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
+
+        log_psi, phase_psi = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
         
         return phase_psi
 

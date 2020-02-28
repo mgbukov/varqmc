@@ -519,28 +519,85 @@ def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float
         b = _b_init(k2, shape) - 0.01
         #c = _a_init(k3, shape)
         
-        return input_shape, (b,)
+        output_shape=(input_shape[0],1)
+        
+        return output_shape, (b,)
 
     def apply_fun(params, x, a=4.0, b=+0.0, c=1.0, **kwargs):
         b,   = params
         x_real, x_imag = x
 
 
-        print('MEAN', np.mean(x_real), np.std(x_real), np.min(x_real), np.max(x_real), x_real.shape)
+        #print('MEAN', np.mean(x_real), np.std(x_real), np.min(x_real), np.max(x_real), x_real.shape)
+        #exit()
 
-
-        #a=jnp.abs(a)
         #x_real= c*(jnp.where(x_real < b, a*(x_real-b), -jnp.expm1(-a*(x_real-b)), ) + a*b)
 
-        x_real=a*jnp.tanh((x_real-b)/a) + b
+        x_real=a*jnp.tanh((x_real-b)/a) #+ b
         
-        print('MEAN post', np.mean(x_real), np.std(x_real), np.min(x_real), np.max(x_real), x_real.shape)
+        #print('MEAN post', np.mean(x_real), np.std(x_real), np.min(x_real), np.max(x_real), x_real.shape)
+        #print()
 
-
-        # print(x_real)
-        # exit()
+        #print(x_real)
+        #exit()
 
         return (x_real, x_imag)
+        
+    return init_fun, apply_fun
+
+
+
+def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
+    """Layer construction function for a batch normalization layer."""
+    _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
+    _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
+
+
+    def init_fun(rng, input_shape):
+        
+        k1, k2 = random.split(rng)
+        k2, k3 = random.split(k2)
+        k3, k4 = random.split(k3)
+
+        #a = _a_init(k1, shape)
+        b_shape = (1,)
+        b = _b_init(k2, b_shape) - 0.0
+        
+        # init_value_W=1E-2
+        # W_shape=output_layer_shape+(1,) 
+        # W1 = 1.0 + random.uniform(k3,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
+        # W2 = 1.0 + random.uniform(k4,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
+
+        output_shape=(input_shape[0],1)
+        
+        return output_shape, (b,)
+
+    def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
+        b,   = params
+        Re_z, Im_z = x
+
+        
+        # symmetrize
+        log_psi   = jnp.sum(Re_z.reshape(reduce_shape,order='C'), axis=[1,])
+        phase_psi = jnp.sum(Im_z.reshape(reduce_shape,order='C'), axis=[1,])
+
+        # sum over hidden neurons
+        #log_psi=log_psi-W
+
+        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])
+        phase_psi = jnp.sum(phase_psi.reshape(output_shape), axis=[1,])
+
+        #log_psi   = jnp.dot(log_psi,W1)
+        #phase_psi = jnp.dot(phase_psi,W2)
+
+        #print('MEAN', np.mean(log_psi), np.std(log_psi), np.min(log_psi), np.max(log_psi), log_psi.shape)
+
+        # regularize output
+        a=4.0
+        log_psi=a*jnp.tanh((log_psi-b)/a) + b
+        
+        
+        return (log_psi, phase_psi)
         
     return init_fun, apply_fun
 

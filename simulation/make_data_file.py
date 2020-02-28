@@ -1,4 +1,5 @@
 import sys, os
+from mpi4py import MPI
 import datetime
 import yaml
 
@@ -6,6 +7,8 @@ import yaml
 		
 
 def create_params_file(params):
+
+	comm=MPI.COMM_WORLD
 
 	# system time
 	sys_time=datetime.datetime.now()
@@ -21,8 +24,9 @@ def create_params_file(params):
 	#params['data_dir']=data_dir
 
 
-	if not os.path.exists(data_dir):
+	if (not os.path.exists(data_dir)) and comm.Get_rank()==0:
 		os.makedirs(data_dir)
+	comm.Barrier()
 
 
 	config_params_init = open(data_dir + '/config_params_init.yaml', 'w')

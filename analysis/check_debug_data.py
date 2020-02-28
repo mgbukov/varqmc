@@ -1,6 +1,12 @@
 import sys,os
 import numpy as np 
 import pickle
+import jax
+
+path = "../."
+sys.path.insert(0,path)
+from cpp_code import NN_Tree
+
 import matplotlib
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
@@ -8,6 +14,9 @@ import matplotlib.ticker as tck
 from matplotlib.ticker import LogLocator,LinearLocator
 
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+
+from scipy.linalg import eigh, inv
 
 
 matplotlib.use('Qt5Agg')
@@ -47,17 +56,31 @@ import yaml
 
 ###################
 
-n=-6 # steps before final blow-up
-max_iter=499 # last iteration with saved data
-L=4
+# n=-6 # steps before final blow-up
+# max_iter=499 # last iteration with saved data
+# L=4
+# J2=0.5
+# opt='NG'
+# mode='MC'
+# NN_shape_str='16--8'
+# N_MC_points=200
+# N_prss=4
+# NMCchains=2
+# sys_time='2020-02-21_08:51:56'
+
+###################
+
+n=-3 # steps before final blow-up
+max_iter=228 # last iteration with saved E-data + 1
+L=6
 J2=0.5
 opt='NG'
 mode='MC'
-NN_shape_str='16--8'
-N_MC_points=200
-N_prss=4
-NMCchains=2
-sys_time='2020-02-21_08:51:56'
+NN_shape_str='36--8'
+N_MC_points=20000
+N_prss=130
+NMCchains=1
+sys_time='2020-02-24_23:19:34'
 
 
 #### load debug data
@@ -85,6 +108,8 @@ with open(load_dir + 'debug_files/' + 'debug-' + 'phasepsi_data--' + params_str 
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'params_update_data--' + params_str + '.pkl', 'rb') as handle:
 	NN_params_update, = pickle.load(handle)
+	NN_params_update[:-1,...]=NN_params_update[1:,...]
+	NN_params_update[-1,...]=0.0
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str + '.pkl', 'rb') as handle:
 	int_kets, = pickle.load(handle)
@@ -102,42 +127,72 @@ file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
 with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
 	NN_params, apply_fun_args, log_psi_shift = pickle.load(handle)
 
+Tree=NN_Tree(NN_params)
+NN_params_ravelled=Tree.ravel(NN_params)
+
 
 ######################
 
-print('\niteration number: {0:d} with {1:d} unique spin configs & {2:d} unique Elocs.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0], np.unique(Eloc_real[n,:].round(decimals=10)).shape[0]))
+print('\niteration number: {0:d} with {1:d} unique spin configs & {2:d} unique Elocs & mean {3:0.4f}.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0], np.unique(Eloc_real[n,:].round(decimals=10)).shape[0], np.mean(Eloc_real[n,:])) )
 
-
-#exit()
 
 
 # print("norm_layer", NN_params[-1])
 
+# print( logpsi_kets[n,:].max()+log_psi_shift )
+# exit()
 
 
 print("F_vector:", np.min(F_lastiters[n,:]), np.max(F_lastiters[n,:]), )
-print("S_matrix:", np.min(S_lastiters[n,:]), np.max(S_lastiters[n,:]), ) 
+print("S_matrix:", np.min(S_lastiters[n,:]), np.max(S_lastiters[n,:]), )
+print() 
+
+E_S, V_S = eigh(S_lastiters[n,:])
+nat_grad=inv(S_lastiters[n,:]).dot(F_lastiters[n,:])
+
+#print("NN_params:", NN_params )
+
+#print(NN_params_update[n,:][-1], nat_grad[-1])
 #exit()
 
 
+print(-1E-2*NN_params_update[n,:][-1], NN_params_ravelled[-1],)
+#exit()
 
-# print(Eloc_real[n,:20])
+print('S_bb:',S_lastiters[n,-1,-1])
+
+
+plt.plot(F_lastiters[n,:],'.b')
+plt.plot(inv(S_lastiters[n,...])[0,:],'.r', markersize=1.0)
+#plt.plot(E_S,'.b')
+#plt.yscale('log')
+plt.show()
+
+
+#exit()
+
+
+#print(Eloc_real[n,:20])
 # print(logpsi_kets[n,:20])
 # print(phasepsi_kets[n,:20])
 # print()
 
-#exit()
+#print(np.mean(Eloc_real[n,:]))
+
+
+# print(logpsi_kets[n,:].min()+log_psi_shift, logpsi_kets[n,:].max()+log_psi_shift)
+# exit()
 
 
 
 
 ######################
 
-# print(int_kets[n,:10])
-# MC_tool = MC_sample(load_dir, NN_params,N_MC_points=10)
-# print(MC_tool.ints_ket)
+with jax.disable_jit():
+	MC_tool = MC_sample(load_dir, NN_params,N_MC_points=1)
+print(MC_tool.ints_ket)
 
-# exit()
+exit()
 
 ######################
 
@@ -146,9 +201,9 @@ print("S_matrix:", np.min(S_lastiters[n,:]), np.max(S_lastiters[n,:]), )
 
 data=Eloc_real[n,:]
 
-q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
+#q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
 #q25, q75 = np.percentile(data, 0.05), np.percentile(data, 99.95)
-#q25, q75 = np.percentile(data, 0.3), np.percentile(data, 99.62)
+q25, q75 = np.percentile(data, 0.3), np.percentile(data, 99.62)
 iqr = q75 - q25
 print('Percentiles: 25th=%.3f, 75th=%.3f, IQR=%.3f' % (q25, q75, iqr))
 # calculate the outlier cutoff
@@ -199,6 +254,8 @@ print(np.mean(reamainers), np.mean(data))
 
 ##############
 #inds=np.where(np.logical_and(np.abs(Eloc_real[n,:])>=16.5, np.abs(Eloc_real[n,:])<=16.8))[0]
+
+print( Eloc_real[n, np.where(np.in1d(Eloc_real[n,:], outliers))] )
 inds=[np.where(np.in1d(Eloc_real[n,:], outliers)) [0][-1]]
 
 
@@ -219,6 +276,10 @@ inds=[np.where(np.in1d(Eloc_real[n,:], outliers)) [0][-1]]
 #exit()
 
 #inds=np.arange(107).astype(np.uint16)
+
+
+int_to_spinconfig(int_kets[n,inds][0],L)
+
 
 
 log_psi_batch, phase_psi_batch = evaluate_DNN(load_dir, NN_params,int_kets[n,inds], log_psi_shift=log_psi_shift, )

@@ -155,7 +155,8 @@ class VMC(object):
 			self.load_dir=os.getcwd()+'/data/data_files/'
 			
 
-		
+		# define number of iterations to store for debugging purposes
+		self.n_iter=10
 		
 		self._create_NN(load_data=self.load_data)
 		self._create_optimizer()
@@ -262,6 +263,7 @@ class VMC(object):
 		
 		#self.evaluate_NN=jit(self.DNN.evaluate)
 		self.evaluate_NN=self.DNN.evaluate
+		print("\n\nNN evaluation NOT JITTED !!!\n\n")
 		
 		#self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
 		
@@ -352,6 +354,7 @@ class VMC(object):
 
 	
 		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.DNN.N_varl_params,compute_grad_log_psi, self.DNN.NN_Tree )
+		self.NG.init_global_variables(self.n_iter)
 		self.NG.run_debug_helper=self.run_debug_helper
 
 		# jax self.optimizer
@@ -442,13 +445,13 @@ class VMC(object):
 	def _create_energy_estimator(self):
 		### Energy estimator
 		self.E_estimator=Energy_estimator(self.comm,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type) # contains all of the physics
-		self.E_estimator.init_global_params(self.N_MC_points)
+		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 		self.N_features=self.DNN.N_sites*self.DNN.N_symm
 
 	def _create_MC_sampler(self, ):
 		### initialize MC sampler variables
 		self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype)
+		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
 		self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
 		
 		
@@ -611,15 +614,15 @@ class VMC(object):
 		config_params_yaml.close()
 
 
-	def debug_helper(self,grads):
+	def debug_helper(self,):
 
 		# record DNN params update
 		if self.comm.Get_rank()==0:
 			self.params_update[:-1,...]=self.params_update[1:,...]
-			self.params_update[-1,...]=grads
+			self.params_update[-1,...]*=0.0
 
 
-	def run_debug_helper(self, run=False):
+	def run_debug_helper(self, run=False, ):
 
 
 		#
@@ -667,8 +670,9 @@ class VMC(object):
 								)
 
 				
-
 		self.comm.Barrier()
+
+
 	
 
 	def discard_outliars(self,):
@@ -702,6 +706,9 @@ class VMC(object):
 
 			#self.comm.Barrier()
 			ti=time.time()
+
+			# shift params_update
+			self.debug_helper()
 
 			init_iter_str="\n\nITERATION {0:d}, PROCESS_RANK {1:d}:\n\n".format(iteration, self.comm.Get_rank())
 			if self.comm.Get_rank()==0:
@@ -788,9 +795,7 @@ class VMC(object):
 			timing_matrix_filename = '/simulation_time--' + self.file_name + '.txt'
 			np.savetxt(self.data_dir+timing_matrix_filename,timing_matrix.T,delimiter=',')
 			
-		# store data from last 6 iterations
-		self.run_debug_helper(run=True)
-
+		
 		# close files
 		self.logfile.close()
 		self.file_energy.close()
@@ -798,6 +803,10 @@ class VMC(object):
 		self.file_loss.close()
 		#self.file_r2.close()
 		self.file_phase_hist.close()
+
+
+		# store data from last 6 iterations
+		self.run_debug_helper(run=True,)
 
 
 
@@ -954,7 +963,9 @@ class VMC(object):
 		##### compute loss
 		r2=self.NG.r2_cost
 
-		self.debug_helper(grads)
+		# record gradients
+		if self.comm.Get_rank()==0:
+			self.params_update[-1,...]=grads
 
 	
 		print("(a,b,c): ", self.DNN.params[-1])

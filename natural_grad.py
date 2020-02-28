@@ -72,13 +72,6 @@ class natural_gradient():
 		self.F_log_norm=0.0 
 		self.F_phase_norm=0.0 
 
-		if self.comm.Get_rank()==0:
-			n_iter=6
-			self.S_lastiters=np.zeros([n_iter,N_varl_params,N_varl_params],dtype=np.float64) # array to store last S-matrices
-			self.F_lastiters=np.zeros([n_iter,N_varl_params,],dtype=np.float64) # array to store last F-vectors
-		else:
-			self.S_lastiters=np.array([[None],[None]])
-			self.F_lastiters=np.array([[None],[None]])
 
 		self.run_debug_helper=None
 		self.debug_mode=True
@@ -97,6 +90,15 @@ class natural_gradient():
 		self.RK_inv_p=0.0
 		self.counter=0
 		
+
+	def init_global_variables(self,n_iter):
+		
+		if self.comm.Get_rank()==0:
+			self.S_lastiters=np.zeros([n_iter,self.N_varl_params,self.N_varl_params],dtype=np.float64) # array to store last S-matrices
+			self.F_lastiters=np.zeros([n_iter,self.N_varl_params,],dtype=np.float64) # array to store last F-vectors
+		else:
+			self.S_lastiters=np.array([[None],[None]])
+			self.F_lastiters=np.array([[None],[None]])
 		
 	def debug_helper(self):
 

@@ -224,7 +224,7 @@ class Energy_estimator():
 
 
 
-	def init_global_params(self,N_MC_points,SdotS=False):
+	def init_global_params(self,N_MC_points,n_iter,SdotS=False):
 
 		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
@@ -232,7 +232,6 @@ class Energy_estimator():
 		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
 
 		if self.comm.Get_rank()==0:
-			n_iter=6
 			self.Eloc_real_g=np.zeros((n_iter,N_MC_points),dtype=np.float64)
 			self.Eloc_imag_g=np.zeros_like(self.Eloc_real_g)
 		else:
@@ -384,8 +383,8 @@ class Energy_estimator():
 		# print()
 		# print(Eloc_cos.sum()*cos_phase_kets, Eloc_sin.sum()*sin_phase_kets)
 		# print()
-		# print(np.log(log_kets))
-		#exit()
+		# print(log_kets)
+		# exit()
 
 		#######
 

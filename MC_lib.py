@@ -57,7 +57,7 @@ class MC_sampler():
 
 
 
-	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,basis_type,MPI_basis_dtype):
+	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,basis_type,MPI_basis_dtype,n_iter):
 
 		self.N_batch=N_batch
 		self.N_sites=L**2
@@ -77,7 +77,6 @@ class MC_sampler():
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 
-		n_iter=6
 		self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
 		if self.comm.Get_rank()==0:
 			self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
