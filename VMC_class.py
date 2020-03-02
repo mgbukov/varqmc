@@ -78,6 +78,7 @@ class VMC(object):
 
 		self.L=params_dict['L'] # system size
 		self.J2 = params_dict['J2']
+		self.sign = params_dict['sign'] # -1: Marshal rule is on; +1 Marshal rule is off
 
 		self.mode=params_dict['mode'] # exact or MC simulation
 		self.optimizer=params_dict['optimizer']
@@ -261,9 +262,9 @@ class VMC(object):
 		# jit functions
 		self.evaluate_NN_dyn=self.DNN.evaluate_dyn
 		
-		#self.evaluate_NN=jit(self.DNN.evaluate)
-		self.evaluate_NN=self.DNN.evaluate
-		print("\n\nNN evaluation NOT JITTED !!!\n\n")
+		self.evaluate_NN=jit(self.DNN.evaluate)
+		#self.evaluate_NN=self.DNN.evaluate
+		#print("\n\nNN evaluation NOT JITTED !!!\n\n")
 		
 		#self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
 		
@@ -444,7 +445,7 @@ class VMC(object):
 
 	def _create_energy_estimator(self):
 		### Energy estimator
-		self.E_estimator=Energy_estimator(self.comm,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type) # contains all of the physics
+		self.E_estimator=Energy_estimator(self.comm,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign,) # contains all of the physics
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 		self.N_features=self.DNN.N_sites*self.DNN.N_symm
 
@@ -862,7 +863,11 @@ class VMC(object):
 			if iteration==0:
 				self.MC_tool.thermal=self.thermal # set MC sampler to re-use initial state
 		
-		#exit()
+		# get log_psi statistics
+		data_tuple=np.min(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.mean(self.MC_tool.log_mod_kets), np.std(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets)-np.min(self.MC_tool.log_mod_kets)
+		psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(*data_tuple )
+		self.logfile.write(psi_str)
+		print(psi_str)
 
 
 		##### compute local energies #####
@@ -968,8 +973,10 @@ class VMC(object):
 			self.params_update[-1,...]=grads
 
 	
-		print("(a,b,c): ", self.DNN.params[-1])
-
+		b_str="reg layer params: {}\n".format( self.DNN.params[-1] )
+		self.logfile.write(b_str)
+		if self.comm.Get_rank()==0:
+			print(b_str)
 		
 		return loss, r2
 

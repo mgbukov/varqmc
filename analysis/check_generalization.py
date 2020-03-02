@@ -84,7 +84,8 @@ DNN_psi=VMC(params,train=False)
 # C_sign_psi_L1_weighted=np.zeros_like(C_KL_div)
 
 
-
+print('USE pandas cvs reader isntead !!!')
+exit()
 
 
 for k, iteration in enumerate(range(N_iter)):

@@ -1,20 +1,19 @@
 J2: 0.5
+sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 4
 NN_dtype: cpx
-NN_shape_str: 16--8
+NN_shape_str: 16--10
 NN_type: DNN
 N_MC_chains: 2
 N_MC_points: 200 #107 # 
-#N_batch: 170
 N_iterations: 500
 batchnorm: false
 load_data: false
 minibatch_size: 100
-mode: MC # exact #  
+mode: MC # exact #
 grad_update_mode: normal # phase  # alternating #  log_mod
 MC_thermal: true
 optimizer: NG
 save_data: true
 seed: 0
 start_iter: 0
-#stop_iter: 0

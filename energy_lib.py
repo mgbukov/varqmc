@@ -37,7 +37,7 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
 
 class Energy_estimator():
 
-	def __init__(self,comm,J2,N_MC_points,N_batch,L,N_symm,NN_type,):
+	def __init__(self,comm,J2,N_MC_points,N_batch,L,N_symm,NN_type,sign,):
 
 		# MPI commuicator
 		self.comm=comm
@@ -69,8 +69,9 @@ class Energy_estimator():
 		###### setting up hamiltonian ######
 		J1=1.0 # spin=spin interaction
 		J2=J2 # magnetic field strength
-		sign=-1.0
-		
+		#sign=-1.0 # -1: Marshal rule is on; +1 Marshal rule is off
+		#sign=+1.0 # -1: Marshal rule is on; +1 Marshal rule is off
+
 		self.N_sites=N_sites
 		self.N_symm=N_symm
 		self.sign=int(sign)
@@ -388,7 +389,7 @@ class Energy_estimator():
 
 		#######
 
-		psi_str="log_psi_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
+		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
 		if self.logfile!=None:
 			self.logfile.write(psi_str)
 		if self.comm.Get_rank()==0:

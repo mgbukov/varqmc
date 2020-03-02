@@ -578,7 +578,10 @@ def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_in
 
         
         # symmetrize
-        log_psi   = jnp.sum(Re_z.reshape(reduce_shape,order='C'), axis=[1,])
+        # 1/(N/p) = p/N : p different terms in sum left
+        # uncorrelated: 1/\sqrt(p) 
+        # correlated: 1/p
+        log_psi   = jnp.sum(Re_z.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
         phase_psi = jnp.sum(Im_z.reshape(reduce_shape,order='C'), axis=[1,])
 
         # sum over hidden neurons
@@ -593,7 +596,7 @@ def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_in
         #print('MEAN', np.mean(log_psi), np.std(log_psi), np.min(log_psi), np.max(log_psi), log_psi.shape)
 
         # regularize output
-        a=4.0
+        a=8.0
         log_psi=a*jnp.tanh((log_psi-b)/a) + b
         
         
