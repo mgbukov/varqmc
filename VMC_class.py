@@ -262,9 +262,9 @@ class VMC(object):
 		# jit functions
 		self.evaluate_NN_dyn=self.DNN.evaluate_dyn
 		
-		self.evaluate_NN=jit(self.DNN.evaluate)
-		#self.evaluate_NN=self.DNN.evaluate
-		#print("\n\nNN evaluation NOT JITTED !!!\n\n")
+		#self.evaluate_NN=jit(self.DNN.evaluate)
+		self.evaluate_NN=self.DNN.evaluate
+		print("\n\nNN evaluation NOT JITTED !!!\n\n")
 		
 		#self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
 		
@@ -289,6 +289,7 @@ class VMC(object):
 			# dlog_psi_s   = vmap(partial(grad(loss_log_mod_psi),   NN_params))(batch, )
 			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
 
+
 			# dlog_psi_s   = vmap(jit(grad(loss_log_mod_psi)),   in_axes=(None,0,) )(NN_params,batch, )
 			# dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
 
@@ -296,11 +297,23 @@ class VMC(object):
 			dlog_psi_s   = vmap(partial(jit(grad(loss_log_mod_psi)),   NN_params))(batch, )
 			dphase_psi_s = vmap(partial(jit(grad(loss_phase_psi)), NN_params))(batch, )
 
-			dlog_psi = []
-			for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
-				for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # loop over NN params
-					dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
 
+			dlog_psi = []
+
+			for (dlog_psi_W,dphase_psi_W) in zip(self.DNN.NN_Tree.flatten(dlog_psi_s),self.DNN.NN_Tree.flatten(dphase_psi_s)):
+				dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
+
+			# for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
+			# 	for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # loop over NN params
+			# 		dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
+
+
+			# for (dlog_psi_tower,dphase_psi_tower) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
+			# 	for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_tower,dphase_psi_tower): # loop over layers
+			# 		for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # loop over NN params
+			# 			dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
+
+	
 			return jnp.concatenate(dlog_psi, axis=1)
 
 
@@ -310,9 +323,12 @@ class VMC(object):
 			dlog_psi_s   = vmap(partial(jit(grad(loss_log_mod_psi)),   NN_params))(batch, )
 			
 			dlog_psi = []
-			for dlog_psi_layer in dlog_psi_s: # loop over layers
-				for dlog_psi_W in dlog_psi_layer: # loop over NN params
-					dlog_psi.append( dlog_psi_W.reshape(self.N_batch,-1) )
+			for dlog_psi_W in self.DNN.NN_Tree.flatten(dlog_psi_s):
+				dlog_psi.append( dlog_psi_W.reshape(self.N_batch,-1) )
+
+			# for dlog_psi_layer in dlog_psi_s: # loop over layers
+			# 	for dlog_psi_W in dlog_psi_layer: # loop over NN params
+			# 		dlog_psi.append( dlog_psi_W.reshape(self.N_batch,-1) )
 
 			return jnp.concatenate(dlog_psi, axis=1)
 
@@ -323,10 +339,15 @@ class VMC(object):
 			dphase_psi_s = vmap(partial(jit(grad(loss_phase_psi)), NN_params))(batch, )
 	
 			dlog_psi = []
-			for dphase_psi_layer in dphase_psi_s: # loop over layers
-				for dphase_psi_W in dphase_psi_layer: # loop over NN params
-					dlog_psi.append( 1j*dphase_psi_W.reshape(self.N_batch,-1) )
+			for dphase_psi_W in self.DNN.NN_Tree.flatten(dphase_psi_s):
+				dlog_psi.append( 1j*dphase_psi_W.reshape(self.N_batch,-1) )
 
+
+			# for dphase_psi_layer in dphase_psi_s: # loop over layers
+			# 	for dphase_psi_W in dphase_psi_layer: # loop over NN params
+			# 		dlog_psi.append( 1j*dphase_psi_W.reshape(self.N_batch,-1) )
+
+			
 			return jnp.concatenate(dlog_psi, axis=1)
 
 
@@ -972,11 +993,13 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 			self.params_update[-1,...]=grads
 
-	
-		b_str="reg layer params: {}\n".format( self.DNN.params[-1] )
-		self.logfile.write(b_str)
-		if self.comm.Get_rank()==0:
-			print(b_str)
+		#print(grads[-3:-1])
+		#exit()
+
+		# b_str="reg layer params: {}\n".format( self.DNN.params[0][-1] )
+		# self.logfile.write(b_str)
+		# if self.comm.Get_rank()==0:
+		# 	print(b_str)
 		
 		return loss, r2
 

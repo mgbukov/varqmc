@@ -11,7 +11,7 @@ fi
 echo "#!/bin/bash -login" > submission.sh
 echo "#$ -P f-dmrg" >> submission.sh
 echo "#$ -N job_VMC" >> submission.sh # Specify parameters in the job name. Don't specify the labels for k and SGE_TASK_ID 
-echo "#$ -l h_rt=18:00:00" >> submission.sh
+echo "#$ -l h_rt=11:50:00" >> submission.sh
 
 #echo "#$ -pe omp ${N_omp}" >> submission.sh # more processors
 

@@ -326,50 +326,88 @@ cdef class Neural_Net:
           
             # define DNN
             shape_last_layer=shapes['layer_1']
-            self.NN_architecture = {
-                                    'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                    'nonlin_1': Poly_cpx,
-                                    'reg_1': Regularization((shape_last_layer[1],)),
-                                    #'norm_1': Norm_real(),
-                                #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
-                                #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
-                                #    'nonlin_2': Poly_cpx,
-                                #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                #    'layer_3': GeneralDense_cpx_nonholo(shapes['layer_3'], ignore_b=False), 
-                                }
 
-            # create a copy of the NN architecture to update the batch norm mean and variance dynamically
-            self.NN_architecture_dyn = self.NN_architecture.copy()
-            for key in self.NN_architecture.keys():
-                if 'batch_norm' in key:
-                    self.NN_architecture_dyn[key]=BatchNorm_cpx_dyn(axis=(0,))
 
-            # create NN
-            init_params, self.apply_layer, self.apply_fun_args = serial(*self.NN_architecture.values())
-            _, self.apply_layer_dyn, self.apply_fun_args_dyn = serial(*self.NN_architecture_dyn.values())
-           
-            # determine shape variables
-            input_shape=(1,self.N_sites)
-            output_shape, self.params = init_params(rng,input_shape)
+            if self.NN_dtype=='cpx':
+                self.NN_architecture = {
+                                        'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
+                                        'nonlin_1': Poly_cpx,
+                                        'reg_1': Regularization_cpx((shape_last_layer[1],)),
+                                        #'norm_1': Norm_real(),
+                                    #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                    #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
+                                    #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
+                                    #    'nonlin_2': Poly_cpx,
+                                    #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
+                                    #    'layer_3': GeneralDense_cpx_nonholo(shapes['layer_3'], ignore_b=False), 
+                                    }
+
+                # determine shape variables
+                input_shape=(1,self.N_sites)
+                reduce_shape = (-1,self.N_symm,shape_last_layer[1]) 
+                output_shape = (-1,shape_last_layer[1],)
+
+                # create a copy of the NN architecture to update the batch norm mean and variance dynamically
+                self.params, self.apply_layer, self.apply_fun_args, self.apply_layer_dyn, self.apply_fun_args_dyn = self._compute_layers(rng, self.NN_architecture, input_shape, output_shape, reduce_shape)
+
+
+            elif self.NN_dtype=='real-decoupled':
+
+                NN_arch_log = {
+                                        'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True), 
+                                        'nonlin_1': LogCosh,
+                                        'reg_1': Regularization((shape_last_layer[1],)),
+                                    }
+
+
+                NN_arch_phase = {
+                                        'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=1E0), #4.3E-2
+                                        'reg_1': Phase_arg((shape_last_layer[1],)),
+                                    }
+
+                self.NN_architecture=(NN_arch_log, NN_arch_phase)
+
+
+                # determine shape variables
+                input_shape=(1,self.N_sites)
+                reduce_shape = (-1,self.N_symm,shape_last_layer[1]) 
+                output_shape = (-1,shape_last_layer[1],)
+
+                # create a copy of the NN architecture to update the batch norm mean and variance dynamically
+                params_log,   apply_layer_log,   apply_fun_args_log,   apply_layer_dyn_log,   apply_fun_args_dyn_log  = self._compute_layers(rng, NN_arch_log  , input_shape, output_shape, reduce_shape)
+                params_phase, apply_layer_phase, apply_fun_args_phase, apply_layer_dyn_phase, apply_fun_args_dyn_phase= self._compute_layers(rng, NN_arch_phase, input_shape, output_shape, reduce_shape)
+
+                
+                                
+                self.params=(params_log, params_phase)
+                self.apply_fun_args    =(apply_fun_args_log,     apply_fun_args_phase)
+                self.apply_fun_args_dyn=(apply_fun_args_dyn_log, apply_fun_args_dyn_phase)
+
+
+
+                self.apply_layer = lambda params, inputs, apply_fun_args: ( apply_layer_log  (params[0], inputs, kwargs=apply_fun_args[0]) ,
+                                                                            apply_layer_phase(params[1], inputs, kwargs=sapply_fun_args[1]) , 
+                                                                        )
+
+
+                self.apply_layer_dyn = lambda params, inputs, kwargs=self.apply_fun_args_dyn: ( apply_layer_dyn_log  (params[0], inputs, kwargs=kwargs[0]) ,
+                                                                                                apply_layer_dyn_phase(params[1], inputs, kwargs=kwargs[1]) , 
+                                                                                ) 
+                
+
+
+            else:
+                raise ValueError('NN_dtype not implemented.')
+
             
-
-
-            self.input_shape  = (-1,self.N_sites) # reshape input data batch
-            #self.reduce_shape = (-1,self.N_symm,output_shape[1]) # tuple to reshape output before symmetrization
-            #self.output_shape = (-1,) + output_shape[1:]
-
-            self.reduce_shape = (-1,self.N_symm,shape_last_layer[1]) 
-            self.output_shape = (-1,shape_last_layer[1],)
-  
+        
            
           
             self.NN_Tree = NN_Tree(self.params)
             self.N_varl_params=self.NN_Tree.N_varl_params 
 
 
-            self._init_apply_fun_args(rng,input_shape)
-
+            
 
 
         elif NN_type=='CNN':
@@ -411,10 +449,30 @@ cdef class Neural_Net:
             raise ValueError("unsupported string for variable for NN_type.") 
         
  
-    def _init_apply_fun_args(self,rng,input_shape):
+
+    def _compute_layers(self,rng,NN_architecture, input_shape, output_shape, reduce_shape):
+
+        NN_architecture_dyn = NN_architecture.copy()
+        for key in NN_architecture.keys():
+            if 'batch_norm' in key:
+                NN_architecture_dyn[key]=BatchNorm_cpx_dyn(axis=(0,))
+
+        # create NN
+        init_params, apply_layer, apply_fun_args = serial(*NN_architecture.values())
+        _, apply_layer_dyn, apply_fun_args_dyn = serial(*NN_architecture_dyn.values())
+
+        _, params = init_params(rng,input_shape)
+
+        self._init_apply_fun_args(rng, NN_architecture, apply_fun_args,apply_fun_args_dyn, input_shape, output_shape, reduce_shape)
+
+        return params, apply_layer, apply_fun_args, apply_layer_dyn, apply_fun_args_dyn
+
+
+
+    def _init_apply_fun_args(self,rng, NN_architecture, apply_fun_args,apply_fun_args_dyn, input_shape, output_shape, reduce_shape):
         
-        layers_type=list(self.NN_architecture.keys())
-        init_funs, apply_funs = zip(*self.NN_architecture.values())
+        layers_type=list(NN_architecture.keys())
+        init_funs, apply_funs = zip(*NN_architecture.values())
 
         for j, (init_fun, layer_type) in enumerate(zip(init_funs, layers_type)):        
             
@@ -425,19 +483,20 @@ cdef class Neural_Net:
                 mean, std_mat_inv = init_batchnorm_cpx_params(input_shape)
                 
                 # an update in the parameters of apply_fun_args_dyn UPDATES directly the params of apply_fun_args
-                self.apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv, )        
-                self.apply_fun_args_dyn[j]=dict(fixpoint_iter=False, mean=mean, std_mat_inv=std_mat_inv, comm=self.comm, )
+                apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv, )        
+                apply_fun_args_dyn[j]=dict(fixpoint_iter=False, mean=mean, std_mat_inv=std_mat_inv, comm=self.comm, )
         
             if 'reg' in layer_type:
-                D=dict(reduce_shape=self.reduce_shape, output_shape=self.output_shape)
-                self.apply_fun_args[j]=D
-                self.apply_fun_args_dyn[j]=D
+                D=dict(reduce_shape=reduce_shape, output_shape=output_shape)
+                apply_fun_args[j]=D
+                apply_fun_args_dyn[j]=D
+
 
 
     def _init_evaluate(self):
 
-        #self.evaluate_log  =self._evaluate_log
-        #self.evaluate_phase=self._evaluate_phase
+        # self.evaluate_log  =self._evaluate_log
+        # self.evaluate_phase=self._evaluate_phase
 
         # define network evaluation on GPU
         self.evaluate_log  =jit(self._evaluate_log)
@@ -664,7 +723,7 @@ cdef class Neural_Net:
         # phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
 
         log_psi, phase_psi = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
-        
+
         return phase_psi
 
 

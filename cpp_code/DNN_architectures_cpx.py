@@ -36,6 +36,34 @@ def periodic_padding(inputs,filter_shape,strides):
     return jnp.pad(inputs, ((0,0),(0,0),(0,n_x),(0,n_y)), mode='wrap')
 
 
+def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
+
+    def init_fun(rng,input_shape):
+
+         
+        output_shape=(input_shape[0],W_shape[1])
+        W = random.uniform(rng,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
+        
+        if not ignore_b:
+            rng, k1 = random.split(rng)
+            b = random.uniform(k1,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
+            params=(W,b,)
+        
+        else:
+            params=(W,)
+        
+        return output_shape, params
+
+    def apply_fun(params,inputs, **kwargs):
+        z = jnp.dot(inputs,params[0])
+        if not ignore_b:
+            # add bias
+            z += params[1]       
+        return z
+
+    return init_fun, apply_fun
+
+
 def GeneralDense_cpx_nonholo(W_shape, ignore_b=False):
 
     def init_fun(rng,input_shape):
@@ -319,6 +347,9 @@ def logcosh_imag(Ws):
 
 
 
+@jit
+def logcosh(x):
+    return jnp.log(jnp.cosh(x))
 
 
 
@@ -504,7 +535,7 @@ def init_batchnorm_cpx_params(input_shape):
     return mean, std_mat_inv
 
 
-
+'''
 def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
     """Layer construction function for a batch normalization layer."""
     _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
@@ -544,10 +575,10 @@ def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float
         return (x_real, x_imag)
         
     return init_fun, apply_fun
+'''
 
 
-
-def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
+def Regularization_cpx(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
     """Layer construction function for a batch normalization layer."""
     _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
     _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
@@ -605,6 +636,95 @@ def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_in
     return init_fun, apply_fun
 
 
+def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
+    """Layer construction function for a batch normalization layer."""
+    _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
+    _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
+
+
+    def init_fun(rng, input_shape):
+        
+        k1, k2 = random.split(rng)
+        k2, k3 = random.split(k2)
+        k3, k4 = random.split(k3)
+
+        #a = _a_init(k1, shape)
+        b_shape = (1,)
+        b = _b_init(k2, b_shape) - 0.0
+        
+        # init_value_W=1E-2
+        # W_shape=output_layer_shape+(1,) 
+        # W1 = 1.0 + random.uniform(k3,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
+        # W2 = 1.0 + random.uniform(k4,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
+
+        output_shape=(input_shape[0],1)
+        
+        return output_shape, (b,)
+
+    def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
+        b,   = params
+        
+        # symmetrize
+        # 1/(N/p) = p/N : p different terms in sum left
+        # uncorrelated: 1/\sqrt(p) 
+        # correlated: 1/p
+        log_psi   = jnp.sum(x.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
+        
+        # sum over hidden neurons
+        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])
+        
+        # regularize output
+        a=8.0
+        log_psi=a*jnp.tanh((log_psi-b)/a) + b
+        
+        
+        return log_psi
+        
+    return init_fun, apply_fun
+
+
+
+
+def Phase_arg(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
+    """Layer construction function for a batch normalization layer."""
+    _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
+    _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
+
+
+    def init_fun(rng, input_shape):
+        
+        k1, k2 = random.split(rng)
+       
+        #a = _a_init(k1, shape)
+        b_shape = (1,)
+        b = _b_init(k2, b_shape) - 0.0
+        
+        output_shape=(input_shape[0],1)
+        
+        return output_shape, (b,)
+
+    def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
+        b,   = params
+    
+        phase_psi = jnp.exp(1.0j*x)
+        #phase_psi=x
+
+        # symmetrize
+        phase_psi   = jnp.sum(phase_psi.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
+        # sum over hidden neurons
+        phase_psi   = jnp.sum(  phase_psi.reshape(output_shape), axis=[1,])
+        
+        # regularize output
+        phase_psi=jnp.angle(phase_psi)
+        #phase_psi=phase_psi.real
+
+        #print(phase_psi)
+        #exit()
+        
+        return phase_psi
+        
+    return init_fun, apply_fun
+
 
 ###############
 
@@ -654,6 +774,8 @@ def elementwise(fun, **fun_kwargs):
 LogCosh_cpx=elementwise(logcosh_cpx)
 Poly_cpx=elementwise(poly_cpx)
 #Normalize_cpx=elementwise(normalize_cpx)
+
+LogCosh=elementwise(logcosh)
 
 
 
