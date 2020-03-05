@@ -30,6 +30,7 @@ from jax import jit, grad, vmap, random, ops, partial
 from jax.config import config
 config.update("jax_enable_x64", True)
 from jax.experimental import optimizers
+#from optimizers import sgd, adam
 
 import jax.numpy as jnp
 import numpy as np
@@ -46,12 +47,29 @@ from natural_grad import natural_gradient
 from MC_lib import MC_sampler
 from energy_lib import Energy_estimator
 
+
 import datetime
 import time
 np.set_printoptions(threshold=np.inf)
 
 
 #from misc.MC_weights import *
+
+
+
+def read_str(NN_shape_str):
+
+	shape_tuple=()
+
+	NN_shape_str=NN_shape_str.replace('(','')
+	NN_shape_str=NN_shape_str.replace(')','')
+	NN_shape_str=NN_shape_str.split(',')
+
+
+	for NN_str in NN_shape_str:
+		shape_tuple+=(NN_str,)
+
+	return shape_tuple, len(NN_shape_str)
 
 
 
@@ -218,17 +236,39 @@ class VMC(object):
 
 	def _create_NN(self, load_data=False):
 
-		neurons=[]
-		for neuron in self.NN_shape_str.split('--'):
-			neurons.append(int(neuron))
+		
+		if ',' in self.NN_shape_str:
 
-		assert(neurons[0]==self.L**2)
+			NN_shape_str, M=read_str(self.NN_shape_str)
+			
 
-		self.shapes={}		
+			self.shapes=tuple({} for _ in range(M) )
+
+			neurons=tuple([] for _ in range(M))
+			for j in range(M):
+				for neuron in NN_shape_str[j].split('--'):
+					neurons[j].append(int(neuron))	
+		else:
+			self.shapes={}
+			neurons=[]
+			for neuron in self.NN_shape_str.split('--'):
+				neurons.append(int(neuron))
+
+			assert(neurons[0]==self.L**2)
+
+			
 	
 		if self.NN_type == 'DNN':
-			for j in range(len(neurons)-1):
-				self.shapes['layer_{0:d}'.format(j+1)]=[neurons[j],neurons[j+1]]
+
+			if ',' in self.NN_shape_str:
+
+				for j in range(M):
+					for i in range(len(neurons[j])-1):
+						self.shapes[j]['layer_{0:d}'.format(i+1)]=[neurons[j][i],neurons[j][i+1]]
+
+			else:
+				for i in range(len(neurons)-1):
+					self.shapes['layer_{0:d}'.format(i+1)]=[neurons[i],neurons[i+1]]
 		
 			# self.shapes=dict(layer_1 = [self.L**2, 8], 
 			# 			#	 layer_2 = [12       ,  6],
@@ -243,8 +283,6 @@ class VMC(object):
 						)
 			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}-{1:d}-{2:d}'.format(value['out_chan'],value['filter_shape'][0],value['strides'][0]) for value in self.shapes.values() )
 
-		
-		
 
 
 		### create Neural network
@@ -262,9 +300,9 @@ class VMC(object):
 		# jit functions
 		self.evaluate_NN_dyn=self.DNN.evaluate_dyn
 		
-		#self.evaluate_NN=jit(self.DNN.evaluate)
-		self.evaluate_NN=self.DNN.evaluate
-		print("\n\nNN evaluation NOT JITTED !!!\n\n")
+		self.evaluate_NN=jit(self.DNN.evaluate)
+		#self.evaluate_NN=self.DNN.evaluate
+		#print("\n\nNN evaluation NOT JITTED !!!\n\n")
 		
 		#self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
 		
@@ -381,14 +419,17 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			step_size=1E-2
-			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=step_size)
-			#self.opt_state = self.opt_init(self.NN_params)
-			self.opt_state = self.opt_init(self.DNN.params)
+			self.learning_rates=[1E-2,1E-2]
+			opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=1.0)
+			self.opt_state = opt_init(self.DNN.params)
 
 		elif self.optimizer=='adam':
+			
 			step_size=1E-3
-			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=step_size, b1=0.9, b2=0.99, eps=1e-08)
+			opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=step_size, b1=0.9, b2=0.99, eps=1e-08)
+			self.opt_state = opt_init(self.DNN.params)
+
+			# Energy cost function
 			if self.mode=='exact':
 
 				@jax.partial(jit, static_argnums=(2,3))
@@ -445,13 +486,16 @@ class VMC(object):
 
 				self.compute_grad=jit(grad(loss_energy_MC), static_argnums=(2,3))
 
-			self.opt_state = self.opt_init(self.DNN.params)
-
+			
 		elif self.optimizer=='RK':
+
+			print("\n\nsingle solver currently available\n\n")
+			exit()
+
 			step_size=1E-4
 			self.NG.init_RK_params(step_size)
 
-		self.step_size=step_size
+		#self.step_size=step_size
 
 		# define variable to keep track of the DNN params update
 		n_iter=6
@@ -635,6 +679,14 @@ class VMC(object):
 		yaml.dump(self.params_dict, config_params_yaml)
 		config_params_yaml.close()
 
+		# flush data files
+		self.file_energy.flush()
+		self.file_loss.flush()
+		self.file_MC_data.flush()
+		self.file_opt_data.flush()
+		self.file_phase_hist.flush()
+
+
 
 	def debug_helper(self,):
 
@@ -785,7 +837,6 @@ class VMC(object):
 
 				if self.comm.Get_rank()==0 and self.save_data:
 					self.save_sim_data(iteration,loss,r2,phase_hist)
-
 
 			
 			prss_time=time.time()-ti
@@ -983,6 +1034,12 @@ class VMC(object):
 				
 				
 			##### apply gradients
+
+			left_ind = 0
+			for j, right_ind in enumerate(self.DNN.N_varl_params_vec):
+				grads[left_ind:left_ind+right_ind]*=self.learning_rates[j]
+				left_ind+=right_ind
+
 			self.opt_state = self.opt_update(iteration, self.DNN.NN_Tree.unravel(grads), self.opt_state) 
 			self.DNN.update_params(self.get_params(self.opt_state))
 			

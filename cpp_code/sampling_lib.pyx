@@ -34,10 +34,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=4
+DEF _L=6
 cdef extern from *:
     """
-    #define _L 4
+    #define _L 6
     """
     pass
 
@@ -272,6 +272,7 @@ cdef class Neural_Net:
     cdef vector[unsigned int] thread_seeds
 
     cdef int N_varl_params, N_symm, N_sites
+    cdef object N_varl_params_vec
     cdef int N_MC_chains, N_spinconfigelmts, N_layers
 
     cdef object evaluate_phase, evaluate_log
@@ -325,19 +326,25 @@ cdef class Neural_Net:
             self.N_symm=_L*_L*2*2*2 # no Z symmetry
           
             # define DNN
-            shape_last_layer=shapes['layer_1']
-
+            
 
             if self.NN_dtype=='cpx':
+
+                shape_last_layer=shapes['layer_1']
+
+
                 self.NN_architecture = {
-                                        'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
+                                        'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True, init_value_W=1E-2,init_value_b=1E-2,), 
                                         'nonlin_1': Poly_cpx,
-                                        'reg_1': Regularization_cpx((shape_last_layer[1],)),
+                                        #'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False, init_value_W=1E-1,init_value_b=1E-1,),
+                                        #'nonlin_2': Poly_cpx,    
+                                        'reg': Regularization_cpx((shape_last_layer[1],)),
+                                    
                                         #'norm_1': Norm_real(),
                                     #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                    #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
+                                    
                                     #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
-                                    #    'nonlin_2': Poly_cpx,
+                                    
                                     #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
                                     #    'layer_3': GeneralDense_cpx_nonholo(shapes['layer_3'], ignore_b=False), 
                                     }
@@ -351,18 +358,43 @@ cdef class Neural_Net:
                 self.params, self.apply_layer, self.apply_fun_args, self.apply_layer_dyn, self.apply_fun_args_dyn = self._compute_layers(rng, self.NN_architecture, input_shape, output_shape, reduce_shape)
 
 
+                self.NN_Tree = NN_Tree(self.params)
+                self.N_varl_params=self.NN_Tree.N_varl_params
+                self.N_varl_params_vec=[self.N_varl_params,] 
+
+
             elif self.NN_dtype=='real-decoupled':
 
+                shape_last_layer_log  =shapes[0]['layer_1']
+                shape_last_layer_phase=shapes[1]['layer_2']
+
+
                 NN_arch_log = {
-                                        'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True), 
-                                        'nonlin_1': LogCosh,
-                                        'reg_1': Regularization((shape_last_layer[1],)),
-                                    }
+                                         'layer_1': GeneralDense_cpx(shapes[0]['layer_1'], ignore_b=True, init_value_W=1E-2,init_value_b=1E-2,), 
+                                         'nonlin_1': Poly_cpx,
+                                         'reg': Regularization_cpx((shape_last_layer_log[1],)),
+
+                                #        'layer_1': GeneralDense(shapes[0]['layer_1'], ignore_b=True, init_value_W=1E-3),
+                                #        'nonlin_1': LogCosh,
+                                #        'layer_2': GeneralDense(shapes[0]['layer_2'], ignore_b=True),
+                                #        'nonlin_2': LogCosh,
+                                #        'layer_3': GeneralDense(shapes[0]['layer_3'], ignore_b=True),  
+                                #        'reg': Regularization((shape_last_layer_log[1],)),
+                            }
 
 
                 NN_arch_phase = {
-                                        'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=1E0), #4.3E-2
-                                        'reg_1': Phase_arg((shape_last_layer[1],)),
+                                #        'layer_1': GeneralDense_cpx(shapes[1]['layer_1'], ignore_b=True, init_value_W=1E-1,init_value_b=1E-1,), 
+                                #        'nonlin_1': Poly_cpx,
+                                #         'reg': Regularization_cpx2((shape_last_layer_phase[1],)),
+
+                                        'layer_1': GeneralDense(shapes[1]['layer_1'], ignore_b=True, init_value_W=3E-1, ), #3E-1
+                                        'nonlin_1': LogCosh,
+                                        'layer_2': GeneralDense(shapes[1]['layer_2'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
+                                        'nonlin_2': LogCosh,
+                                #        'layer_3': GeneralDense(shapes[1]['layer_3'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
+                                #        'nonlin_3': LogCosh,
+                                        'reg': Phase_arg((shape_last_layer_phase[1],)),
                                     }
 
                 self.NN_architecture=(NN_arch_log, NN_arch_phase)
@@ -370,12 +402,17 @@ cdef class Neural_Net:
 
                 # determine shape variables
                 input_shape=(1,self.N_sites)
-                reduce_shape = (-1,self.N_symm,shape_last_layer[1]) 
-                output_shape = (-1,shape_last_layer[1],)
+
+                reduce_shape_log = (-1,self.N_symm,shape_last_layer_log[1])
+                reduce_shape_phase = (-1,self.N_symm,shape_last_layer_phase[1]) 
+
+                output_shape_log = (-1,shape_last_layer_log[1],)
+                output_shape_phase = (-1,shape_last_layer_phase[1],)
+
 
                 # create a copy of the NN architecture to update the batch norm mean and variance dynamically
-                params_log,   apply_layer_log,   apply_fun_args_log,   apply_layer_dyn_log,   apply_fun_args_dyn_log  = self._compute_layers(rng, NN_arch_log  , input_shape, output_shape, reduce_shape)
-                params_phase, apply_layer_phase, apply_fun_args_phase, apply_layer_dyn_phase, apply_fun_args_dyn_phase= self._compute_layers(rng, NN_arch_phase, input_shape, output_shape, reduce_shape)
+                params_log,   apply_layer_log,   apply_fun_args_log,   apply_layer_dyn_log,   apply_fun_args_dyn_log  = self._compute_layers(rng, NN_arch_log  , input_shape, output_shape_log, reduce_shape_log)
+                params_phase, apply_layer_phase, apply_fun_args_phase, apply_layer_dyn_phase, apply_fun_args_dyn_phase= self._compute_layers(rng, NN_arch_phase, input_shape, output_shape_phase, reduce_shape_phase)
 
                 
                                 
@@ -395,6 +432,14 @@ cdef class Neural_Net:
                                                                                 ) 
                 
 
+                self.NN_Tree = NN_Tree(self.params)
+                
+                N_var_log=NN_Tree(params_log).N_varl_params
+                N_var_phase=NN_Tree(params_phase).N_varl_params
+
+                self.N_varl_params=self.NN_Tree.N_varl_params 
+                self.N_varl_params_vec=[N_var_log, N_var_phase, ]
+
 
             else:
                 raise ValueError('NN_dtype not implemented.')
@@ -403,9 +448,7 @@ cdef class Neural_Net:
         
            
           
-            self.NN_Tree = NN_Tree(self.params)
-            self.N_varl_params=self.NN_Tree.N_varl_params 
-
+            
 
             
 
@@ -590,6 +633,10 @@ cdef class Neural_Net:
     property N_varl_params:
         def __get__(self):
             return self.N_varl_params 
+
+    property N_varl_params_vec:
+        def __get__(self):
+            return self.N_varl_params_vec
 
     property params:
         def __get__(self):

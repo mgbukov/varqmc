@@ -187,8 +187,19 @@ class MC_sampler():
 		self.log_psi_shift=np.max(self.log_mod_kets[:])#._value
 		self.log_mod_kets[:] -= self.log_psi_shift 
 		
+		#print(self.phase_kets)
+		#print(self.log_mod_kets)
+		
+		print('THERE', self.phase_kets[-16], self.phase_kets[-1])
+
+		# print()
+		
+		# print(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)[-1,...])
+
+		#exit()
 
 
+		
 		# for j, spin_config in enumerate(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)):
 		# 	print(spin_config[0,...].reshape(4,4))
 		# 	print()

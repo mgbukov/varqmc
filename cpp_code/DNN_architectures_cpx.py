@@ -64,11 +64,11 @@ def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
     return init_fun, apply_fun
 
 
-def GeneralDense_cpx_nonholo(W_shape, ignore_b=False):
+def GeneralDense_cpx_nonholo(W_shape, ignore_b=False,init_value_W=1E-2,init_value_b=1E-2,):
 
     def init_fun(rng,input_shape):
 
-        init_value_W=1E-2 #1E-1
+         #1E-1
 
         rng_real, rng_imag = random.split(rng)
         
@@ -78,8 +78,6 @@ def GeneralDense_cpx_nonholo(W_shape, ignore_b=False):
         W_B = random.uniform(rng_imag,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
 
         if not ignore_b:
-
-            init_value_b=1E-2
 
             rng_real, k1 = random.split(rng_real)
             rng_imag, k2 = random.split(rng_imag)
@@ -122,11 +120,9 @@ def GeneralDense_cpx_nonholo(W_shape, ignore_b=False):
     return init_fun, apply_fun
 
 
-def GeneralDense_cpx(W_shape, ignore_b=False):
+def GeneralDense_cpx(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
 
     def init_fun(rng,input_shape):
-
-        init_value_W=1E-2 
 
         rng_real, rng_imag = random.split(rng)
         
@@ -136,8 +132,6 @@ def GeneralDense_cpx(W_shape, ignore_b=False):
         W_imag = random.uniform(rng_imag,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
 
         if not ignore_b:
-
-            init_value_b=1E-2
 
             rng_real, k1 = random.split(rng_real)
             rng_imag, k2 = random.split(rng_imag)
@@ -184,9 +178,7 @@ def GeneralDense_cpx(W_shape, ignore_b=False):
     return init_fun, apply_fun
 
 
-def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,
-                strides=None, padding='VALID', W_init=None,
-                b_init=normal(1e-6), ignore_b=False, dtype=jnp.float64):
+def GeneralConv_cpx(dimension_numbers, out_chan, filter_shape,strides=None, padding='VALID', W_init=None,b_init=normal(1e-6), ignore_b=False, dtype=jnp.float64):
 
     """Layer construction function for a general convolution layer."""
     lhs_spec, rhs_spec, out_spec = dimension_numbers
@@ -350,7 +342,6 @@ def logcosh_imag(Ws):
 @jit
 def logcosh(x):
     return jnp.log(jnp.cosh(x))
-
 
 
 ##############################
@@ -613,6 +604,58 @@ def Regularization_cpx(output_layer_shape,center=True, scale=True, a_init=ones, 
         # uncorrelated: 1/\sqrt(p) 
         # correlated: 1/p
         log_psi   = jnp.sum(Re_z.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
+        #phase_psi = jnp.sum(Im_z.reshape(reduce_shape,order='C'), axis=[1,])
+
+        # sum over hidden neurons
+        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])
+        #phase_psi = jnp.sum(phase_psi.reshape(output_shape), axis=[1,])
+
+        # regularize output
+        a=8.0
+        log_psi=a*jnp.tanh((log_psi-b)/a) + b
+        
+        
+        return log_psi # (log_psi, phase_psi)
+        
+    return init_fun, apply_fun
+
+
+
+def Regularization_cpx2(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
+    """Layer construction function for a batch normalization layer."""
+    _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
+    _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
+
+
+    def init_fun(rng, input_shape):
+        
+        k1, k2 = random.split(rng)
+        k2, k3 = random.split(k2)
+        k3, k4 = random.split(k3)
+
+        #a = _a_init(k1, shape)
+        b_shape = (1,)
+        b = _b_init(k2, b_shape) - 0.0
+        
+        # init_value_W=1E-2
+        # W_shape=output_layer_shape+(1,) 
+        # W1 = 1.0 + random.uniform(k3,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
+        # W2 = 1.0 + random.uniform(k4,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
+
+        output_shape=(input_shape[0],1)
+        
+        return output_shape, (b,)
+
+    def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
+        b,   = params
+        Re_z, Im_z = x
+
+        
+        # symmetrize
+        # 1/(N/p) = p/N : p different terms in sum left
+        # uncorrelated: 1/\sqrt(p) 
+        # correlated: 1/p
+        log_psi   = jnp.sum(Re_z.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
         phase_psi = jnp.sum(Im_z.reshape(reduce_shape,order='C'), axis=[1,])
 
         # sum over hidden neurons
@@ -631,7 +674,7 @@ def Regularization_cpx(output_layer_shape,center=True, scale=True, a_init=ones, 
         log_psi=a*jnp.tanh((log_psi-b)/a) + b
         
         
-        return (log_psi, phase_psi)
+        return phase_psi # (log_psi, phase_psi)
         
     return init_fun, apply_fun
 
@@ -696,8 +739,8 @@ def Phase_arg(output_layer_shape,center=True, scale=True, a_init=ones, b_init=ze
         k1, k2 = random.split(rng)
        
         #a = _a_init(k1, shape)
-        b_shape = (1,)
-        b = _b_init(k2, b_shape) - 0.0
+        b_shape = (1,) #output_layer_shape #
+        b = _b_init(k2, b_shape)
         
         output_shape=(input_shape[0],1)
         
@@ -705,18 +748,26 @@ def Phase_arg(output_layer_shape,center=True, scale=True, a_init=ones, b_init=ze
 
     def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
         b,   = params
-    
-        phase_psi = jnp.exp(1.0j*x)
-        #phase_psi=x
+
+        #print(x[-1,...].sum(), x[-2,...].sum(), x[-16,...].sum())
+
+        #phase_psi = jnp.exp(1j*x)
+        phase_psi=x 
 
         # symmetrize
         phase_psi   = jnp.sum(phase_psi.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
+        
         # sum over hidden neurons
         phase_psi   = jnp.sum(  phase_psi.reshape(output_shape), axis=[1,])
+
+        #phase_psi = jnp.dot(phase_psi,b)
         
+        #print('THERE', phase_psi[-16], phase_psi[-1])
+        
+
         # regularize output
-        phase_psi=jnp.angle(phase_psi)
-        #phase_psi=phase_psi.real
+        #phase_psi=jnp.angle(phase_psi)
+        #phase_psi=jnp.pi*jnp.tanh(phase_psi-b)
 
         #print(phase_psi)
         #exit()

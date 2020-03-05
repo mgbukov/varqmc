@@ -281,12 +281,11 @@ class natural_gradient():
 
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,self.iteration)
 
-		#print('HERE', np.max(np.abs(self.dlog_psi[-1,:])))
-		# exit()
+		#print('HERE', np.max(np.abs(self.dlog_psi[-1,:])), np.max(np.abs(self.dlog_psi[-16,:])))
+
 
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
-
 
 		### compute natural_gradients using cg
 		# regularize Fisher metric
