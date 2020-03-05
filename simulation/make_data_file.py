@@ -29,9 +29,13 @@ def create_params_file(params):
 	comm.Barrier()
 
 
+	# check if file exists and create it if not
+	#if not os.path.isfile(data_dir + '/config_params_init.yaml'):
+
 	config_params_init = open(data_dir + '/config_params_init.yaml', 'w')
 	yaml.dump(params, config_params_init)
 	config_params_init.close()
+
 
 	return data_dir
 

@@ -15,7 +15,7 @@ import pickle
 
 class natural_gradient():
 
-	def __init__(self,comm,N_MC_points,N_batch,N_varl_params,compute_grad_log_psi, NN_Tree, grad_update_mode='normal'):
+	def __init__(self,comm,N_MC_points,N_batch,N_varl_params,compute_grad_log_psi, NN_Tree, grad_update_mode='normal', start_iter=0,):
 				 
 		self.comm=comm
 
@@ -76,7 +76,7 @@ class natural_gradient():
 		self.run_debug_helper=None
 		self.debug_mode=True
 
-		self.iteration=0
+		self.iteration=start_iter
 		self.r2_cost=0.0
 		self.max_grads=0.0
 
@@ -162,7 +162,7 @@ class natural_gradient():
 
 		if self.TDVP_type=='real':
 			self.O_expt2[:] = (   jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
-					  		      + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
+					  		    + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
 			self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
 
@@ -283,7 +283,6 @@ class natural_gradient():
 
 		#print('HERE', np.max(np.abs(self.dlog_psi[-1,:])), np.max(np.abs(self.dlog_psi[-16,:])))
 
-
 		self.compute_gradients(Eloc_params_dict=Eloc_params_dict,mode=mode)
 		self.compute_fisher_metric(Eloc_params_dict=Eloc_params_dict,mode=mode)
 
@@ -317,6 +316,7 @@ class natural_gradient():
 		self.F_log_norm=np.linalg.norm(self.F_vector_log)
 		self.F_phase_norm=np.linalg.norm(self.F_vector_phase)
 
+		
 		#######################################################
 
 		# apply conjugate gradient a few times

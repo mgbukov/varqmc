@@ -34,10 +34,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -271,7 +271,7 @@ cdef class Neural_Net:
     cdef int MPI_rank, seed
     cdef vector[unsigned int] thread_seeds
 
-    cdef int N_varl_params, N_symm, N_sites
+    cdef int N_varl_params, N_symm, N_sites, N_features
     cdef object N_varl_params_vec
     cdef int N_MC_chains, N_spinconfigelmts, N_layers
 
@@ -491,7 +491,11 @@ cdef class Neural_Net:
         else:
             raise ValueError("unsupported string for variable for NN_type.") 
         
- 
+        
+
+        self.N_features=self.N_sites*self.N_symm
+
+
 
     def _compute_layers(self,rng,NN_architecture, input_shape, output_shape, reduce_shape):
 
@@ -554,10 +558,10 @@ cdef class Neural_Net:
     def _init_variables(self,N_MC_chains):
 
         self.N_MC_chains=N_MC_chains
-        self.N_spinconfigelmts=self.N_symm*self.N_sites
+        self.N_spinconfigelmts=self.N_features
 
-        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
-        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
+        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_features,dtype=np.int8)
+        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_features,dtype=np.int8)
 
         # access data in device array; transfer memory from numpy to jax
         if self.NN_type=='DNN':
@@ -597,6 +601,10 @@ cdef class Neural_Net:
     property N_sites:
         def __get__(self):
             return self.N_sites
+
+    property N_features:
+        def __get__(self):
+            return self.N_features
 
     property N_symm:
         def __get__(self):
@@ -641,6 +649,8 @@ cdef class Neural_Net:
     property params:
         def __get__(self):
             return self.params
+        def __set__(self,value):
+            self.params=value
 
     property evaluate_phase:
         def __get__(self):
@@ -815,7 +825,7 @@ cdef class Neural_Net:
                                            thermalization_time,
                                            auto_correlation_time,
                                            #
-                                           &spin_states[chain_n*n_MC_points*self.N_symm*self.N_sites],
+                                           &spin_states[chain_n*n_MC_points*self.N_features],
                                            &ket_states[chain_n*n_MC_points],
                                            &log_mod_kets[chain_n*n_MC_points],
                                            &s0_vec[0],
@@ -838,7 +848,7 @@ cdef class Neural_Net:
                                            0, # thermalization time
                                            auto_correlation_time,
                                            #
-                                           &spin_states[self.N_MC_chains*n_MC_points*self.N_symm*self.N_sites],
+                                           &spin_states[self.N_MC_chains*n_MC_points*self.N_features],
                                            &ket_states[self.N_MC_chains*n_MC_points],
                                            &log_mod_kets[self.N_MC_chains*n_MC_points],
                                            &s0_vec[0],
@@ -969,7 +979,7 @@ cdef class Neural_Net:
                 self.log_psi_s[chain_n] = self.log_psi_t[chain_n];
                 mod_psi_s = mod_psi_t;
                 # set spin configs
-                for i in range(self.N_symm*self.N_sites):
+                for i in range(self.N_features):
                     spinstate_s[i] = spinstate_t[i];
                 
                 N_accepted+=1;
@@ -977,7 +987,7 @@ cdef class Neural_Net:
 
             if( (N_MC_proposals[0] > thermalization_time) & ((N_MC_proposals[0] % auto_correlation_time) == 0) ):
                 
-                for i in range(self.N_symm*self.N_sites):
+                for i in range(self.N_features):
                     spin_states[k*self.N_sites*self.N_symm + i] = spinstate_s[i];
 
                 ket_states[k] = s;

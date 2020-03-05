@@ -83,6 +83,8 @@ class VMC(object):
 		else:
 			self.data_dir=data_dir
 
+		self.params_dict=params_dict
+			
 
 		# initialize communicator
 		self.comm=MPI.COMM_WORLD
@@ -100,6 +102,9 @@ class VMC(object):
 
 		self.mode=params_dict['mode'] # exact or MC simulation
 		self.optimizer=params_dict['optimizer']
+		self.grad_update_mode=params_dict['grad_update_mode']
+		
+
 		self.NN_type=params_dict['NN_type'] # DNN vs CNN
 		self.NN_dtype=params_dict['NN_dtype'] # 'real' # # cpx vs real network parameters
 		self.NN_shape_str=params_dict['NN_shape_str']
@@ -109,9 +114,6 @@ class VMC(object):
 		self.batchnorm=params_dict['batchnorm']
 
 
-		self.grad_update_mode=params_dict['grad_update_mode']
-		
-
 		# training params
 		self.N_iterations=params_dict['N_iterations']
 		self.start_iter=params_dict['start_iter']
@@ -120,6 +122,7 @@ class VMC(object):
 		self.thermal=params_dict['MC_thermal']
 		self.N_MC_points=params_dict['N_MC_points']
 		self.N_MC_chains = params_dict['N_MC_chains'] # number of MC chains to run in parallel
+		self.minibatch_size=params_dict['minibatch_size'] # define batch size for GPU evaluation of local energy
 
 
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
@@ -128,91 +131,60 @@ class VMC(object):
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
 			assert(self.L==4)
-			
 			self.N_batch=self.N_MC_points#
 			if self.comm.Get_size()>1:
 				print('only one MPI process allowed for "exact" simulation.')
 				exit()
 		elif self.mode=='MC':
-
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
-			
 			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
 				self.N_batch+=1
-
-			#print(self.comm.Get_rank(), self.N_batch)
-
-
-			# self.N_batch=self.N_MC_points//self.comm.Get_size()
-			# if self.N_batch//self.N_MC_chains != self.N_batch/self.N_MC_chains:
-			# 	print('number of MC chains incompatible with the total number of points:', self.N_batch//self.N_MC_chains, self.N_batch/self.N_MC_chains)
-			# 	exit()
 		else:
 			print('unrecognized operation mode!')
 			
 
-		# define batch size for GPU evaluation of local energy
-		self.minibatch_size=params_dict['minibatch_size']
-
 		
 		
-		if self.load_data:
+	
+		model_params=dict(model=self.NN_type+self.NN_dtype,
+						  mode=self.mode,
+						  L=self.L,
+						  J2=self.J2,
+						  opt=self.optimizer,
+						  NNstrct=self.NN_shape_str,
+						  MCpts=self.N_MC_points,
+						  Nprss=self.comm.Get_size(),
+						  NMCchains=self.N_MC_chains,
+						)
 
-			self.start_iter=params_dict['stop_iter']
-			
-			model_params=dict(model=self.NN_type+self.NN_dtype,
-							  mode=self.mode,
-							  L=self.L,
-							  J2=self.J2,
-							  opt=self.optimizer,
-							  NNstrct=params_dict['NN_shape_str'],
-							  MCpts=self.N_MC_points,
-							  Nprss=self.comm.Get_size(),
-							  NMCchains=self.N_MC_chains,
-							)
-			self._create_file_name(model_params)
-			self.load_dir=os.getcwd()+'/data/data_files/'
-			
-
-		# define number of iterations to store for debugging purposes
-		self.n_iter=10
 		
+		self.n_iter=10 # define number of iterations to store for debugging purposes
+		
+		self._create_file_name(model_params)
 		self._create_NN(load_data=self.load_data)
 		self._create_optimizer()
 		self._create_energy_estimator()
 		self._create_MC_sampler()
 
 		
-		if not self.load_data:
-			model_params=dict(model=self.NN_type+self.NN_dtype,
-							  mode=self.mode,
-							  L=self.L,
-							  J2=self.J2,
-							  opt=self.optimizer,
-							  NNstrct=self.NN_shape_str,
-							  MCpts=self.N_MC_points,
-							  Nprss=self.comm.Get_size(),
-							  NMCchains=self.N_MC_chains, 
-							)
-			self._create_file_name(model_params)
+
 
 		# create log file and directory
 		if self.save_data:
 			self._create_logs()
 
 
+
+
 		# add variables to yaml file
-		if self.comm.Get_rank()==0 and self.save_data:
+		if self.comm.Get_rank()==0 and self.save_data and (not self.load_data):
 			
 			config_params_yaml = open(self.data_dir + '/config_params.yaml', 'w')
 			
-			params_dict['N_batch']=self.N_batch
-			params_dict['NN_shape_str']=self.NN_shape_str
+			self.params_dict['N_batch']=self.N_batch
+			self.params_dict['NN_shape_str']=self.NN_shape_str
 			
-			self.params_dict=params_dict
 			yaml.dump(self.params_dict, config_params_yaml)
-
-
 
 			config_params_yaml.close()
 
@@ -247,7 +219,10 @@ class VMC(object):
 			neurons=tuple([] for _ in range(M))
 			for j in range(M):
 				for neuron in NN_shape_str[j].split('--'):
-					neurons[j].append(int(neuron))	
+					neurons[j].append(int(neuron))
+
+				assert(neurons[j][0]==self.L**2)	
+		
 		else:
 			self.shapes={}
 			neurons=[]
@@ -290,11 +265,13 @@ class VMC(object):
 		#self.DNN.update_params(load_params())
 
 		if load_data:
-			file_name='NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
-			with open(self.load_dir+file_name+'.pkl', 'rb') as handle:
-				NN_params = pickle.load(handle)
+			file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter) + self.file_name
+			print(file_name)
+			with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+				self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
+				self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
 
-			self.DNN.update_params(NN_params)
+			#self.DNN.update_params(NN_params)
 		
 
 		# jit functions
@@ -417,6 +394,7 @@ class VMC(object):
 		self.NG.init_global_variables(self.n_iter)
 		self.NG.run_debug_helper=self.run_debug_helper
 
+
 		# jax self.optimizer
 		if self.optimizer=='NG':
 			self.learning_rates=[1E-2,1E-2]
@@ -512,8 +490,7 @@ class VMC(object):
 		### Energy estimator
 		self.E_estimator=Energy_estimator(self.comm,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign,) # contains all of the physics
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
-		self.N_features=self.DNN.N_sites*self.DNN.N_symm
-
+		
 	def _create_MC_sampler(self, ):
 		### initialize MC sampler variables
 		self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
@@ -576,7 +553,7 @@ class VMC(object):
 			# open log_file
 			if os.path.exists(file_name):
 				if self.load_data:
-				    append_write = 'a' # append if already exists
+				    append_write = 'a+' # append if already exists
 				else:
 					append_write = 'w' # make a new file if not
 			else:
@@ -621,7 +598,13 @@ class VMC(object):
 		self.timing_vec=np.zeros((self.N_iterations+1,),dtype=np.float64)
 		
 
-		
+		### load data
+		if self.load_data:
+			iteration, self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm=np.loadtxt(self.savefile_dir+'opt_data--'+common_str, delimiter=':', skiprows=self.start_iter-1, max_rows=1)
+			self.NG.counter=int(self.NG.counter)
+
+
+
 	def _compute_phase_hist(self, phases, weigths):
 								
 		# compute histogram
@@ -761,7 +744,7 @@ class VMC(object):
 		self.E_estimator.Eloc_imag[inds]=0.0
 
 
-	def train(self, start=0):
+	def train(self, start_iter=0):
 
 
 		# set timer
@@ -772,11 +755,11 @@ class VMC(object):
 			assert(self.N_MC_points==107) # 107 states in the symmetry reduced sector for L=4
 
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
-			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.DNN.NN_type)
+			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN.N_features, NN_type=self.DNN.NN_type)
 
 
 
-		for iteration in range(start,self.N_iterations, 1): 
+		for iteration in range(start_iter,start_iter+self.N_iterations, 1): 
 
 			#self.comm.Barrier()
 			ti=time.time()
@@ -811,12 +794,11 @@ class VMC(object):
 			#exit()
 
 			if self.mode=='exact':
-				self.logfile.write('overlap = {0:0.4f}.\n\n'.format(self.Eloc_params_dict['overlap']) )
+				self.logfile.write('overlap = {0:0.10f}.\n\n'.format(self.Eloc_params_dict['overlap']) )
 
 			
 			
-			if iteration<self.N_iterations-1:
-
+			if iteration<self.N_iterations+start_iter:
 
 				#### check point DNN parameters
 				if self.comm.Get_rank()==0 and self.save_data:
@@ -836,6 +818,7 @@ class VMC(object):
 
 
 				if self.comm.Get_rank()==0 and self.save_data:
+					#if not(self.load_data and (start_iter==iteration)):
 					self.save_sim_data(iteration,loss,r2,phase_hist)
 
 			
@@ -843,7 +826,9 @@ class VMC(object):
 			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.\n".format(self.comm.Get_rank(), iteration, prss_time)
 			self.logfile.write(fin_iter_str)
 			print(fin_iter_str)
-			self.timing_vec[iteration]=prss_time
+			
+
+			self.timing_vec[iteration-start_iter]=prss_time
 			
 			self.logfile.flush()
 			os.fsync(self.logfile.fileno())
@@ -857,7 +842,7 @@ class VMC(object):
 		final_str='\n\nPROCESS_RANK {0:d}, total calculation time: {1:0.4f} secs.\n\n\n'.format(self.comm.Get_rank(),prss_tot_time)
 		print(final_str)
 		self.logfile.write(final_str)
-		self.timing_vec[iteration+1]=prss_tot_time
+		self.timing_vec[iteration+1-start_iter]=prss_tot_time
 
 
 		timing_matrix=np.zeros((self.comm.Get_size(),self.N_iterations+1),dtype=np.float64)
@@ -865,7 +850,7 @@ class VMC(object):
 
 
 		if self.comm.Get_rank()==0 and self.save_data:
-			timing_matrix_filename = '/simulation_time--' + self.file_name + '.txt'
+			timing_matrix_filename = '/simulation_time--start_iter_{0:d}--'.format(start_iter) + self.file_name + '.txt'
 			np.savetxt(self.data_dir+timing_matrix_filename,timing_matrix.T,delimiter=',')
 			
 		
@@ -1050,7 +1035,7 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 			self.params_update[-1,...]=grads
 
-		#print(grads[-3:-1])
+		#print('GRADS', grads[-3:-1])
 		#exit()
 
 		# b_str="reg layer params: {}\n".format( self.DNN.params[0][-1] )
