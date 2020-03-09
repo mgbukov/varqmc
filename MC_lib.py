@@ -88,9 +88,8 @@ class MC_sampler():
 			self.phase_kets_g=np.array([[None],[None]])
 
 
-		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
 		self.s0_g=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
-
+		self.sf_g=np.zeros_like(self.s0_g)
 
 		self._reset_global_vars()
 		
@@ -126,7 +125,7 @@ class MC_sampler():
 		#assert(self.spinstates_ket.max()==0)
 
 		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
-												self.spinstates_ket,self.ints_ket,self.log_mod_kets,self.s0, self.thermal,
+												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
 
 		#print(self.ints_ket)
@@ -157,9 +156,11 @@ class MC_sampler():
 		### gather seeds
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgatherv([self.s0,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
+			self.comm.Allgatherv([DNN.s0_vec,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
+			self.comm.Allgatherv([DNN.sf_vec,  self.MPI_basis_dtype], [self.sf_g, self.MPI_basis_dtype])
 		else:
-			self.s0_g=self.s0.copy()
+			self.s0_g=self.s0_vec.copy()
+			self.sf_g=self.sf_vec.copy()
 
 
 		### compute acceptance ratio
@@ -191,7 +192,7 @@ class MC_sampler():
 		#print(self.log_mod_kets)
 		
 		print('THERE', self.phase_kets[-16], self.phase_kets[-1])
-
+		#exit()
 		# print()
 		
 		# print(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)[-1,...])

@@ -1,12 +1,12 @@
 J2: 0.5
-sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
+sign: -1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 6
 NN_dtype: real-decoupled # cpx #
 NN_shape_str: (36--10,36--24--12) 
 NN_type: DNN
 N_MC_chains: 1
 N_MC_points: 20000
-N_iterations: 700
+N_iterations: 1000
 batchnorm: false
 load_data: false
 minibatch_size: 100

@@ -15,9 +15,13 @@ import pickle
 
 class natural_gradient():
 
-	def __init__(self,comm,N_MC_points,N_batch,N_varl_params,compute_grad_log_psi, NN_Tree, grad_update_mode='normal', start_iter=0,):
+	def __init__(self,comm,N_MC_points,N_batch,N_varl_params_vec,compute_grad_log_psi, NN_Tree, NN_dtype, grad_update_mode, start_iter, ):
 				 
 		self.comm=comm
+		self.logfile=None
+
+		self.NN_dtype=NN_dtype
+		self.grad_update_mode=grad_update_mode
 
 
 		self.compute_grad_log_psi=compute_grad_log_psi
@@ -35,16 +39,17 @@ class natural_gradient():
 
 		self.N_batch=N_batch
 		self.N_MC_points=N_MC_points
-		self.N_varl_params=N_varl_params
+		self.N_varl_params=np.sum(N_varl_params_vec)
+		self.N_varl_params_vec=N_varl_params_vec
 		
 		self.NN_Tree=NN_Tree
 
 
 		######  preallocate memory
 		
-		self.dlog_psi=np.zeros([self.N_batch,N_varl_params],dtype=np.complex128)
+		self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=np.complex128)
 
-		self.F_vector=np.zeros(N_varl_params,dtype=dtype)
+		self.F_vector=np.zeros(self.N_varl_params,dtype=dtype)
 		self.F_vector_log=np.zeros_like(self.F_vector)
 		self.F_vector_phase=np.zeros_like(self.F_vector)
 
@@ -54,8 +59,8 @@ class natural_gradient():
 		self.S_matrix_reg=1E-15*np.eye(self.F_vector.shape[0])
 		self.nat_grad_guess=np.zeros_like(self.F_vector)
 
-		self.O_expt=np.zeros(N_varl_params,dtype=np.complex128)
-		self.OO_expt=np.zeros([N_varl_params,N_varl_params],dtype=np.float64)
+		self.O_expt=np.zeros(self.N_varl_params,dtype=np.complex128)
+		self.OO_expt=np.zeros([self.N_varl_params,self.N_varl_params],dtype=np.float64)
 		self.O_expt2=np.zeros_like(self.OO_expt)
 
 		self.E_diff_weighted=np.zeros(self.N_batch,dtype=np.complex128)
@@ -71,6 +76,7 @@ class natural_gradient():
 		self.F_norm=0.0 # F norm
 		self.F_log_norm=0.0 
 		self.F_phase_norm=0.0 
+		self.S_logcond=0.0
 
 
 		self.run_debug_helper=None
@@ -310,48 +316,89 @@ class natural_gradient():
 			if self.check_on and self.TDVP_type=='real':
 				self._S_matrix_checks()
 
+
 		# compute norm
 		self.S_norm=np.linalg.norm(self.S_matrix)
 		self.F_norm=np.linalg.norm(self.F_vector)
 		self.F_log_norm=np.linalg.norm(self.F_vector_log)
 		self.F_phase_norm=np.linalg.norm(self.F_vector_phase)
+		self.S_logcond=np.log(np.linalg.cond(self.S_matrix))
 
-		
+
+
 		#######################################################
 
+		
 		# apply conjugate gradient a few times
-		info=1
-		while info>0 and self.cg_maxiter<1E5:
-			# apply cg
-			#self.nat_grad, info, iter_ = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
-			if self.TDVP_type=='real':
-				self.nat_grad, info = cg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
-			# elif self.TDVP_type=='cpx':
-			# 	self.nat_grad, info = bicg(self.S_matrix,self.F_vector,x0=self.nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol)
-			 
-			# 
-			if info>0:
-				self.cg_maxiter*=2
-				print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
-				
+		# info=1
+		# while info>0 and self.cg_maxiter<1E5:
+		# 	# apply cg
 
+		# 	if self.NN_dtype=='cpx':
+		# 		self.nat_grad, info = cg(self.S_matrix,self.F_vector,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess) # 
+
+		# 	elif 'decoupled' in self.NN_dtype:
+		# 		if self.grad_update_mode=='normal':
+		# 			left_ind = 0
+		# 			for j, right_ind in enumerate(self.N_varl_params_vec):
+		# 				self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
+		# 				left_ind+=right_ind
+
+		# 		elif self.grad_update_mode=='alternating':
+		# 			if self.iteration%2==0:
+		# 				left_ind = self.N_varl_params_vec[0]
+		# 				right_ind= self.N_varl_params_vec[1]
+		# 				self.nat_grad[0:left_ind]*=0.0
+		# 			else:
+		# 				left_ind = 0
+		# 				right_ind= self.N_varl_params_vec[0]
+		# 				self.nat_grad[right_ind:]*=0.0
+					
+		# 			self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
+		# 			#self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, ) #
+
+
+		# 		elif self.grad_update_mode=='phase':
+		# 			left_ind = self.N_varl_params_vec[0]
+		# 			right_ind= self.N_varl_params_vec[1]
+		# 			self.nat_grad[0:left_ind]*=0.0
+		# 			self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
+
+		# 		elif self.grad_update_mode=='log_mod':
+		# 			left_ind = 0
+		# 			right_ind= self.N_varl_params_vec[0]
+		# 			self.nat_grad[right_ind:]*=0.0
+		# 			self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
+		# 	else:
+		# 		raise(NotImplementedError)
+
+				
+		# 	# 
+		# 	if info>0:
+		# 		self.cg_maxiter*=2
+		# 		print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
+			
+
+		self.nat_grad[:]=jnp.dot(jnp.linalg.inv(self.S_matrix), self.F_vector).block_until_ready()._value
 
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
 
-		
+		print('nat_grad:', self.iteration, self.nat_grad.min(), self.nat_grad.max(), self.nat_grad.mean(), self.nat_grad.std() )
 
+		
 		# normalize gradients
-		if not self.RK_on:
+		if self.RK_on:
+			
+			return self.nat_grad
+		else: 
 			self.r2_cost=self._compute_r2_cost(Eloc_params_dict)
 			self.max_grads=[np.max(jnp.abs(self.F_vector.real)), np.max(jnp.abs(self.nat_grad.real))]
-
 
 			#self.nat_grad /= np.sqrt(jnp.dot(self.F_vector.conj(),self.nat_grad).real)
 			
 			return self.nat_grad
-		else:
-			return self.nat_grad
+		
 		
 
 	def update_params(self,self_time=1.0):

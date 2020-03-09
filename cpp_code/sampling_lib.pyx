@@ -27,6 +27,8 @@ cimport openmp
 
 
 from DNN_architectures_cpx import *
+from DNN_architectures_real import *
+
 from reshape_class import NN_Tree
 from functools import partial   
 
@@ -282,7 +284,7 @@ cdef class Neural_Net:
     cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
     cdef func_type spin_config
-    cdef basis_type[::1] sf_vec
+    cdef basis_type[::1] sf_vec, s0_vec
 
     
     cdef vector[np.uint16_t] sites
@@ -313,7 +315,7 @@ cdef class Neural_Net:
         self._init_NN(rng,shapes,NN_type,NN_dtype)
         self._init_evaluate()
         self._init_variables(N_MC_chains)
-
+        self._init_MC_data()
 
 
     def _init_NN(self,rng,shapes,NN_type,NN_dtype):
@@ -335,7 +337,7 @@ cdef class Neural_Net:
 
                 self.NN_architecture = {
                                         'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True, init_value_W=1E-2,init_value_b=1E-2,), 
-                                        'nonlin_1': Poly_cpx,
+                                        'nonlin_1': elementwise(poly_cpx),
                                         #'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False, init_value_W=1E-1,init_value_b=1E-1,),
                                         #'nonlin_2': Poly_cpx,    
                                         'reg': Regularization_cpx((shape_last_layer[1],)),
@@ -371,8 +373,8 @@ cdef class Neural_Net:
 
                 NN_arch_log = {
                                          'layer_1': GeneralDense_cpx(shapes[0]['layer_1'], ignore_b=True, init_value_W=1E-2,init_value_b=1E-2,), 
-                                         'nonlin_1': Poly_cpx,
-                                         'reg': Regularization_cpx((shape_last_layer_log[1],)),
+                                         'nonlin_1': elementwise(poly_real),
+                                         'reg': Regularization((shape_last_layer_log[1],)),
 
                                 #        'layer_1': GeneralDense(shapes[0]['layer_1'], ignore_b=True, init_value_W=1E-3),
                                 #        'nonlin_1': LogCosh,
@@ -389,9 +391,9 @@ cdef class Neural_Net:
                                 #         'reg': Regularization_cpx2((shape_last_layer_phase[1],)),
 
                                         'layer_1': GeneralDense(shapes[1]['layer_1'], ignore_b=True, init_value_W=3E-1, ), #3E-1
-                                        'nonlin_1': LogCosh,
+                                        'nonlin_1': elementwise(logcosh),
                                         'layer_2': GeneralDense(shapes[1]['layer_2'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
-                                        'nonlin_2': LogCosh,
+                                        'nonlin_2': elementwise(logcosh),
                                 #        'layer_3': GeneralDense(shapes[1]['layer_3'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
                                 #        'nonlin_3': LogCosh,
                                         'reg': Phase_arg((shape_last_layer_phase[1],)),
@@ -446,7 +448,7 @@ cdef class Neural_Net:
 
             
         
-           
+            self.input_shape=(-1,self.N_sites)
           
             
 
@@ -574,9 +576,6 @@ cdef class Neural_Net:
         self.log_psi_s=np.zeros(self.N_MC_chains,dtype=np.float64)
         self.log_psi_t=np.zeros(self.N_MC_chains,dtype=np.float64)
 
-
-        self.sf_vec=((1<<(self.N_sites//2))-1) * np.ones(self.N_MC_chains,dtype=basis_type_py)
-
         ###############################################################
 
         self.sites=np.arange(self.N_sites,dtype=np.uint16)
@@ -587,10 +586,28 @@ cdef class Neural_Net:
         self.rand_int_ordinal = uniform_int_distribution[int](0,choose_n_k(self.N_sites, self.N_sites//2))
 
 
+    def _init_MC_data(self, s0_vec=None, sf_vec=None, ):
+
         self.thread_seeds=np.zeros(self.N_MC_chains,dtype=np.uint)
+        self.s0_vec=np.zeros(self.N_MC_chains,dtype=basis_type_py)
+        self.sf_vec=np.zeros(self.N_MC_chains,dtype=basis_type_py)
+
         for i in range(self.N_MC_chains):
+
+            if s0_vec is None:
+                self.s0_vec[i]=0
+            else:
+                self.s0_vec[i]=s0_vec[i]
+
+            if sf_vec is None:
+                self.sf_vec[i]=(1<<(self.N_sites//2))-1
+            else:
+                self.sf_vec[i]=sf_vec[i]
+
+
             self.thread_seeds[i]=self.seed + 3333*self.MPI_rank + 7777*i   #(rand()%RAND_MAX)
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
+
 
 
 
@@ -664,6 +681,13 @@ cdef class Neural_Net:
         def __get__(self):
             return self.apply_layer
 
+    property s0_vec:
+        def __get__(self):
+            return self.s0_vec
+
+    property sf_vec:
+        def __get__(self):
+            return self.sf_vec
 
 
     @cython.boundscheck(False)
@@ -725,11 +749,6 @@ cdef class Neural_Net:
         return log_psi, phase_psi
 
 
-    # @jax.partial(jit, static_argnums=(0,3))
-    # def evaluate(self, params, batch, apply_fun_args):
-    #     return self._evaluate(params, batch, apply_fun_args)
-
-
 
     @cython.boundscheck(False)
     cpdef object _evaluate_log(self, object params, object batch):
@@ -754,10 +773,6 @@ cdef class Neural_Net:
         
         return log_psi
 
-
-    # @jax.partial(jit, static_argnums=(0,3))
-    # def evaluate_log(self, params, batch, apply_fun_args):
-    #     return self._evaluate_log(params, batch, apply_fun_args)
 
 
     @cython.boundscheck(False)
@@ -800,7 +815,7 @@ cdef class Neural_Net:
                     basis_type[::1] ket_states,
                     np.float64_t[::1] log_mod_kets,
                     #
-                    basis_type[::1] s0_vec,
+                    # basis_type[::1] s0_vec,
                     bool thermal
                     ):
 
@@ -828,7 +843,7 @@ cdef class Neural_Net:
                                            &spin_states[chain_n*n_MC_points*self.N_features],
                                            &ket_states[chain_n*n_MC_points],
                                            &log_mod_kets[chain_n*n_MC_points],
-                                           &s0_vec[0],
+                                           # &s0_vec[0],
                                            # 
                                            &self.spinstate_s[chain_n*self.N_spinconfigelmts],
                                            &self.spinstate_t[chain_n*self.N_spinconfigelmts],
@@ -851,7 +866,7 @@ cdef class Neural_Net:
                                            &spin_states[self.N_MC_chains*n_MC_points*self.N_features],
                                            &ket_states[self.N_MC_chains*n_MC_points],
                                            &log_mod_kets[self.N_MC_chains*n_MC_points],
-                                           &s0_vec[0],
+                                           # &s0_vec[0],
                                            # 
                                            &self.spinstate_s[0],
                                            &self.spinstate_t[0],
@@ -882,7 +897,7 @@ cdef class Neural_Net:
                             np.int8_t * spin_states,
                             basis_type * ket_states,
                             double * log_mod_kets,
-                            basis_type[] s0_vec,
+                            # basis_type[] s0_vec,
                             #
                             np.int8_t * spinstate_s,
                             np.int8_t * spinstate_t,
@@ -928,7 +943,7 @@ cdef class Neural_Net:
 
            
         # store initial state for reproducibility
-        s0_vec[chain_n] = s;
+        self.s0_vec[chain_n] = s;
             
         
         # compute initial spin config and its amplitude value

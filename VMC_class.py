@@ -168,16 +168,16 @@ class VMC(object):
 
 		
 
-
 		# create log file and directory
 		if self.save_data:
 			self._create_logs()
 
-
+			if self.load_data:
+				self._load_data()
 
 
 		# add variables to yaml file
-		if self.comm.Get_rank()==0 and self.save_data and (not self.load_data):
+		elif self.comm.Get_rank()==0 and self.save_data:
 			
 			config_params_yaml = open(self.data_dir + '/config_params.yaml', 'w')
 			
@@ -193,6 +193,69 @@ class VMC(object):
 		if train:
 			self.train(self.start_iter)
 		
+
+	def _load_data(self):
+
+
+		start_iter=self.start_iter
+
+		### load MC data
+		
+		with open(self.file_MC_data.name) as file:	
+			for i in range(start_iter):				
+				MC_data_str = file.readline().rstrip().split(' : ')
+
+		it_MC, acceptance_ratio_g, acceptance_ratios, s0_g, sf_g =  MC_data_str
+
+		self.MC_tool.acceptance_ratio_g[0]=np.float64(acceptance_ratio_g)
+		self.MC_tool.s0_g=np.array([self.E_estimator.basis_type(s0) for s0 in s0_g.split(' ')] )
+		self.MC_tool.sf_g=np.array([self.E_estimator.basis_type(sf) for sf in sf_g.split(' ')] )
+
+		self.DNN._init_MC_data(s0_vec=self.MC_tool.s0_g, sf_vec=self.MC_tool.sf_g, )
+
+		### load DNN params
+
+		file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter) + self.file_name
+
+		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+			self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
+			self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
+
+		self.opt_state = self.opt_init(self.DNN.params)
+
+		file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
+		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+			DNN_params_old,_,_ = pickle.load(handle)
+
+		
+		self.NG.nat_grad_guess[:]=self.DNN.NN_Tree.ravel(DNN_params_old)-self.DNN.NN_Tree.ravel(self.DNN.params)
+
+
+		### load NG data
+
+		with open(self.file_opt_data.name) as file:	
+			for i in range(start_iter):				
+				opt_data_str = file.readline().rstrip().split(' : ')
+
+		
+		self.NG.iteration=int(opt_data_str[0])+1
+		self.NG.counter=int(opt_data_str[1])
+		self.NG.RK_step_size=np.float64(opt_data_str[2])
+		self.NG.RK_time=np.float64(opt_data_str[3])
+		self.NG.delta=np.float64(opt_data_str[4])
+		self.NG.tol=np.float64(opt_data_str[5])
+
+
+		with open(self.file_loss.name) as file:	
+			for i in range(start_iter+1):				
+				loss_data_str = file.readline().rstrip().split(' : ')
+
+
+		#####
+		
+		assert(int(it_MC)+1==self.NG.iteration)
+
+
 
 	def update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
 		layers_type=list(layers.keys())
@@ -263,16 +326,7 @@ class VMC(object):
 		### create Neural network
 		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
 		#self.DNN.update_params(load_params())
-
-		if load_data:
-			file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter) + self.file_name
-			print(file_name)
-			with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-				self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
-				self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
-
-			#self.DNN.update_params(NN_params)
-		
+	
 
 		# jit functions
 		self.evaluate_NN_dyn=self.DNN.evaluate_dyn
@@ -390,7 +444,7 @@ class VMC(object):
 
 
 	
-		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch,self.DNN.N_varl_params,compute_grad_log_psi, self.DNN.NN_Tree )
+		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch, self.DNN.N_varl_params_vec, compute_grad_log_psi, self.DNN.NN_Tree, self.NN_dtype, self.grad_update_mode, start_iter=self.start_iter )
 		self.NG.init_global_variables(self.n_iter)
 		self.NG.run_debug_helper=self.run_debug_helper
 
@@ -398,14 +452,17 @@ class VMC(object):
 		# jax self.optimizer
 		if self.optimizer=='NG':
 			self.learning_rates=[1E-2,1E-2]
-			opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=1.0)
-			self.opt_state = opt_init(self.DNN.params)
+			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=1.0)
+			self.opt_state = self.opt_init(self.DNN.params)
 
 		elif self.optimizer=='adam':
+
+			if self.load_data:
+				raise("Loading data not supported for adam yet")
 			
 			step_size=1E-3
-			opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=step_size, b1=0.9, b2=0.99, eps=1e-08)
-			self.opt_state = opt_init(self.DNN.params)
+			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=step_size, b1=0.9, b2=0.99, eps=1e-08)
+			self.opt_state = self.opt_init(self.DNN.params)
 
 			# Energy cost function
 			if self.mode=='exact':
@@ -565,6 +622,7 @@ class VMC(object):
 		logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		self.logfile = create_open_file(logfile_dir+logfile_name)
 		self.E_estimator.logfile=self.logfile
+		self.NG.logfile=self.logfile
 
 		# redircet warnings to log
 		def customwarn(message, category, filename, lineno, file=None, line=None):
@@ -597,13 +655,6 @@ class VMC(object):
 		### timing vector
 		self.timing_vec=np.zeros((self.N_iterations+1,),dtype=np.float64)
 		
-
-		### load data
-		if self.load_data:
-			iteration, self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm=np.loadtxt(self.savefile_dir+'opt_data--'+common_str, delimiter=':', skiprows=self.start_iter-1, max_rows=1)
-			self.NG.counter=int(self.NG.counter)
-
-
 
 	def _compute_phase_hist(self, phases, weigths):
 								
@@ -643,11 +694,17 @@ class VMC(object):
 		self.file_energy.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.E_MC_std_g))
 		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
 		
-		self.file_loss.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f}\n".format(iteration, loss[0], loss[1], r2))
-		#self.file_r2.write("{0:d} : {1:0.14f}\n".format(iteration, r2))
+		self.file_loss.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.10f} : {5:0.10f} : {6:0.10f} : {7:0.10f} : {8:0.10f}\n".format(iteration, r2, self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm, self.NG.S_logcond, loss[0], loss[1], ))
+		
 
-		self.file_MC_data.write("{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])   +   ' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "   +   ' '.join(str(s) for s in self.MC_tool.s0_g)+"\n") #		
-		self.file_opt_data.write("{0:d} : {1:05d} : {2:0.10f} : {3:0.10f} : {4:0.10f} : {5:0.10f} : {6:0.10f} : {7:0.10f} : {8:0.10f} : {9:0.10f}\n".format(iteration, self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm,))
+		MC_data_1="{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])
+		MC_data_2=' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "
+		MC_data_3=' '.join(str(s) for s in self.MC_tool.s0_g)+" : "
+		MC_data_4=' '.join(str(s) for s in self.MC_tool.sf_g)
+		self.file_MC_data.write(MC_data_1  +  MC_data_2  +  MC_data_3 +  MC_data_4 + "\n") #		
+		
+
+		self.file_opt_data.write("{0:d} : {1:05d} : {2:0.10f} : {3:0.10f} : {4:0.14f} : {5:0.10f}\n".format(iteration, self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, ))
 
 
 		
@@ -790,7 +847,6 @@ class VMC(object):
 				print(E_str)
 			self.logfile.write(E_str)
 			
-
 			#exit()
 
 			if self.mode=='exact':
@@ -987,6 +1043,7 @@ class VMC(object):
 
 	def update_NN_params(self,iteration):
 
+		ti=time.time()
 
 		if self.optimizer=='RK':
 			# compute updated NN parameters
@@ -1002,7 +1059,7 @@ class VMC(object):
 				loss=self.NG.max_grads
 				self.NG.update_params() # update NG params
 
-				S_str="NG: norm(S)={0:0.14f}, norm(F)={1:0.14f}, norm(F_log)={2:0.14f}, norm(F_phase)={3:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm) 		
+				S_str="NG: norm(S)={0:0.14f}, norm(F)={1:0.14f}, norm(F_log)={2:0.14f}, norm(F_phase)={3:0.14f}, S_condnum={4:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm, self.NG.S_logcond) 		
 				if self.comm.Get_rank()==0:
 					print(S_str)
 				self.logfile.write(S_str)
@@ -1025,23 +1082,39 @@ class VMC(object):
 				grads[left_ind:left_ind+right_ind]*=self.learning_rates[j]
 				left_ind+=right_ind
 
+				
 			self.opt_state = self.opt_update(iteration, self.DNN.NN_Tree.unravel(grads), self.opt_state) 
 			self.DNN.update_params(self.get_params(self.opt_state))
+
+
+
 			
 		##### compute loss
 		r2=self.NG.r2_cost
+		
 
 		# record gradients
 		if self.comm.Get_rank()==0:
 			self.params_update[-1,...]=grads
 
-		#print('GRADS', grads[-3:-1])
+
+
+
+
+		
+
+		print('GRADS', r2, loss, self.NG.delta)
 		#exit()
 
 		# b_str="reg layer params: {}\n".format( self.DNN.params[0][-1] )
 		# self.logfile.write(b_str)
 		# if self.comm.Get_rank()==0:
 		# 	print(b_str)
+
+		grad_str="total gradients/NG calculation took {0:.4f} secs.\n".format(time.time()-ti)
+		self.logfile.write(grad_str)
+		if self.comm.Get_rank()==0:
+			print(grad_str)
 		
 		return loss, r2
 

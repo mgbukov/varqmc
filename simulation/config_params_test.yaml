@@ -6,11 +6,11 @@ NN_shape_str: (16--10,16--24--12)
 NN_type: DNN
 N_MC_chains: 2
 N_MC_points: 107 # 200 # 
-N_iterations: 3 #500
+N_iterations: 500
 batchnorm: false
 load_data: false
 minibatch_size: 100
-mode: exact # MC #  
+mode: exact # MC # 
 grad_update_mode: alternating # normal # phase # log_mod #  
 MC_thermal: true
 optimizer: NG # adam #
