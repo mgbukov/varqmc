@@ -12,6 +12,7 @@ load_data: false
 minibatch_size: 100
 mode: MC
 grad_update_mode: alternating # normal # phase  #  log_mod
+alt_iter: 20  
 MC_thermal: true
 optimizer: NG
 save_data: true

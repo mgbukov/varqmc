@@ -103,6 +103,7 @@ class VMC(object):
 		self.mode=params_dict['mode'] # exact or MC simulation
 		self.optimizer=params_dict['optimizer']
 		self.grad_update_mode=params_dict['grad_update_mode']
+		self.alt_iters=params_dict['alt_iter'] # only effective in real-decoupled mode
 		
 
 		self.NN_type=params_dict['NN_type'] # DNN vs CNN
@@ -427,7 +428,7 @@ class VMC(object):
 				dlog_psi=grad_log_psi(NN_params,batch)
 
 			elif self.grad_update_mode=='alternating':
-				if iteration%2==0: # phase grads
+				if (iteration//self.alt_iters)%2==1: # phase grads
 					dlog_psi=grad_log_phase(NN_params,batch)
 
 				else: # log_mod_psi grads
@@ -447,6 +448,7 @@ class VMC(object):
 		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch, self.DNN.N_varl_params_vec, compute_grad_log_psi, self.DNN.NN_Tree, self.NN_dtype, self.grad_update_mode, start_iter=self.start_iter )
 		self.NG.init_global_variables(self.n_iter)
 		self.NG.run_debug_helper=self.run_debug_helper
+		self.NG.alt_iters=self.alt_iters
 
 
 		# jax self.optimizer
@@ -474,7 +476,7 @@ class VMC(object):
 						Energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag ))
 
 					elif self.grad_update_mode=='alternating':
-						if iteration%2==0: # phase grads
+						if (iteration//self.alt_iters)%2==1: # phase grads
 							phase_psi = self.DNN.evaluate_phase(NN_params,batch,)
 							Energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(phase_psi*params_dict['E_diff'].imag ))
 						else:
@@ -502,7 +504,7 @@ class VMC(object):
 						Energy=2.0*jnp.sum(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
 
 					elif self.grad_update_mode=='alternating':
-						if iteration%2==0: # phase grads
+						if (iteration//self.alt_iters)%2==1: # phase grads
 							phase_psi = self.DNN.evaluate_phase(NN_params,batch,)
 							Energy=2.0*jnp.sum(phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
 						else:

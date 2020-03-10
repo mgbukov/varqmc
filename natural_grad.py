@@ -22,7 +22,7 @@ class natural_gradient():
 
 		self.NN_dtype=NN_dtype
 		self.grad_update_mode=grad_update_mode
-
+		self.alt_iters=1
 
 		self.compute_grad_log_psi=compute_grad_log_psi
 
@@ -329,11 +329,10 @@ class natural_gradient():
 		#######################################################
 
 		
-		# apply conjugate gradient a few times
+		### apply conjugate gradient a few times
 		# info=1
 		# while info>0 and self.cg_maxiter<1E5:
 		# 	# apply cg
-
 		# 	if self.NN_dtype=='cpx':
 		# 		self.nat_grad, info = cg(self.S_matrix,self.F_vector,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess) # 
 
@@ -345,7 +344,7 @@ class natural_gradient():
 		# 				left_ind+=right_ind
 
 		# 		elif self.grad_update_mode=='alternating':
-		# 			if self.iteration%2==0:
+		# 			if (self.iteration//self.alt_iters)%2==1:
 		# 				left_ind = self.N_varl_params_vec[0]
 		# 				right_ind= self.N_varl_params_vec[1]
 		# 				self.nat_grad[0:left_ind]*=0.0
@@ -355,9 +354,7 @@ class natural_gradient():
 		# 				self.nat_grad[right_ind:]*=0.0
 					
 		# 			self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
-		# 			#self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, ) #
-
-
+					
 		# 		elif self.grad_update_mode=='phase':
 		# 			left_ind = self.N_varl_params_vec[0]
 		# 			right_ind= self.N_varl_params_vec[1]
@@ -377,15 +374,28 @@ class natural_gradient():
 		# 	if info>0:
 		# 		self.cg_maxiter*=2
 		# 		print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
-			
+		
 
-		self.nat_grad[:]=jnp.dot(jnp.linalg.inv(self.S_matrix), self.F_vector).block_until_ready()._value
+		if (self.iteration//self.alt_iters)%2==1:
+			left_ind = self.N_varl_params_vec[0]
+			right_ind= self.N_varl_params_vec[1]
+			self.nat_grad[0:left_ind]*=0.0
+		else:
+			left_ind = 0
+			right_ind= self.N_varl_params_vec[0]
+			self.nat_grad[right_ind:]*=0.0
+		
+		self.nat_grad[left_ind:left_ind+right_ind]=jnp.dot(jnp.linalg.inv(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind]), self.F_vector[left_ind:left_ind+right_ind]).block_until_ready()._value
+
+
+		#self.nat_grad=jnp.dot(jnp.linalg.inv(self.S_matrix), self.F_vector).block_until_ready()._value
+
 
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
 
 		print('nat_grad:', self.iteration, self.nat_grad.min(), self.nat_grad.max(), self.nat_grad.mean(), self.nat_grad.std() )
-
+		#print('nat_grad:', np.linalg.norm(self.nat_grad-nat_grad_2))
 		
 		# normalize gradients
 		if self.RK_on:
