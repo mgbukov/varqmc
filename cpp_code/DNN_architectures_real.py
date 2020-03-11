@@ -157,8 +157,8 @@ def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_in
         log_psi   = jnp.sum(x.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
         
         # sum over hidden neurons
-        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])
-        
+        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])   
+
         # regularize output
         a=8.0
         log_psi=a*jnp.tanh((log_psi-b)/a) + b

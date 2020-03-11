@@ -36,30 +36,28 @@ plt.tick_params(labelsize=20)
 
 save=True #False
 
-L=4
-J2=0.5
-opt='NG'
-mode='exact'
-NN_dtype='real-decoupled'
-NN_shape_str='(16--10,16--24--12)'
-N_MC_points=107
-N_prss=1
-NMCchains=2
-sys_time='2020-03-10_20:48:50'
-
-
 # L=4
 # J2=0.5
 # opt='NG'
-# mode='MC'
+# mode='exact'
 # NN_dtype='real-decoupled'
 # NN_shape_str='(16--10,16--24--12)'
-# N_MC_points=200
+# N_MC_points=107
 # N_prss=1
 # NMCchains=2
-# sys_time='2020-03-09_20:27:07'
+# sys_time='2020-03-10_20:48:50'
 
 
+L=4
+J2=0.5
+opt='NG'
+mode='MC'
+NN_dtype='real-decoupled'
+NN_shape_str='(16--10,16--24--12)'
+N_MC_points=1000
+N_prss=4
+NMCchains=2
+sys_time='2020-03-10_22:13:22'
 
 
 
