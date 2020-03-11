@@ -462,8 +462,8 @@ class VMC(object):
 			if self.load_data:
 				raise("Loading data not supported for adam yet")
 			
-			step_size=1E-3
-			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=step_size, b1=0.9, b2=0.99, eps=1e-08)
+			self.learning_rates=[1E-0,1E-0,]
+			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=1E-3, b1=0.9, b2=0.99, eps=1e-08)
 			self.opt_state = self.opt_init(self.DNN.params)
 
 			# Energy cost function
@@ -874,6 +874,8 @@ class VMC(object):
 					mod_psi_2=np.exp(2.0*(self.MC_tool.log_mod_kets-self.MC_tool.log_psi_shift))
 					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,mod_psi_2)
 
+				#print(phase_hist)
+				#exit()
 
 				if self.comm.Get_rank()==0 and self.save_data:
 					#if not(self.load_data and (start_iter==iteration)):

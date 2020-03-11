@@ -13,7 +13,6 @@ from jax import jit, grad, random, device_put, partial
 from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
 
 
-
 cimport cython
 import numpy as np
 cimport numpy as np
@@ -258,7 +257,7 @@ def c_offdiag_sum(
 @cython.boundscheck(False)
 cdef class Neural_Net:
 
-    cdef object NN_Tree
+    cdef object NN_Tree, NN_Tree_vec
 
     cdef object NN_architecture, NN_architecture_dyn
     cdef object apply_layer, apply_layer_dyn
@@ -361,6 +360,8 @@ cdef class Neural_Net:
 
 
                 self.NN_Tree = NN_Tree(self.params)
+                self.NN_Tree_vec=[NN_Tree(self.params), ]
+
                 self.N_varl_params=self.NN_Tree.N_varl_params
                 self.N_varl_params_vec=[self.N_varl_params,] 
 
@@ -372,9 +373,9 @@ cdef class Neural_Net:
 
 
                 NN_arch_log = {
-                                         'layer_1': GeneralDense_cpx(shapes[0]['layer_1'], ignore_b=True, init_value_W=1E-2,init_value_b=1E-2,), 
-                                         'nonlin_1': elementwise(poly_real),
-                                         'reg': Regularization((shape_last_layer_log[1],)),
+                                        'layer_1': GeneralDense_cpx(shapes[0]['layer_1'], ignore_b=True, init_value_W=1E-2,init_value_b=1E-2,), 
+                                        'nonlin_1': elementwise(poly_real),
+                                        'reg': Regularization((shape_last_layer_log[1],)),
 
                                 #        'layer_1': GeneralDense(shapes[0]['layer_1'], ignore_b=True, init_value_W=1E-3),
                                 #        'nonlin_1': LogCosh,
@@ -390,12 +391,12 @@ cdef class Neural_Net:
                                 #        'nonlin_1': Poly_cpx,
                                 #         'reg': Regularization_cpx2((shape_last_layer_phase[1],)),
 
-                                        'layer_1': GeneralDense(shapes[1]['layer_1'], ignore_b=True, init_value_W=3E-1, ), #3E-1
+                                        'layer_1': GeneralDense(shapes[1]['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
                                         'nonlin_1': elementwise(logcosh),
-                                        'layer_2': GeneralDense(shapes[1]['layer_2'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
+                                        'layer_2': GeneralDense(shapes[1]['layer_2'], ignore_b=False, init_value_W=1E-2, init_value_b=1E-2), #init_value_W=1E-1, init_value_b=1E-1
                                         'nonlin_2': elementwise(logcosh),
-                                #        'layer_3': GeneralDense(shapes[1]['layer_3'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
-                                #        'nonlin_3': LogCosh,
+                                        # 'layer_3': GeneralDense(shapes[1]['layer_3'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
+                                        # 'nonlin_3': elementwise(logcosh),
                                         'reg': Phase_arg((shape_last_layer_phase[1],)),
                                     }
 
@@ -435,6 +436,7 @@ cdef class Neural_Net:
                 
 
                 self.NN_Tree = NN_Tree(self.params)
+                self.NN_Tree_vec=[NN_Tree(params_log), NN_Tree(params_log)]
                 
                 N_var_log=NN_Tree(params_log).N_varl_params
                 N_var_phase=NN_Tree(params_phase).N_varl_params
@@ -654,6 +656,10 @@ cdef class Neural_Net:
     property NN_Tree:
         def __get__(self):
             return self.NN_Tree
+
+    property NN_Tree_vec:
+        def __get__(self):
+            return self.NN_Tree_vec
 
     property N_varl_params:
         def __get__(self):
