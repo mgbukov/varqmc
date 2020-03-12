@@ -37,41 +37,6 @@ plt.tick_params(labelsize=20)
 save=True #False # 
 
 
-# L=6
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_dtype='real-decoupled'
-# NN_shape_str='(36--10,36--24--12)'
-# N_MC_points=20000
-# N_prss=130
-# NMCchains=1
-# sys_time='2020-03-09_02:23:44'
-
-
-# L=6
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_dtype='real-decoupled'
-# NN_shape_str='(36--10,36--24--12)'
-# N_MC_points=20000
-# N_prss=130
-# NMCchains=1
-# sys_time='2020-03-09_02:23:56'
-
-
-# L=6
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_dtype='real-decoupled'
-# NN_shape_str='(36--10,36--24--12)'
-# N_MC_points=20000
-# N_prss=130
-# NMCchains=1
-# sys_time='2020-03-09_22:16:12'
-
 
 L=4
 J2=0.5
@@ -79,10 +44,10 @@ opt='NG'
 mode='MC'
 NN_dtype='real-decoupled'
 NN_shape_str='(16--10,16--24--12)'
-N_MC_points=20000
+N_MC_points=80000
 N_prss=130
 NMCchains=1
-sys_time='2020-03-11_13:16:24'
+sys_time='2020_03_11-16_22_19'  # '2020_03_11-16_17_31'
 
 
 

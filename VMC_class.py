@@ -162,12 +162,12 @@ class VMC(object):
 		self.n_iter=10 # define number of iterations to store for debugging purposes
 		
 		self._create_file_name(model_params)
+		self._copy_code()
 		self._create_NN(load_data=self.load_data)
 		self._create_optimizer()
 		self._create_energy_estimator()
 		self._create_MC_sampler()
 
-		
 
 		# create log file and directory
 		if self.save_data:
@@ -194,6 +194,22 @@ class VMC(object):
 		if train:
 			self.train(self.start_iter)
 		
+
+	def _copy_code(self):
+
+		code_dir=self.data_dir+'/code_files/'
+
+		files=['../VMC_class.py', '../MC_lib.py', '../natural_grad.py', '../energy_lib.py', '../cpp_code/sampling_lib.pyx', '../cpp_code/DNN_architectures*', '../cpp_code/reshape_class.py', '../cpp_code/_cpp_funcs',]
+
+		if self.comm.Get_rank()==0:
+
+			if not os.path.exists(code_dir):
+				os.makedirs(code_dir)
+
+				for file_or_dir in files:
+					os.system('cp -r ' + file_or_dir + ' ' + code_dir)
+
+
 
 	def _load_data(self):
 
@@ -453,7 +469,7 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			self.learning_rates=[1E-2,1E-1]
+			self.learning_rates=[1E-2,1E-2]
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=1.0)
 			self.opt_state = self.opt_init(self.DNN.params)
 
