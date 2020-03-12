@@ -66,7 +66,7 @@ def evaluate_DNN(load_dir,NN_params, spin_configs, log_psi_shift=0.0,):
 
 
 	spinstates_ket=np.zeros((DNN_psi.N_MC_points*DNN_psi.MC_tool.N_features,), dtype=np.int8)
-	integer_to_spinstate(spin_configs, spinstates_ket, DNN_psi.N_features, NN_type=DNN_psi.DNN.NN_type)
+	integer_to_spinstate(spin_configs, spinstates_ket, DNN_psi.DNN.N_features, NN_type=DNN_psi.DNN.NN_type)
 
 	log_psi, phase_psi = DNN_psi.evaluate_NN(NN_params, spinstates_ket.reshape(DNN_psi.N_MC_points*DNN_psi.MC_tool.N_symm,DNN_psi.MC_tool.N_sites), DNN_psi.DNN.apply_fun_args)
 

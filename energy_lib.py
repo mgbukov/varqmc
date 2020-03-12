@@ -374,6 +374,7 @@ class Energy_estimator():
 
 		# indxs=(np.exp(log_psi_bras-log_kets)>1.0)
 
+		# print()
 		# print(np.exp(log_psi_bras-log_kets))
 		# print()
 		# print(log_psi_bras)

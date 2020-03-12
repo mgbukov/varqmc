@@ -39,48 +39,21 @@ from VMC_class import VMC
 import yaml 
 
 
-###################
-
-# n=-6 # steps before final blow-up
-# max_iter=499 # last iteration with saved data
-# L=4
-# J2=0.5
-# opt='NG'
-# mode='exact'
-# NN_shape_str='16--8'
-# N_MC_points=107
-# N_prss=1
-# NMCchains=2
-# sys_time='2020-02-21_09:22:35'
+#########################
 
 
-###################
-
-# n=-6 # steps before final blow-up
-# max_iter=499 # last iteration with saved data
-# L=4
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_shape_str='16--8'
-# N_MC_points=200
-# N_prss=4
-# NMCchains=2
-# sys_time='2020-02-21_08:51:56'
-
-###################
-
-n=-3 # steps before final blow-up
-max_iter=228 # last iteration with saved E-data + 1
-L=6
+n=-10 # steps before final blow-up
+max_iter=380 # last line with saved E-data
+L=4
 J2=0.5
 opt='NG'
 mode='MC'
-NN_shape_str='36--8'
+NN_dtype='real-decoupled'
+NN_shape_str='(16--10,16--24--12)'
 N_MC_points=20000
 N_prss=130
 NMCchains=1
-sys_time='2020-02-24_23:19:34'
+sys_time='2020-03-10_22:32:06'
 
 
 #### load debug data
@@ -88,8 +61,8 @@ sys_time='2020-02-24_23:19:34'
 
 data_name = sys_time + '--{0:s}-L_{1:d}-{2:s}/'.format(opt,L,mode)
 load_dir='data/' + data_name 
-data_params=(mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
-params_str='model_DNNcpx-mode_{0:s}-L_{1:d}-J2_{2:0.1f}-opt_{3:s}-NNstrct_{4:s}-MCpts_{5:d}-Nprss_{6:d}-NMCchains_{7:d}'.format(*data_params)
+data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
+params_str='model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
 
 
 
@@ -106,10 +79,10 @@ with open(load_dir + 'debug_files/' + 'debug-' + 'logpsi_data--' + params_str + 
 with open(load_dir + 'debug_files/' + 'debug-' + 'phasepsi_data--' + params_str + '.pkl', 'rb') as handle:
 	phasepsi_kets, = pickle.load(handle)
 
-with open(load_dir + 'debug_files/' + 'debug-' + 'params_update_data--' + params_str + '.pkl', 'rb') as handle:
-	NN_params_update, = pickle.load(handle)
-	NN_params_update[:-1,...]=NN_params_update[1:,...]
-	NN_params_update[-1,...]=0.0
+# with open(load_dir + 'debug_files/' + 'debug-' + 'params_update_data--' + params_str + '.pkl', 'rb') as handle:
+# 	NN_params_update, = pickle.load(handle)
+# 	NN_params_update[:-1,...]=NN_params_update[1:,...]
+# 	NN_params_update[-1,...]=0.0
 
 with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str + '.pkl', 'rb') as handle:
 	int_kets, = pickle.load(handle)
@@ -120,7 +93,7 @@ with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str +
 
 
 ######################
-iteration=max_iter+n+1
+iteration=max_iter+n+2
 
 file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
 
@@ -156,17 +129,17 @@ nat_grad=inv(S_lastiters[n,:]).dot(F_lastiters[n,:])
 #exit()
 
 
-print(-1E-2*NN_params_update[n,:][-1], NN_params_ravelled[-1],)
+#print(-1E-2*NN_params_update[n,:][-1], NN_params_ravelled[-1],)
 #exit()
 
 print('S_bb:',S_lastiters[n,-1,-1])
 
 
-plt.plot(F_lastiters[n,:],'.b')
-plt.plot(inv(S_lastiters[n,...])[0,:],'.r', markersize=1.0)
-#plt.plot(E_S,'.b')
-#plt.yscale('log')
-plt.show()
+# plt.plot(F_lastiters[n,:],'.b')
+# plt.plot(inv(S_lastiters[n,...])[0,:],'.r', markersize=1.0)
+# #plt.plot(E_S,'.b')
+# #plt.yscale('log')
+# plt.show()
 
 
 #exit()
@@ -188,11 +161,11 @@ plt.show()
 
 ######################
 
-with jax.disable_jit():
-	MC_tool = MC_sample(load_dir, NN_params,N_MC_points=1)
-print(MC_tool.ints_ket)
+# with jax.disable_jit():
+# 	MC_tool = MC_sample(load_dir, NN_params,N_MC_points=1)
+# print(MC_tool.ints_ket)
 
-exit()
+# exit()
 
 ######################
 
@@ -202,26 +175,26 @@ exit()
 data=Eloc_real[n,:]
 
 #q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
-#q25, q75 = np.percentile(data, 0.05), np.percentile(data, 99.95)
-q25, q75 = np.percentile(data, 0.3), np.percentile(data, 99.62)
+q25, q75 = np.percentile(data, 0.05), np.percentile(data, 99.95)
+#q25, q75 = np.percentile(data, 0.001), np.percentile(data, 99.991)
 iqr = q75 - q25
 print('Percentiles: 25th=%.3f, 75th=%.3f, IQR=%.3f' % (q25, q75, iqr))
 # calculate the outlier cutoff
 cut_off = iqr * 1.5
 lower, upper = q25 - cut_off, q75 + cut_off
 # identify outliers
-outliers = [x for x in data if x < lower or x > upper]
+outliers = np.array([x for x in data if x < lower or x > upper])
 reamainers = [x for x in data if x >= lower and x <= upper]
 
-print(np.array(outliers).shape)
 
-print(np.min(outliers), np.max(outliers))
+
+print('outliers shape:', outliers.shape)
+
+print('min/max outliers:', np.min(outliers), np.max(outliers))
 
 #print(np.sort(outliers))
-print(np.mean(reamainers), np.mean(data))
+print('mean remainers/data:',np.mean(reamainers), np.mean(data))
 
-
-#exit()
 
 #############
 
@@ -255,8 +228,12 @@ print(np.mean(reamainers), np.mean(data))
 ##############
 #inds=np.where(np.logical_and(np.abs(Eloc_real[n,:])>=16.5, np.abs(Eloc_real[n,:])<=16.8))[0]
 
+
+
+
 print( Eloc_real[n, np.where(np.in1d(Eloc_real[n,:], outliers))] )
 inds=[np.where(np.in1d(Eloc_real[n,:], outliers)) [0][-1]]
+#exit()
 
 
 # print(logpsi_kets[n,inds[0]-70:inds[0]+2])
@@ -278,7 +255,7 @@ inds=[np.where(np.in1d(Eloc_real[n,:], outliers)) [0][-1]]
 #inds=np.arange(107).astype(np.uint16)
 
 
-int_to_spinconfig(int_kets[n,inds][0],L)
+#int_to_spinconfig(int_kets[n,inds][0],L)
 
 
 
@@ -289,7 +266,9 @@ Eloc_real_batch,Eloc_imag_batch = compute_Eloc(load_dir, NN_params,int_kets[n,in
 
 # print(log_psi_batch, phase_psi_batch)
 # print(logpsi_kets[n,inds], phasepsi_kets[n,inds])
-# exit()
+np.testing.assert_allclose(log_psi_batch,logpsi_kets[n,inds])
+#exit()
+
 
 
 print(np.min(Eloc_real_batch), np.max(Eloc_real_batch),)

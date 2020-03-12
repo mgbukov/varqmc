@@ -78,6 +78,7 @@ class natural_gradient():
 		self.F_phase_norm=0.0 
 		self.S_logcond=0.0
 
+		self.grad_clip=50.0
 
 		self.run_debug_helper=None
 		self.debug_mode=True
@@ -329,7 +330,7 @@ class natural_gradient():
 		#######################################################
 
 		
-		### apply conjugate gradient a few times
+		# apply conjugate gradient a few times
 		# info=1
 		# while info>0 and self.cg_maxiter<1E5:
 		# 	# apply cg
@@ -344,7 +345,7 @@ class natural_gradient():
 		# 				left_ind+=right_ind
 
 		# 		elif self.grad_update_mode=='alternating':
-		# 			if (self.iteration//self.alt_iters)%2==1:
+		# 			if (self.iteration//self.alt_iters)%2==1: # phase grads
 		# 				left_ind = self.N_varl_params_vec[0]
 		# 				right_ind= self.N_varl_params_vec[1]
 		# 				self.nat_grad[0:left_ind]*=0.0
@@ -352,9 +353,13 @@ class natural_gradient():
 		# 				left_ind = 0
 		# 				right_ind= self.N_varl_params_vec[0]
 		# 				self.nat_grad[right_ind:]*=0.0
+
+
 					
-		# 			self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
+		# 			self.nat_grad[left_ind:left_ind+right_ind], info,  = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
 					
+		# 			#print('CG iters:', iter_, np.linalg.norm(resid), np.linalg.norm(self.nat_grad[left_ind:left_ind+right_ind]-self.nat_grad_guess[left_ind:left_ind+right_ind]) )
+
 		# 		elif self.grad_update_mode=='phase':
 		# 			left_ind = self.N_varl_params_vec[0]
 		# 			right_ind= self.N_varl_params_vec[1]
@@ -376,6 +381,11 @@ class natural_gradient():
 		# 		print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
 		
 
+
+		##############
+
+
+
 		# if (self.iteration//self.alt_iters)%2==1:
 		# 	left_ind = self.N_varl_params_vec[0]
 		# 	right_ind= self.N_varl_params_vec[1]
@@ -385,16 +395,52 @@ class natural_gradient():
 		# 	right_ind= self.N_varl_params_vec[0]
 		# 	self.nat_grad[right_ind:]*=0.0
 		
-		# self.nat_grad[left_ind:left_ind+right_ind]=jnp.dot(jnp.linalg.inv(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind]), self.F_vector[left_ind:left_ind+right_ind]).block_until_ready()._value
+		# #self.nat_grad[left_ind:left_ind+right_ind]=jnp.dot(jnp.linalg.inv(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind]), self.F_vector[left_ind:left_ind+right_ind]).block_until_ready()._value
 
+
+		# U, lmbda, V = np.linalg.svd(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind], hermitian=True)
+		# #print(lmbda)
+
+		# print('check svd:', np.linalg.norm( np.einsum('ij,j,jk->ik',U,lmbda,V) - self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind] ) )
+
+
+		# inds=np.where(lmbda/np.linalg.norm(lmbda) <= 1E-7)[0]
+
+		# #print(lmbda/np.linalg.norm(lmbda))
+
+		# print(inds.shape, lmbda.shape)
+
+		# #print((lmbda/np.linalg.norm(lmbda) )[inds])
+
+		# U=U[:,inds]
+		# lmbda=lmbda[inds]
+		# V=V[inds,:]
+
+		# #nat_grad=self.nat_grad.copy()
+		# self.nat_grad[left_ind:left_ind+right_ind] = np.einsum('ij,j,jk,k->i',V.T.conj(),1.0/(lmbda),U.T.conj(),self.F_vector[left_ind:left_ind+right_ind])
+
+
+		# nat_grad=jnp.dot(jnp.linalg.inv(self.S_matrix), self.F_vector).block_until_ready()._value
+
+
+		# print(np.max(np.abs(nat_grad-self.nat_grad)), np.linalg.norm(np.abs(nat_grad-self.nat_grad)))
+		# exit()
+
+
+		###############
 
 		self.nat_grad[:]=jnp.dot(jnp.linalg.inv(self.S_matrix), self.F_vector).block_until_ready()._value
+
+		###############
+
+		# clip gradients
+		self.nat_grad[:]=np.where(np.abs(self.nat_grad) < self.grad_clip, self.nat_grad, self.grad_clip) 
 
 
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
 
-		print('nat_grad:', self.iteration, self.nat_grad.min(), self.nat_grad.max(), self.nat_grad.mean(), self.nat_grad.std() )
+		print('nat_grad:', self.iteration, self.nat_grad.min(), self.nat_grad.max(), np.abs(self.nat_grad).mean(), np.abs(self.nat_grad).std() )
 		#print('nat_grad:', np.linalg.norm(self.nat_grad-nat_grad_2))
 		
 		# normalize gradients

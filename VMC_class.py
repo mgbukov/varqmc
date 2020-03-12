@@ -453,7 +453,7 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			self.learning_rates=[1E-2,1E-2]
+			self.learning_rates=[1E-2,1E-1]
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=1.0)
 			self.opt_state = self.opt_init(self.DNN.params)
 
@@ -535,9 +535,9 @@ class VMC(object):
 		#self.step_size=step_size
 
 		# define variable to keep track of the DNN params update
-		n_iter=6
+		#n_iter=6
 		if self.comm.Get_rank()==0:
-			self.params_update=np.zeros((n_iter,self.DNN.N_varl_params),dtype=np.float64)
+			self.params_update=np.zeros((self.n_iter,self.DNN.N_varl_params),dtype=np.float64)
 		else:
 			self.params_update=np.array([[None],[None]])
 
@@ -874,8 +874,8 @@ class VMC(object):
 					mod_psi_2=np.exp(2.0*(self.MC_tool.log_mod_kets-self.MC_tool.log_psi_shift))
 					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,mod_psi_2)
 
-				#print(phase_hist)
-				#exit()
+				# print(phase_hist)
+				# exit()
 
 				if self.comm.Get_rank()==0 and self.save_data:
 					#if not(self.load_data and (start_iter==iteration)):

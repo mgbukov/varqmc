@@ -12,7 +12,7 @@ def create_params_file(params):
 
 	# system time
 	sys_time=datetime.datetime.now()
-	sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}--".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
+	sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}_{4:02d}_{5:02d}--".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
 	#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
 
 

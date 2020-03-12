@@ -152,5 +152,5 @@ def cg(A, b, x0=None, tol=1e-5, maxiter=None, M=None, callback=None, atol=None):
         # info isn't set appropriately otherwise
         info = iter_
 
-    return postprocess(x), info, iter_
+    return postprocess(x), info, iter_, resid
 
