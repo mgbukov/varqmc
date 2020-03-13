@@ -104,6 +104,7 @@ class VMC(object):
 		self.optimizer=params_dict['optimizer']
 		self.grad_update_mode=params_dict['grad_update_mode']
 		self.alt_iters=params_dict['alt_iter'] # only effective in real-decoupled mode
+		self.TDVP_opt=params_dict['TDVP_opt']
 		
 
 		self.NN_type=params_dict['NN_type'] # DNN vs CNN
@@ -461,7 +462,7 @@ class VMC(object):
 
 
 	
-		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch, self.DNN.N_varl_params_vec, compute_grad_log_psi, self.DNN.NN_Tree, self.NN_dtype, self.grad_update_mode, start_iter=self.start_iter )
+		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch, self.DNN.N_varl_params_vec, compute_grad_log_psi, self.DNN.NN_Tree, self.NN_dtype, self.grad_update_mode, self.TDVP_opt, self.start_iter )
 		self.NG.init_global_variables(self.n_iter)
 		self.NG.run_debug_helper=self.run_debug_helper
 		self.NG.alt_iters=self.alt_iters

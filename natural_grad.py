@@ -5,7 +5,7 @@ from jax import jit, device_put
 
 from mpi4py import MPI
 import numpy as np
-from scipy.sparse.linalg import cg,cgs,bicg,bicgstab
+from scipy.sparse.linalg import cg #,cgs,bicg,bicgstab
 #from cg import cg
 from scipy.linalg import eigh,eig
 
@@ -15,7 +15,7 @@ import pickle
 
 class natural_gradient():
 
-	def __init__(self,comm,N_MC_points,N_batch,N_varl_params_vec,compute_grad_log_psi, NN_Tree, NN_dtype, grad_update_mode, start_iter, ):
+	def __init__(self,comm,N_MC_points,N_batch,N_varl_params_vec,compute_grad_log_psi, NN_Tree, NN_dtype, grad_update_mode, TDVP_opt, start_iter, ):
 				 
 		self.comm=comm
 		self.logfile=None
@@ -29,6 +29,7 @@ class natural_gradient():
 
 		#self.TDVP_type='cpx' 
 		self.TDVP_type='real'
+		self.TDVP_opt = TDVP_opt # 'svd' # 'inv' # 'cg' #
 
 		dtype=np.float64
 		
@@ -132,13 +133,15 @@ class natural_gradient():
 			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi).block_until_ready() 
 
 
-			if self.TDVP_type=='real':
-				self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
-								 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()
-			elif self.TDVP_type=='cpx':
-				self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.imag).block_until_ready() \
-								 -jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.real).block_until_ready()
 
+			# self.OO_expt[:] = jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
+			# 				 +jnp.einsum('s,sk,sl->kl',abs_psi_2,self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()
+
+			self.OO_expt[:] = jnp.dot(self.dlog_psi.real.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi.real).block_until_ready()	).block_until_ready() \
+							+ jnp.dot(self.dlog_psi.imag.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi.imag).block_until_ready()	).block_until_ready()  		
+
+		
+			
 		elif mode=='MC':
 
 			# self.O_expt[:]=jnp.sum(self.dlog_psi,axis=0)
@@ -150,37 +153,32 @@ class natural_gradient():
 			self.O_expt/=self.N_MC_points
 
 
-			if self.TDVP_type=='real':
-				self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
-					                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()    )._value, \
-									self.OO_expt[:], op=MPI.SUM
-									)
+			# self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.real).block_until_ready() \
+			# 	                  +jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.imag).block_until_ready()    )._value, \
+			# 					self.OO_expt[:], op=MPI.SUM
+			# 					)
 
-			elif self.TDVP_type=='cpx':
-				self.comm.Allreduce((  jnp.einsum('sk,sl->kl',self.dlog_psi.real, self.dlog_psi.imag).block_until_ready() \
-					                  -jnp.einsum('sk,sl->kl',self.dlog_psi.imag, self.dlog_psi.real).block_until_ready()    )._value, \
-									self.OO_expt[:], op=MPI.SUM
-									)
 
-			
+			self.comm.Allreduce((  jnp.dot(self.dlog_psi.real.T, self.dlog_psi.real).block_until_ready() \
+				                  +jnp.dot(self.dlog_psi.imag.T, self.dlog_psi.imag).block_until_ready()    )._value, \
+								self.OO_expt[:], op=MPI.SUM
+								)
+
+	
 			self.OO_expt/=self.N_MC_points
 
 
 
-		if self.TDVP_type=='real':
-			self.O_expt2[:] = (   jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
-					  		    + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
-
-			self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
-
-		elif self.TDVP_type=='cpx':
-			self.O_expt2[:] = (    jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.imag).block_until_ready() \
-					  		     - jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.real).block_until_ready()    )._value
-
-			#self.S_matrix[:] =1j*(self.OO_expt - self.O_expt2)
-			self.S_matrix[:] = self.OO_expt - self.O_expt2
+		# self.O_expt2[:] = (   jnp.einsum('k,l->kl',self.O_expt.real,self.O_expt.real).block_until_ready() \
+		# 		  		    + jnp.einsum('k,l->kl',self.O_expt.imag,self.O_expt.imag).block_until_ready()    )._value
 
 
+		self.O_expt2[:] = jnp.outer(self.O_expt.real,self.O_expt.real) + jnp.outer(self.O_expt.imag,self.O_expt.imag)
+
+		
+		self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
+
+		
 	
 
 	def compute_gradients(self,mode='MC',Eloc_params_dict=None):
@@ -203,29 +201,23 @@ class natural_gradient():
 			#              + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag)/self.N_MC_points
 
 
-			if self.TDVP_type=='real':
+			
 
-				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
-									self.F_vector_log[:], op=MPI.SUM
-									)
+			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
+								self.F_vector_log[:], op=MPI.SUM
+								)
 
-				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
-									self.F_vector_phase[:], op=MPI.SUM
-									)
+			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
+								self.F_vector_phase[:], op=MPI.SUM
+								)
 
 
-				# self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
-				#              		 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()   )._value, \
-				# 					self.F_vector[:], op=MPI.SUM
-				# 					)
+			# self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() \
+			#              		 + jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()   )._value, \
+			# 					self.F_vector[:], op=MPI.SUM
+			# 					)
 
-			elif self.TDVP_type=='cpx':
-				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted.real,self.dlog_psi.imag).block_until_ready() \
-				             		 - jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.real).block_until_ready()   )._value + 0.0j, \
-									self.F_vector[:], op=MPI.SUM
-									)
-				#self.F_vector*=1j
-
+		
 
 			self.F_vector_log/=self.N_MC_points
 			self.F_vector_phase/=self.N_MC_points
@@ -282,6 +274,22 @@ class natural_gradient():
 			exit()
 
 
+	def _TDVP_solver(self, S, F, nat_grad_guess, ):
+
+		info=0
+
+		if self.TDVP_opt == 'cg':
+			nat_grad, info = cg(S,F,x0=nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol) # 
+		
+		elif self.TDVP_opt == 'inv':
+			nat_grad=jnp.dot(jnp.linalg.inv(S), F).block_until_ready()._value
+		
+		elif self.TDVP_opt == 'svd':
+			lmbda, V = np.linalg.eigh(S,)
+			nat_grad = np.dot(V ,  np.dot( np.diag(lmbda/(lmbda**2 + self.tol**2)), np.dot(V.T.conj(), F) ) )
+
+		return nat_grad, info
+
 
 	def compute(self,NN_params,batch,Eloc_params_dict,mode='MC',):
 		
@@ -299,12 +307,6 @@ class natural_gradient():
 		#self.S_matrix += self.delta*np.linalg.norm(self.S_matrix)*np.eye(self.S_matrix.shape[0]) 
 
 		self.debug_helper()
-
-		#self.nat_grad=np.linalg.inv(self.S_matrix).dot(self.F_vector)
-
-		# E, V = eigh(self.S_matrix)
-		# print(E)
-		# exit()
 
 
 		####################################################### 
@@ -330,107 +332,57 @@ class natural_gradient():
 		#######################################################
 
 		
-		# apply conjugate gradient a few times
-		# info=1
-		# while info>0 and self.cg_maxiter<1E5:
-		# 	# apply cg
-		# 	if self.NN_dtype=='cpx':
-		# 		self.nat_grad, info = cg(self.S_matrix,self.F_vector,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess) # 
+		# solve TDVP EOM
 
-		# 	elif 'decoupled' in self.NN_dtype:
-		# 		if self.grad_update_mode=='normal':
-		# 			left_ind = 0
-		# 			for j, right_ind in enumerate(self.N_varl_params_vec):
-		# 				self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
-		# 				left_ind+=right_ind
-
-		# 		elif self.grad_update_mode=='alternating':
-		# 			if (self.iteration//self.alt_iters)%2==1: # phase grads
-		# 				left_ind = self.N_varl_params_vec[0]
-		# 				right_ind= self.N_varl_params_vec[1]
-		# 				self.nat_grad[0:left_ind]*=0.0
-		# 			else:
-		# 				left_ind = 0
-		# 				right_ind= self.N_varl_params_vec[0]
-		# 				self.nat_grad[right_ind:]*=0.0
+		info=1
+		while info>0 and self.cg_maxiter<1E5:
+			# apply cg
+			if self.NN_dtype=='cpx':
+				self.nat_grad[:], info = self._TDVP_solver(self.S_matrix,self.F_vector, self.nat_grad_guess)
 
 
+			elif 'decoupled' in self.NN_dtype:
+				if self.grad_update_mode=='normal':
+					left_ind = 0
+					for j, right_ind in enumerate(self.N_varl_params_vec):
+						self.nat_grad[left_ind:left_ind+right_ind], info = self._TDVP_solver(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind], self.nat_grad_guess[left_ind:left_ind+right_ind])
+						left_ind+=right_ind
+
+				elif self.grad_update_mode=='alternating':
+					if (self.iteration//self.alt_iters)%2==1: # phase grads
+						left_ind = self.N_varl_params_vec[0]
+						right_ind= self.N_varl_params_vec[1]
+						self.nat_grad[0:left_ind]*=0.0
+					else:
+						left_ind = 0
+						right_ind= self.N_varl_params_vec[0]
+						self.nat_grad[right_ind:]*=0.0
+
+					self.nat_grad[left_ind:left_ind+right_ind], info = self._TDVP_solver(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind], self.nat_grad_guess[left_ind:left_ind+right_ind])
+						
 					
-		# 			self.nat_grad[left_ind:left_ind+right_ind], info,  = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
+				elif self.grad_update_mode=='phase':
+					left_ind = self.N_varl_params_vec[0]
+					right_ind= self.N_varl_params_vec[1]
+					self.nat_grad[0:left_ind]*=0.0
+					self.nat_grad[left_ind:left_ind+right_ind], info = self._TDVP_solver(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind], self.nat_grad_guess[left_ind:left_ind+right_ind])
 					
-		# 			#print('CG iters:', iter_, np.linalg.norm(resid), np.linalg.norm(self.nat_grad[left_ind:left_ind+right_ind]-self.nat_grad_guess[left_ind:left_ind+right_ind]) )
-
-		# 		elif self.grad_update_mode=='phase':
-		# 			left_ind = self.N_varl_params_vec[0]
-		# 			right_ind= self.N_varl_params_vec[1]
-		# 			self.nat_grad[0:left_ind]*=0.0
-		# 			self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
-
-		# 		elif self.grad_update_mode=='log_mod':
-		# 			left_ind = 0
-		# 			right_ind= self.N_varl_params_vec[0]
-		# 			self.nat_grad[right_ind:]*=0.0
-		# 			self.nat_grad[left_ind:left_ind+right_ind], info = cg(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind],maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol, x0=self.nat_grad_guess[left_ind:left_ind+right_ind] ) #
-		# 	else:
-		# 		raise(NotImplementedError)
+				elif self.grad_update_mode=='log_mod':
+					left_ind = 0
+					right_ind= self.N_varl_params_vec[0]
+					self.nat_grad[right_ind:]*=0.0
+					self.nat_grad[left_ind:left_ind+right_ind], info = self._TDVP_solver(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind],self.F_vector[left_ind:left_ind+right_ind], self.nat_grad_guess[left_ind:left_ind+right_ind])
+					
+			else:
+				raise(NotImplementedError)
 
 				
-		# 	# 
-		# 	if info>0:
-		# 		self.cg_maxiter*=2
-		# 		print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
+			# affects CG solver only
+			if info>0:
+				self.cg_maxiter*=2
+				print('cg failed to converge in {0:d} iterations to tolerance {1:0.14f}; increasing maxiter to {2:d}'.format(info,self.tol,int(self.cg_maxiter)))
 		
-
-
-		##############
-
-
-
-		# if (self.iteration//self.alt_iters)%2==1:
-		# 	left_ind = self.N_varl_params_vec[0]
-		# 	right_ind= self.N_varl_params_vec[1]
-		# 	self.nat_grad[0:left_ind]*=0.0
-		# else:
-		# 	left_ind = 0
-		# 	right_ind= self.N_varl_params_vec[0]
-		# 	self.nat_grad[right_ind:]*=0.0
 		
-		# #self.nat_grad[left_ind:left_ind+right_ind]=jnp.dot(jnp.linalg.inv(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind]), self.F_vector[left_ind:left_ind+right_ind]).block_until_ready()._value
-
-
-		# U, lmbda, V = np.linalg.svd(self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind], hermitian=True)
-		# #print(lmbda)
-
-		# print('check svd:', np.linalg.norm( np.einsum('ij,j,jk->ik',U,lmbda,V) - self.S_matrix[left_ind:left_ind+right_ind,left_ind:left_ind+right_ind] ) )
-
-
-		# inds=np.where(lmbda/np.linalg.norm(lmbda) <= 1E-7)[0]
-
-		# #print(lmbda/np.linalg.norm(lmbda))
-
-		# print(inds.shape, lmbda.shape)
-
-		# #print((lmbda/np.linalg.norm(lmbda) )[inds])
-
-		# U=U[:,inds]
-		# lmbda=lmbda[inds]
-		# V=V[inds,:]
-
-		# #nat_grad=self.nat_grad.copy()
-		# self.nat_grad[left_ind:left_ind+right_ind] = np.einsum('ij,j,jk,k->i',V.T.conj(),1.0/(lmbda),U.T.conj(),self.F_vector[left_ind:left_ind+right_ind])
-
-
-		# nat_grad=jnp.dot(jnp.linalg.inv(self.S_matrix), self.F_vector).block_until_ready()._value
-
-
-		# print(np.max(np.abs(nat_grad-self.nat_grad)), np.linalg.norm(np.abs(nat_grad-self.nat_grad)))
-		# exit()
-
-
-		###############
-
-		self.nat_grad[:]=jnp.dot(jnp.linalg.inv(self.S_matrix), self.F_vector).block_until_ready()._value
-
 		###############
 
 		# clip gradients
@@ -440,7 +392,7 @@ class natural_gradient():
 		# store guess for next true
 		self.current_grad_guess[:]=self.nat_grad
 
-		print('nat_grad:', self.iteration, self.nat_grad.min(), self.nat_grad.max(), np.abs(self.nat_grad).mean(), np.abs(self.nat_grad).std() )
+		#print('nat_grad:', self.iteration, self.nat_grad.min(), self.nat_grad.max(), np.abs(self.nat_grad).mean(), np.abs(self.nat_grad).std() )
 		#print('nat_grad:', np.linalg.norm(self.nat_grad-nat_grad_2))
 		
 		# normalize gradients
