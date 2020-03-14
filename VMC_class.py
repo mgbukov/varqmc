@@ -34,7 +34,7 @@ from jax.experimental import optimizers
 
 import jax.numpy as jnp
 import numpy as np
-from scipy.linalg import sqrtm, pinvh
+#from scipy.linalg import sqrtm, pinvh
 
 import yaml
 import pickle
@@ -764,7 +764,7 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 	
 			# check for nans and infs
-			if run or ((not np.isfinite(self.NG.S_matrix).all() ) and (not np.isfinite(self.NG.F_vector).all() )):
+			if run or ((not np.isfinite(self.NG.S_matrix).all() ) or (not np.isfinite(self.NG.F_vector).all() )):
 				
 				with open(self.debug_file_SF+'.pkl', 'wb') as handle:
 
@@ -867,6 +867,9 @@ class VMC(object):
 			self.logfile.write(E_str)
 			
 			#exit()
+
+			## check energy and undo update and restart sampling
+
 
 			if self.mode=='exact':
 				self.logfile.write('overlap = {0:0.10f}.\n\n'.format(self.Eloc_params_dict['overlap']) )
