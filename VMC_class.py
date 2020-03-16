@@ -764,7 +764,7 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 	
 			# check for nans and infs
-			if run or ((not np.isfinite(self.NG.S_matrix).all() ) or (not np.isfinite(self.NG.F_vector).all() )):
+			if run or (not np.isfinite(self.NG.S_matrix).all() ) or (not np.isfinite(self.NG.F_vector).all() ) or  (not np.isfinite(self.Eloc_mean_g).all() ):
 				
 				with open(self.debug_file_SF+'.pkl', 'wb') as handle:
 

@@ -388,9 +388,9 @@ cdef class Neural_Net:
                                 #        'nonlin_1': Poly_cpx,
                                 #         'reg': Regularization_cpx2((shape_last_layer_phase[1],)),
 
-                                        'layer_1': GeneralDense(shapes[1]['layer_1'], ignore_b=True, init_value_W=3E-1, ), #3E-1
+                                        'layer_1': GeneralDense(shapes[1]['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
                                         'nonlin_1': elementwise(logcosh),
-                                        'layer_2': GeneralDense(shapes[1]['layer_2'], ignore_b=False, init_value_W=5E-1, init_value_b=5E-1), #init_value_W=1E-1, init_value_b=1E-1
+                                        'layer_2': GeneralDense(shapes[1]['layer_2'], ignore_b=False, init_value_W=5E-2, init_value_b=5E-2), #init_value_W=5E-1, init_value_b=5E-1
                                         'nonlin_2': elementwise(logcosh),
                                         # 'layer_3': GeneralDense(shapes[1]['layer_3'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1), #4.3E-2
                                         # 'nonlin_3': elementwise(logcosh),
