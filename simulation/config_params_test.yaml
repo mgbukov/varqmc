@@ -11,7 +11,7 @@ batchnorm: false
 load_data: false
 minibatch_size: 100
 mode: MC # exact # 
-grad_update_mode: normal # alternating #  log_mod #  phase # 
+grad_update_mode: alternating # normal # log_mod #  phase # 
 TDVP_opt: 'svd' # 'inv' # 'cg' #
 alt_iter: 20 # of iterations to keep each alternating update for  
 MC_thermal: true

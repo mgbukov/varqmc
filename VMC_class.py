@@ -81,7 +81,7 @@ class VMC(object):
 			self.data_dir=data_dir
 			params_dict = yaml.load(open(self.data_dir+'/config_params_init.yaml'),Loader=yaml.FullLoader)
 		else:
-			self.data_dir=data_dir
+			self.data_dir=None #data_dir
 
 		self.params_dict=params_dict
 			
@@ -163,7 +163,6 @@ class VMC(object):
 		self.n_iter=10 # define number of iterations to store for debugging purposes
 		
 		self._create_file_name(model_params)
-		self._copy_code()
 		self._create_NN(load_data=self.load_data)
 		self._create_optimizer()
 		self._create_energy_estimator()
@@ -172,6 +171,10 @@ class VMC(object):
 
 		# create log file and directory
 		if self.save_data:
+			if data_dir is None:
+				raise ValueError("data_dir cannot be None-type for save_data=True.")
+
+			self._copy_code()
 			self._create_logs()
 
 			if self.load_data:
@@ -228,6 +231,7 @@ class VMC(object):
 		self.MC_tool.acceptance_ratio_g[0]=np.float64(acceptance_ratio_g)
 		self.MC_tool.s0_g=np.array([self.E_estimator.basis_type(s0) for s0 in s0_g.split(' ')] )
 		self.MC_tool.sf_g=np.array([self.E_estimator.basis_type(sf) for sf in sf_g.split(' ')] )
+
 
 		self.DNN._init_MC_data(s0_vec=self.MC_tool.s0_g, sf_vec=self.MC_tool.sf_g, )
 
@@ -755,8 +759,10 @@ class VMC(object):
 			self.params_update[-1,...]*=0.0
 
 
-	def run_debug_helper(self, run=False, ):
+	def run_debug_helper(self, run=False,):
 
+		# set default flag to False
+		exit_flag=False 
 
 		#
 		##### store data
@@ -802,8 +808,22 @@ class VMC(object):
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
+				# set exit variable and bcast it to all processes
+				exit_flag=True
+		
+		exit_flag = self.comm.bcast(exit_flag, root=0)
 				
+		
+
 		self.comm.Barrier()
+
+
+
+		if exit_flag:
+			exit_str="\n\nEncountered nans or infs!\nExiting simulation...\n\n"
+			print(exit_str)
+			self.logfile.write(exit_str)
+			exit()
 
 
 	
@@ -868,7 +888,8 @@ class VMC(object):
 			
 			#exit()
 
-			## check energy and undo update and restart sampling
+			# if dE > E_std only on one side + condition on E_std
+			##### check energy and undo update and restart sampling: (1.05*, max_value) and 0.5 for reduction
 
 
 			if self.mode=='exact':
@@ -1028,7 +1049,7 @@ class VMC(object):
 			# print(np.sum(abs_psi_2), np.linalg.norm(mod_kets[self.inv_index]), self.MC_tool.log_psi_shift, np.mean(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.min(self.MC_tool.log_mod_kets))
 
 			self.Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
-			overlap=np.abs(self.psi[self.inv_index].dot(self.E_estimator.psi_GS_exact))**2
+			overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
 			self.Eloc_params_dict['overlap']=overlap
 
 

@@ -35,10 +35,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
