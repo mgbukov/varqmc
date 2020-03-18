@@ -232,8 +232,12 @@ class VMC(object):
 		self.MC_tool.s0_g=np.array([self.E_estimator.basis_type(s0) for s0 in s0_g.split(' ')] )
 		self.MC_tool.sf_g=np.array([self.E_estimator.basis_type(sf) for sf in sf_g.split(' ')] )
 
+		m_l=self.N_MC_chains*self.comm.Get_rank()
+		m_r=self.N_MC_chains*(self.comm.Get_rank()+1)
 
-		self.DNN._init_MC_data(s0_vec=self.MC_tool.s0_g, sf_vec=self.MC_tool.sf_g, )
+		print(self.comm.Get_rank(),self.MC_tool.s0_g[m_l:m_r], self.MC_tool.sf_g[m_l:m_r], )
+
+		self.DNN._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
 
 		### load DNN params
 
