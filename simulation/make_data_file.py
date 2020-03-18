@@ -11,10 +11,15 @@ def create_params_file(params):
 	comm=MPI.COMM_WORLD
 
 	# system time
-	sys_time=datetime.datetime.now()
-	sys_data="{0:d}_{1:02d}_{2:02d}-{3:02d}_{4:02d}_{5:02d}--".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
-	#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
+	
+	sys_data=''
 
+	if self.comm.Get_rank()==0:
+		sys_time=datetime.datetime.now()
+		sys_data="{0:d}_{1:02d}_{2:02d}-{3:02d}_{4:02d}_{5:02d}--".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
+	
+	# broadcast sys_data
+	sys_data = self.comm.bcast(sys_data, root=0)
 
 
 	sys_time=sys_data + params['optimizer'] + '-L_{0:d}-{1:s}'.format(params['L'],params['mode'])
