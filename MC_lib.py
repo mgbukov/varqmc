@@ -162,8 +162,8 @@ class MC_sampler():
 			self.comm.Allgatherv([DNN.s0_vec,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
 			self.comm.Allgatherv([DNN.sf_vec,  self.MPI_basis_dtype], [self.sf_g, self.MPI_basis_dtype])
 		else:
-			self.s0_g=self.s0_vec.copy()
-			self.sf_g=self.sf_vec.copy()
+			self.s0_g=DNN.s0_vec.copy()
+			self.sf_g=DNN.sf_vec.copy()
 
 
 		### compute acceptance ratio

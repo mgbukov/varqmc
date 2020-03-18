@@ -35,10 +35,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=4
+DEF _L=6
 cdef extern from *:
     """
-    #define _L 4
+    #define _L 6
     """
     pass
 
@@ -141,6 +141,8 @@ cdef extern from "sample.h":
     T rep_int_to_spinstate[T,J](const int,T ,J []) nogil
     T rep_int_to_spinstate_conv[T,J](const int,T ,J []) nogil
 
+    basis_type ref_state(const basis_type) nogil
+
 
 
 @cython.boundscheck(False)
@@ -175,12 +177,19 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
 
 
 @cython.boundscheck(False)
+def representative(basis_type[:] states,basis_type[:] out,):
+    cdef int i;
+    cdef int Ns=states.shape[0]
+    with nogil:
+        for i in range (Ns):
+            out[i]=ref_state(states[i]) 
+
+
+@cython.boundscheck(False)
 def integer_cyclicity(basis_type[:] states,np.npy_uint32[::1] cycl):
     cdef int i;
     cdef int Ns=states.shape[0];
     cdef int Nsites=N_sites;
-    
-
     with nogil:
         for i in range (Ns):
             cycl[i]=cyclicity(Nsites,states[i])
@@ -264,7 +273,7 @@ cdef class Neural_Net:
     cdef object apply_fun_args, apply_fun_args_dyn
     
     #cdef object W_real, W_imag
-    cdef object params
+    cdef object params, params_update
     cdef object input_shape, reduce_shape, output_shape, out_chan, strides, filter_shape 
     cdef object NN_type, NN_dtype
     cdef object comm
@@ -449,7 +458,7 @@ cdef class Neural_Net:
         
             self.input_shape=(-1,self.N_sites)
           
-            
+            self.params_update=0.0*self.NN_Tree.ravel(self.params)
 
             
 
@@ -671,6 +680,12 @@ cdef class Neural_Net:
             return self.params
         def __set__(self,value):
             self.params=value
+
+    property params_update:
+        def __get__(self):
+            return self.params_update
+        def __set__(self,value):
+            self.params_update=value
 
     property evaluate_phase:
         def __get__(self):

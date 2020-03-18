@@ -809,7 +809,8 @@ class VMC(object):
 								)
 
 				# set exit variable and bcast it to all processes
-				exit_flag=True
+				if not run: 
+					exit_flag=True
 		
 		exit_flag = self.comm.bcast(exit_flag, root=0)
 				
@@ -853,9 +854,9 @@ class VMC(object):
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN.N_features, NN_type=self.DNN.NN_type)
 
-
-
+		
 		for iteration in range(start_iter,start_iter+self.N_iterations, 1): 
+
 
 			#self.comm.Barrier()
 			ti=time.time()
@@ -885,11 +886,25 @@ class VMC(object):
 				E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g[-1,...]).shape[0] )
 				print(E_str)
 			self.logfile.write(E_str)
-			
+
+
 			#exit()
 
+
+			# if iteration>0 and Eloc_old[0]-self.Eloc_mean_g.real>=0 and Eloc_old[1]:
+			# 	file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(iteration-1) + self.file_name
+
+			# 	with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+			# 		self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
+			# 		self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
+
+			# Eloc_old=(self.Eloc_mean_g.real,self.E_MC_std_g)
+			
+		
+
 			# if dE > E_std only on one side + condition on E_std
-			##### check energy and undo update and restart sampling: (1.05*, max_value) and 0.5 for reduction
+			##### check energy and undo update and restart sampling: (1.05*, max_value=1E-1) and 0.5 for reduction
+
 
 
 			if self.mode=='exact':
@@ -1127,9 +1142,11 @@ class VMC(object):
 				grads[left_ind:left_ind+right_ind]*=self.learning_rates[j]
 				left_ind+=right_ind
 
-				
-			self.opt_state = self.opt_update(iteration, self.DNN.NN_Tree.unravel(grads), self.opt_state) 
+			
+			self.opt_state = self.opt_update(iteration, self.DNN.NN_Tree.unravel(grads) , self.opt_state)
+
 			self.DNN.update_params(self.get_params(self.opt_state))
+
 
 
 

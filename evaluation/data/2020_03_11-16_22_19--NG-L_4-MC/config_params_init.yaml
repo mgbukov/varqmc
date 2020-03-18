@@ -13,6 +13,7 @@ grad_update_mode: normal
 load_data: false
 minibatch_size: 100
 mode: MC
+TDVP_opt: 'svd' # 'inv' # 'cg' #
 optimizer: NG
 save_data: true
 seed: 0

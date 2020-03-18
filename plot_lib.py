@@ -154,12 +154,113 @@ def plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	plt.tight_layout(rect=(0,0,0.9,1))
 
+	print('here')
 
 	if save:
 		plt.savefig(plotfile_dir + 'phase_hist.pdf')
 		plt.close()
 	else:
 		plt.show()
+
+
+def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
+
+	file_name= load_dir + 'phases_histogram--' + params_str + '.txt'
+
+
+	# preallocate lists
+	iter_step=[]
+	hist_vals=[]
+
+	with open(file_name, 'r') as f:
+		for j,row in enumerate(f):
+			row_list=row.strip().split(" : ")
+
+			iter_step.append(int(row_list[0]))
+			hist_vals.append(np.array( list([float(elem.strip(',')) for elem in row_list[1].strip().split(", ")]) ))
+
+	iter_step=np.array(iter_step)
+	hist_vals=np.array(hist_vals).T
+
+	n_bins=40
+	binned_phases=np.linspace(-np.pi,np.pi, n_bins, endpoint=True)
+
+
+
+	#####################
+
+	# energy data
+
+	file_name= load_dir + 'energy--' + params_str + '.txt'
+
+	# preallocate lists
+	Eave_real=[]
+	Eave_imag=[]
+	Estd=[]
+
+	with open(file_name, 'r') as f:
+		for j,row in enumerate(f):
+			row_list=row.strip().split(" : ")
+
+			Eave_real.append(float(row_list[1]))
+			Eave_imag.append(float(row_list[2]))
+			Estd.append(float(row_list[3]))
+
+
+	iter_step=np.array(iter_step)
+	Eave_real=np.array(Eave_real)
+	Eave_imag=np.array(Eave_imag)
+	Estd=np.array(Estd)
+
+
+	#####################
+
+
+	#create temporary save directory
+	save_dir = plotfile_dir + '/tmp_movie'
+	if not os.path.exists(save_dir):
+	    os.makedirs(save_dir)
+
+	for it, hist in enumerate(hist_vals.T):
+
+		ax=plt.gca()
+
+		ax.set_xlim([-np.pi,np.pi])
+		ax.set_ylim([-0.05,1.05])
+
+		ax.xaxis.set_major_locator(plt.MultipleLocator(np.pi / 2))
+		ax.xaxis.set_major_formatter(plt.FuncFormatter(format_func))
+
+		ax.grid(color='k', linestyle='-', linewidth=0.1)
+		ax.yaxis.set_ticks_position('both')
+		
+		ax.set_xlabel('wavefunction phase')
+		ax.set_ylabel('probability')
+
+
+
+		ax.plot(binned_phases, hist, '-b.')
+		ax.set_title('iter={0:04d}, $E={1:0.6f}$'.format(it,Eave_real[it]))
+
+
+		plt.tight_layout()
+		#plt.show()
+		#exit()
+
+		fname=save_dir + '/phase_hist_frame_{0:d}.png'.format(it)
+		plt.savefig(fname)
+
+		plt.close()
+
+
+	# create movie
+	movie_name=plotfile_dir + 'phase_movie.mp4' # -loglevel panic -codec:v libx264
+	cmd = "ffmpeg -framerate 15 -i " + save_dir + "/phase_hist_frame_%01d.png -r 30 -pix_fmt yuv420p "+movie_name
+	# execute command cmd
+	os.system(cmd)
+	# remove temp directory
+	os.system("rm -rf "+plotfile_dir+"/tmp_movie*")
+
 
 
 
@@ -244,7 +345,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 	with open(file_name, 'r') as f:
 		for j,row in enumerate(f):
 			row_list=row.strip().split(" : ")
-			
+	
 			iter_step.append(float(row_list[0]))
 			r2.append(float(row_list[1])) 
 			S_norm.append(float(row_list[2])) 
@@ -252,8 +353,8 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 			F_log_norm.append(float(row_list[4])) 
 			F_phase_norm.append(float(row_list[5]))
 			S_logcond.append(float(row_list[6]))
-			F_max.append(float(row_list[6]))
-			alpha_max.append(float(row_list[7]))
+			F_max.append(float(row_list[7]))
+			alpha_max.append(float(row_list[8]))
 
 
 	iter_step=np.array(iter_step)
@@ -263,6 +364,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 	F_log_norm=np.array(F_log_norm)
 	F_phase_norm=np.array(F_phase_norm)
 	S_logcond=np.array(S_logcond)
+	F_max=np.array(F_max)
 	alpha_max=np.array(alpha_max)
 
 
@@ -367,7 +469,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	plt.plot(iter_step, F_max, '.c', label='$||\\mathrm{max}_k(F_k)$')
 	plt.xlabel('iteration')
-	plt.ylabel('$\\mathrm{max}_k(\\alpha_k)$')
+	plt.ylabel('$\\mathrm{max}_k(F_k)$')
 	#plt.ylim(-0.01,1.01)
 	#plt.legend()
 	
@@ -376,7 +478,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 
 	if save:
-		plt.savefig(plotfile_dir + 'alpha_max.pdf')
+		plt.savefig(plotfile_dir + 'F_max.pdf')
 		plt.close()
 	else:
 		plt.show()

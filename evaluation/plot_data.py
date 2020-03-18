@@ -47,7 +47,7 @@ NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
 N_MC_points=100000
 N_prss=260
 NMCchains=1
-sys_time= '2020_03_13-19_52_22' 
+sys_time= '2020_03_15-19_12_08' 
 
 
 
@@ -80,7 +80,7 @@ plot_energy( load_dir, plotfile_dir, params_str, L, J2, save=save)
 
 plot_loss( load_dir, plotfile_dir, params_str, L, J2, save=save)
 
-
+phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True)
 
 
 
