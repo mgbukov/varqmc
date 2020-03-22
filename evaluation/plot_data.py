@@ -41,13 +41,13 @@ save=True #False #
 L=6
 J2=0.5
 opt='NG'
-mode='MC'
+mode='MC' # 'exact' #
 NN_dtype='real-decoupled'
 NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-N_MC_points=100000
-N_prss=260
-NMCchains=1
-sys_time= '2020_03_15-19_12_08' 
+N_MC_points=100000 # 107 #
+N_prss=260 # 1 #
+NMCchains=1 # 2 #
+sys_time= '2020_03_17-23_32_53' 
 
 
 
@@ -57,8 +57,8 @@ sys_time= '2020_03_15-19_12_08'
 data_name = sys_time + '--{0:s}-L_{1:d}-{2:s}/'.format(opt,L,mode)
 load_dir='data/' + data_name  + 'data_files/'
 data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
-params_str='model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
-
+params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
+#params_str=''
 
 plotfile_dir = 'data/' + data_name  + 'plots/'
 
@@ -80,7 +80,7 @@ plot_energy( load_dir, plotfile_dir, params_str, L, J2, save=save)
 
 plot_loss( load_dir, plotfile_dir, params_str, L, J2, save=save)
 
-phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True)
+#phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True)
 
 
 

@@ -241,7 +241,8 @@ class VMC(object):
 
 		### load DNN params
 
-		file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter) + self.file_name
+		#file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter) + self.file_name
+		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(self.start_iter)
 
 		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
 			self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
@@ -249,7 +250,8 @@ class VMC(object):
 
 		self.opt_state = self.opt_init(self.DNN.params)
 
-		file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
+		#file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
+		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(self.start_iter-1) + self.file_name
 		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
 			DNN_params_old,_,_ = pickle.load(handle)
 
@@ -478,7 +480,7 @@ class VMC(object):
 
 		# jax self.optimizer
 		if self.optimizer=='NG':
-			self.learning_rates=[1E-2,1E-2]
+			self.learning_rates=np.array([1E-2,1E-2]) # 51E-3
 			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=1.0)
 			self.opt_state = self.opt_init(self.DNN.params)
 
@@ -487,7 +489,7 @@ class VMC(object):
 			if self.load_data:
 				raise("Loading data not supported for adam yet")
 			
-			self.learning_rates=[1E-0,1E-0,]
+			self.learning_rates=np.array([1.0,1.0,])
 			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=1E-3, b1=0.9, b2=0.99, eps=1e-08)
 			self.opt_state = self.opt_init(self.DNN.params)
 
@@ -646,7 +648,8 @@ class VMC(object):
 			return open(file_name, append_write)
 
 		# logfile name
-		logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
+		#logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
+		logfile_name= 'LOGFILE--MPIprss_{0:d}'.format(self.comm.Get_rank()) + '.txt'
 		self.logfile = create_open_file(logfile_dir+logfile_name)
 		self.E_estimator.logfile=self.logfile
 		self.NG.logfile=self.logfile
@@ -657,26 +660,27 @@ class VMC(object):
 		warnings.showwarning = customwarn
 
 		
-		self.debug_file_SF=self.savefile_dir_debug + 'debug-SF_data'+'--' + self.file_name
-		self.debug_file_logpsi=self.savefile_dir_debug + 'debug-logpsi_data'+'--' + self.file_name
-		self.debug_file_phasepsi=self.savefile_dir_debug + 'debug-phasepsi_data'+'--' + self.file_name
-		self.debug_file_intkets=self.savefile_dir_debug + 'debug-intkets_data'+'--' + self.file_name
-		self.debug_file_Eloc=self.savefile_dir_debug + 'debug-Eloc_data'+'--' + self.file_name
-		self.debug_file_params_update=self.savefile_dir_debug + 'debug-params_update_data'+'--' + self.file_name
+		self.debug_file_SF           =self.savefile_dir_debug + 'debug-SF_data'            #+'--' + self.file_name
+		self.debug_file_logpsi       =self.savefile_dir_debug + 'debug-logpsi_data'        #+'--' + self.file_name
+		self.debug_file_phasepsi     =self.savefile_dir_debug + 'debug-phasepsi_data'      #+'--' + self.file_name
+		self.debug_file_intkets      =self.savefile_dir_debug + 'debug-intkets_data'       #+'--' + self.file_name
+		self.debug_file_Eloc         =self.savefile_dir_debug + 'debug-Eloc_data'          #+'--' + self.file_name
+		self.debug_file_params_update=self.savefile_dir_debug + 'debug-params_update_data' #+'--' + self.file_name
 		
 
 		if self.save_data:
 			# data files
-			common_str =  self.file_name + '.txt'
+			#common_str = '--'  self.file_name + '.txt'
+			common_str = '.txt'
 
-			self.file_energy= create_open_file(self.savefile_dir+'energy--'+common_str)
+			self.file_energy= create_open_file(self.savefile_dir+'energy'+common_str)
 			#self.file_energy_std= create_open_file(self.savefile_dir+'energy_std--'+common_str)
-			self.file_loss= create_open_file(self.savefile_dir+'loss--'+common_str)
+			self.file_loss= create_open_file(self.savefile_dir+'loss'+common_str)
 			#self.file_r2= create_open_file(self.savefile_dir+'r2--'+common_str)
-			self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram--'+common_str)
+			self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram'+common_str)
 
-			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data--'+common_str)
-			self.file_opt_data= create_open_file(self.savefile_dir+'opt_data--'+common_str)
+			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+common_str)
+			self.file_opt_data= create_open_file(self.savefile_dir+'opt_data'+common_str)
 
 
 		### timing vector
@@ -711,7 +715,8 @@ class VMC(object):
 	def check_point(self, iteration,):
 			
 		# NN parameters
-		file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
+		#file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
+		file_name='NNparams'+'--iter_{0:05d}'.format(iteration) 
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
 			pickle.dump([self.DNN.params,self.DNN.apply_fun_args,self.MC_tool.log_psi_shift,], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -847,7 +852,6 @@ class VMC(object):
 
 	def train(self, start_iter=0):
 
-
 		# set timer
 		t_start=time.time()
 
@@ -858,8 +862,13 @@ class VMC(object):
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN.N_features, NN_type=self.DNN.NN_type)
 
-		
-		for iteration in range(start_iter,start_iter+self.N_iterations, 1): 
+
+		# auxiliary variable
+		prev_it_data=np.zeros(5) # Eloc_real, Eloc_imag, Eloc_std, S_norm, F_norm
+
+		iteration=start_iter
+		while iteration < start_iter+self.N_iterations:
+		#for iteration in range(start_iter,start_iter+self.N_iterations, 1): 
 
 
 			#self.comm.Barrier()
@@ -885,37 +894,62 @@ class VMC(object):
 			#self.get_Stot_data(self.DNN.params)
 
 			#####
-			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g, ) 		
+			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}, E_imag={2:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g, self.Eloc_mean_g.imag, )
+			E_str+="	with lr's {0:0.6f} and {1:0.6f}.\n".format(self.learning_rates[0], self.learning_rates[1] )
 			if self.comm.Get_rank()==0:
-				E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g[-1,...]).shape[0] )
+				#E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g[-1,...]).shape[0] )
 				print(E_str)
 			self.logfile.write(E_str)
+
+
+			if self.mode=='exact':
+				olap_str='overlap = {0:0.10f}.\n\n'.format(self.Eloc_params_dict['overlap'])
+				if self.comm.Get_rank()==0:
+					print(olap_str)
+				self.logfile.write(olap_str)
 
 
 			#exit()
 
 
-			# if iteration>0 and Eloc_old[0]-self.Eloc_mean_g.real>=0 and Eloc_old[1]:
-			# 	file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(iteration-1) + self.file_name
 
-			# 	with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-			# 		self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
-			# 		self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
-
-			# Eloc_old=(self.Eloc_mean_g.real,self.E_MC_std_g)
-			
-		
-
-			# if dE > E_std only on one side + condition on E_std
 			##### check energy and undo update and restart sampling: (1.05*, max_value=1E-1) and 0.5 for reduction
+			# if iteration>0 and self.mode=='MC': 
+			# 	_b1=prev_it_data[0] - self.Eloc_mean_g.real
+			# 	_b2=np.abs(self.Eloc_mean_g.imag)
+			# 	_b3=1E1*prev_it_data[2] - self.E_MC_std_g 
+			# 	_b4=self.NG.F_norm/self.NG.S_norm
+			# 	if _b1<-1.0 or _b2 < -0.1 or _b3 < 0: 
+			# 		# file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(iteration-1) #+ self.file_name
+			# 		# with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+			# 		# 	self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
+			# 		# 	self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
+				
+			# 		# revert DNN params update; 
+			# 		self.DNN.params=self.DNN.NN_Tree.unravel(self.DNN.NN_Tree.ravel(self.DNN.params)+self.DNN.params_update)
+
+			# 		mssg="restarting iteration: dE={0:0.6f}, dE_std={1:0.6f}, dnorm={2:0.10f},\n".format(_b1, _b3, _b4)
+
+			# 		if self.comm.Get_rank()==0:
+			# 			print(mssg)
+			# 		self.logfile.write(mssg)
+
+			# 		# decrease learning rate
+			# 		self.learning_rates*=0.5
+
+			# 		continue # restart sampling
+			# 	else:
+
+			# 		# increase learning rats
+			# 		if np.max(self.learning_rates)<1E-1:
+			# 			self.learning_rates*=1.01
 
 
 
-			if self.mode=='exact':
-				self.logfile.write('overlap = {0:0.10f}.\n\n'.format(self.Eloc_params_dict['overlap']) )
 
 			
 			
+			##### save data
 			if iteration<self.N_iterations+start_iter:
 
 				#### check point DNN parameters
@@ -941,7 +975,7 @@ class VMC(object):
 					#if not(self.load_data and (start_iter==iteration)):
 					self.save_sim_data(iteration,loss,r2,phase_hist)
 
-			
+
 			prss_time=time.time()-ti
 			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.\n".format(self.comm.Get_rank(), iteration, prss_time)
 			self.logfile.write(fin_iter_str)
@@ -954,8 +988,14 @@ class VMC(object):
 			os.fsync(self.logfile.fileno())
 
 
-			# synch 
+			# synch
+			prev_it_data[0], prev_it_data[1], prev_it_data[2]=self.Eloc_mean_g.real, self.Eloc_mean_g.imag, self.E_MC_std_g
+			prev_it_data[3], prev_it_data[4]=self.NG.S_norm, self.NG.F_norm
+			
+			iteration+=1
 			self.comm.Barrier()
+
+		iteration-=1
 
 		
 		prss_tot_time=time.time()-t_start
@@ -1111,7 +1151,7 @@ class VMC(object):
 
 		if self.optimizer=='RK':
 			# compute updated NN parameters
-			self.DNN.update_params(self.NG.Runge_Kutta(self.DNN.params,self.batch,self.Eloc_params_dict,self.mode,self.get_training_data))
+			self.DNN.params = self.NG.Runge_Kutta(self.DNN.params,self.batch,self.Eloc_params_dict,self.mode,self.get_training_data)
 			loss=self.NG.max_grads
 			grads=self.NG.dy_star - 1.0/6.0*(self.NG.dy-self.NG.dy_star)
 
@@ -1149,7 +1189,9 @@ class VMC(object):
 			
 			self.opt_state = self.opt_update(iteration, self.DNN.NN_Tree.unravel(grads) , self.opt_state)
 
-			self.DNN.update_params(self.get_params(self.opt_state))
+			self.DNN.params = self.get_params(self.opt_state)
+			self.DNN.params_update=grads
+
 
 
 

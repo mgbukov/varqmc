@@ -108,8 +108,13 @@ class Energy_estimator():
 		J2_pm_list=[[0.5*J2,i,T_d[i]] for i in range(N_sites)] + [[0.5*J2,i,T_a[i]] for i in range(N_sites)]
 	
 
-		self.static_off_diag=[ ["+-",J1_pm_list],["-+",J1_pm_list], ["+-",J2_pm_list],["-+",J2_pm_list] ]
-		self.static_diag=[ ["zz",J1_list],["zz",J2_list] ]
+		self.static_off_diag=[ ["+-",J1_pm_list],["-+",J1_pm_list],]
+		self.static_diag=[ ["zz",J1_list], ]
+		
+		if self.J2>0:
+			self.static_off_diag+=[ ["+-",J2_pm_list],["-+",J2_pm_list] ]
+			self.static_diag+=[["zz",J2_list],]
+		
 		static_list_offdiag = _consolidate_static(self.static_off_diag)
 		static_list_diag = _consolidate_static(self.static_diag)
 		
@@ -186,6 +191,7 @@ class Energy_estimator():
 		self.basis = spin_basis_general(self.N_sites, pauli=False, Nup=self.N_sites//2)
 		
 		self.H=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis,dtype=np.float64) #
+		self.H_symm=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis_symm,dtype=np.float64)
 		
 		self.SdotS=hamiltonian(self.static_off_diag_SdotS+self.static_diag_SdotS, [], basis=self.basis,dtype=np.float64)
 
@@ -390,6 +396,43 @@ class Energy_estimator():
 
 		#######
 
+
+		#np.set_printoptions(threshold=np.inf, suppress=True)
+
+		phase_kets = (phase_kets+np.pi)%(2*np.pi) - np.pi
+		phase_psi_bras = (phase_psi_bras+np.pi)%(2*np.pi) - np.pi
+
+		ind=np.argmax(log_kets)
+		a=phase_kets[ind]
+		phase_kets=phase_kets-a
+		phase_psi_bras=phase_psi_bras-a
+
+
+		# print(phase_kets)
+		# print()
+		# for phi, log in zip(phase_psi_bras, log_psi_bras):
+		# 	print(phi,np.exp(2.0*log))
+		#print(phase_psi_bras)
+
+		# import matplotlib
+		# import matplotlib.pyplot as plt
+
+		# fig, ax = plt.subplots(nrows=1, ncols=2)
+
+
+		# ax[0].plot(phase_kets,log_kets,'.b',markersize=0.5)
+		# ax[0].set_xlim([-2*np.pi,2*np.pi])
+		# ax[0].set_ylim([-10,0])
+
+		# ax[1].plot(phase_psi_bras,log_psi_bras,'.r',markersize=0.5)
+		# ax[1].set_xlim([-2*np.pi,2*np.pi])
+		# ax[1].set_ylim([-10,0])
+
+		# plt.show(	)
+
+		# exit()
+
+
 		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
 		if self.logfile!=None:
 			self.logfile.write(psi_str)
@@ -401,6 +444,7 @@ class Energy_estimator():
 		self._n_per_term=self._n_per_term[self._n_per_term>0]
 		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term,self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras,log_kets)
 		
+		#print(self._Eloc_cos)
 
 		cos_phase_kets=np.cos(phase_kets)
 		sin_phase_kets=np.sin(phase_kets)
@@ -417,9 +461,6 @@ class Energy_estimator():
 			indx=np.asarray(indx,dtype=np.int32)
 			update_diag_ME(ints_ket,self.Eloc_real,opstr,indx,J) 
 
-		
-		#print(self.Eloc_real)
-		#exit()
 
 		#################################
 		#
@@ -460,6 +501,8 @@ class Energy_estimator():
 
 			self.SdotS_imag=2.0*self.Eloc_imag # double off-diagonal contribution
 
+
+		return log_psi_bras, phase_psi_bras
 
 
 	def process_local_energies(self,mode='MC',Eloc_params_dict=None,SdotS=False):

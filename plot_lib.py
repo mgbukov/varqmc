@@ -47,7 +47,7 @@ def format_func(value, tick_number):
 
 def plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
-	file_name= load_dir + 'MC_data--' + params_str + '.txt'
+	file_name= load_dir + 'MC_data' + params_str + '.txt'
 
 
 	# preallocate lists
@@ -94,7 +94,7 @@ def plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 def plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
-	file_name= load_dir + 'phases_histogram--' + params_str + '.txt'
+	file_name= load_dir + 'phases_histogram' + params_str + '.txt'
 
 
 	# preallocate lists
@@ -154,8 +154,6 @@ def plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	plt.tight_layout(rect=(0,0,0.9,1))
 
-	print('here')
-
 	if save:
 		plt.savefig(plotfile_dir + 'phase_hist.pdf')
 		plt.close()
@@ -165,7 +163,7 @@ def plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
 
-	file_name= load_dir + 'phases_histogram--' + params_str + '.txt'
+	file_name= load_dir + 'phases_histogram' + params_str + '.txt'
 
 
 	# preallocate lists
@@ -191,7 +189,7 @@ def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
 
 	# energy data
 
-	file_name= load_dir + 'energy--' + params_str + '.txt'
+	file_name= load_dir + 'energy' + params_str + '.txt'
 
 	# preallocate lists
 	Eave_real=[]
@@ -268,7 +266,7 @@ def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
 
 def plot_NG(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
-	file_name= load_dir + 'opt_data--' + params_str + '.txt'
+	file_name= load_dir + 'opt_data' + params_str + '.txt'
 
 
 	# preallocate lists
@@ -327,7 +325,7 @@ def plot_NG(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
-	file_name= load_dir + 'loss--' + params_str + '.txt'
+	file_name= load_dir + 'loss' + params_str + '.txt'
 
 
 	# preallocate lists
@@ -488,7 +486,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 def plot_energy(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
-	file_name= load_dir + 'energy--' + params_str + '.txt'
+	file_name= load_dir + 'energy' + params_str + '.txt'
 
 
 	if J2==0.0:
@@ -526,6 +524,7 @@ def plot_energy(load_dir, plotfile_dir, params_str,L,J2, save=True):
 	plt.plot(iter_step, Delta_E,'b' )
 	plt.fill_between(iter_step, Delta_E-Estd, Delta_E+Estd,color='b', alpha=0.2)
 
+	plt.gca().yaxis.set_ticks_position('both')
 
 	plt.xlabel('iteration')
 	plt.ylabel('$|E - E_\\mathrm{GS}|/N$')

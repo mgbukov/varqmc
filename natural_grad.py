@@ -286,7 +286,7 @@ class natural_gradient():
 		
 		elif self.TDVP_opt == 'svd':
 			lmbda, V = np.linalg.eigh(S,)
-			nat_grad = np.dot(V ,  np.dot( np.diag(lmbda/(lmbda**2 + self.tol**2)), np.dot(V.T.conj(), F) ) )
+			nat_grad = np.dot(V ,  np.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2)), np.dot(V.T.conj(), F) ) )
 
 		return nat_grad, info
 
@@ -401,10 +401,13 @@ class natural_gradient():
 			return self.nat_grad
 		else: 
 			self.r2_cost=self._compute_r2_cost(Eloc_params_dict)
-			self.max_grads=[np.max(np.abs(self.F_vector.real)), np.max(np.abs(self.nat_grad.real))]
+			self.max_grads=[np.max(np.abs(self.F_vector)), np.max(np.abs(self.nat_grad))]
 
-			#self.nat_grad /= np.sqrt(jnp.dot(self.F_vector.conj(),self.nat_grad).real)
-			
+			# left_ind=0
+			# for j, right_ind in enumerate(self.N_varl_params_vec):
+			# 	self.nat_grad[left_ind:left_ind+right_ind] /= np.sqrt(np.dot(self.F_vector[left_ind:left_ind+right_ind],self.nat_grad[left_ind:left_ind+right_ind]))
+			# 	left_ind+=right_ind
+				
 			return self.nat_grad
 		
 		

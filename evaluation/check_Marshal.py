@@ -55,32 +55,46 @@ import yaml
 # sys_time='2020_03_15-16_39_47'
 
 
-# n=-1
-# iteration=655+n+1 # last line with saved E-data
-# L=6
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_dtype='real-decoupled'
-# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-# N_MC_points=100000
-# N_prss=260
-# NMCchains=1
-# sys_time= '2020_03_15-19_12_08'
-
-
 n=-1
-iteration=700+n+1 # last line with saved E-data
-L=4
+iteration=37+n+1 # last line with saved E-data
+L=6
 J2=0.5
 opt='NG'
 mode='MC'
 NN_dtype='real-decoupled'
-NN_shape_str='({0:d}--10,{0:d}--24--12)'.format(L**2)
-N_MC_points=80000
-N_prss=130
+NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
+N_MC_points=100000
+N_prss=260
 NMCchains=1
-sys_time= '2020_03_11-16_22_19'  
+sys_time= '2020_03_15-19_12_08'
+
+
+# n=-1
+# iteration=700+n+1 # last line with saved E-data
+# L=4
+# J2=0.5
+# opt='NG'
+# mode='MC'
+# NN_dtype='real-decoupled'
+# NN_shape_str='({0:d}--10,{0:d}--24--12)'.format(L**2)
+# N_MC_points=80000
+# N_prss=130
+# NMCchains=1
+# sys_time= '2020_03_11-16_22_19'  
+
+
+# n=-1
+# iteration=499+n+1 # last line with saved E-data
+# L=4
+# J2=0.5
+# opt='NG'
+# mode='exact'
+# NN_dtype='real-decoupled'
+# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
+# N_MC_points=107
+# N_prss=1
+# NMCchains=2
+# sys_time= '2020_03_18-15_52_01' 
 
 
 
@@ -94,7 +108,7 @@ data_name = sys_time + '--{0:s}-L_{1:d}-{2:s}/'.format(opt,L,mode)
 load_dir='data/' + data_name 
 data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 params_str='model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
-
+#params_str=''
 
 # with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str + '.pkl', 'rb') as handle:
 # 	int_kets, = pickle.load(handle)
@@ -126,6 +140,13 @@ print('\niteration number: {0:d}.\n'.format(iteration,))
 
 ######################
 
+if L==4:
+	E_estimator, basis_states, index, inv_index, count = ED_results(load_dir,)
+	psi_GS=E_estimator.psi_GS_exact[index]
+
+
+############
+
 
 N_MC_points=1000 # MC points
 
@@ -135,86 +156,98 @@ with jax.disable_jit():
 
 #rep_spin_configs_ints=compute_reps(int_kets[n,:],L)
 rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
+#rep_spin_configs_ints=basis_states
 
 #print(rep_spin_configs_ints)
 #print(MC_tool.ints_ket)
+
+
+################
 
 
 
 log_psi, phase_psi = evaluate_DNN(load_dir,NN_params, rep_spin_configs_ints, )
 sign_psi = np.exp(-1j*phase_psi)
 
-
-# collapse sign_psi and re-evaluate the energy
-
-
-
 Eloc_Re, Eloc_Im=compute_Eloc(load_dir,NN_params,rep_spin_configs_ints,log_psi,phase_psi,)
 
 # local E for exact states
-print(Eloc_Re)
+print('DNN:', Eloc_Re.mean(), Eloc_Im.mean())
 
 
+################
 
-log_psi_ED, sign_psi_ED, mult_ED, p_ED, sign_psi_ED_J2_0 = extract_ED_signs(rep_spin_configs_ints,L,J2)
 
 # get phases
+log_psi_ED, sign_psi_ED, mult_ED, p_ED, sign_psi_ED_J2_0 = extract_ED_signs(rep_spin_configs_ints,L,J2)
 phase_psi_ED = np.pi*0.5*(sign_psi_ED+1.0)
 phase_psi_ED_J2_0 = np.pi*0.5*(sign_psi_ED_J2_0+1.0)
 
+#print('log-loss', np.mean(np.abs(log_psi-log_psi[0]-(log_psi_ED-log_psi_ED[0]) )))
+
+
+# evalute exact Eloc
+Eloc_real_ED ,Eloc_imag_ED = compute_Eloc_ED(load_dir,rep_spin_configs_ints,log_psi_ED,phase_psi_ED,L,J2)
+
+print('exact:',Eloc_real_ED.mean(), Eloc_imag_ED.mean())
+
+
+Eloc_real_ED_J2_0 ,Eloc_imag_ED_J2_0 = compute_Eloc_ED(load_dir,rep_spin_configs_ints,log_psi_ED,phase_psi_ED_J2_0,L,0.0)
+
+
+#print(p_ED.dot(Eloc_real_ED))
+#print(p_ED.dot(Eloc_real_ED_J2_0))
+
+#exit()
+
+
 #check logs
-C_log     = np.mean( np.abs( (log_psi_ED - log_psi_ED[0]) - (log_psi - log_psi[0]) ) )
-C_log_max = np.max(  np.abs( (log_psi_ED - log_psi_ED[0]) - (log_psi - log_psi[0]) ) )
+ind=np.argmax(log_psi)
+C_log     = np.mean( np.abs( (log_psi_ED - log_psi_ED[ind]) - (log_psi - log_psi[ind]) ) )
+C_log_max = np.max(  np.abs( (log_psi_ED - log_psi_ED[ind]) - (log_psi - log_psi[ind]) ) )
 
-# compute sign loss functions
-
-def compute_costs(phase_psi_1, phase_psi_2):
-	#C_sign_psi      = 1.0 - np.abs( np.sum(           sign_psi_ED*sign_psi ) )/N_MC_points
-	
-	hist_1 = phase_histpgram(phase_psi_1)
-	hist_2 = phase_histpgram(phase_psi_2)
-
-	hist_1=hist_1/np.linalg.norm(hist_1)
-	hist_2=hist_2/np.linalg.norm(hist_2)
-
-	N = len(hist_1)
-
-	C_phase=np.zeros(N)
-	for j in range(N):
-
-		C_phase[j]=np.sqrt(hist_1[:].dot( np.roll(hist_2, j) ))
-
-	return C_phase
+C_sign_psi      = 1.0 - np.abs( np.sum(     sign_psi_ED*sign_psi ) )/N_MC_points
+C_sign_psi_J2_0 = 1.0 - np.abs( np.sum(sign_psi_ED_J2_0*sign_psi ) )/N_MC_points
+C_sign_psi_ED   = 1.0 - np.abs( np.sum(sign_psi_ED_J2_0*sign_psi_ED ) )/N_MC_points
 
 
-C_phase_J2_05 = compute_costs(phase_psi, phase_psi_ED)
-C_phase_J2_00 = compute_costs(phase_psi, phase_psi_ED_J2_0)
-C_phase_mixed = compute_costs(phase_psi_ED, phase_psi_ED_J2_0)
+
 
 #C_sign=np.abs(np.sum(sign_psi_ED*sign_psi_ED_J2_0))/N_MC_points
 #C_sign=sign_psi_ED.dot(sign_psi_ED_J2_0) - (np.sum(sign_psi_ED)*np.sum(sign_psi_ED_J2_0))
 
 print('costs:\n')
 print(C_log,C_log_max)
-print()
-print(C_phase_J2_05)
-print()
-print(C_phase_J2_00)
-print()
-print(C_phase_mixed)
+print(C_sign_psi, C_sign_psi_J2_0, C_sign_psi_ED)
 print()
 
 
-print('E={0:0.8f}, E_std={1:0.8f}'.format(np.mean(Eloc_Re), np.std(Eloc_Re)/np.sqrt(N_MC_points)) )
-
-print()
-print(phase_histpgram(phase_psi))
-print()
-print(phase_histpgram(phase_psi_ED))
-print()
-print(phase_histpgram(phase_psi_ED_J2_0))
+print('DNN:               E_real={0:0.8f}, E_imag={1:0.8f}, E_std={2:0.8f}.'.format(np.mean(Eloc_Re)        , Eloc_Im.mean()          , np.std(Eloc_Re)          /np.sqrt(N_MC_points)) )
+print('exact:             E_real={0:0.8f}, E_imag={1:0.8f}, E_std={2:0.8f}.'.format(Eloc_real_ED.mean()     , Eloc_imag_ED.mean()     , np.std(Eloc_real_ED)     /np.sqrt(N_MC_points)) )
+print('exact (J2=0-sign): E_real={0:0.8f}, E_imag={1:0.8f}, E_std={2:0.8f}.\n'.format(Eloc_real_ED_J2_0.mean(), Eloc_imag_ED_J2_0.mean(), np.std(Eloc_real_ED_J2_0)/np.sqrt(N_MC_points)) )
 
 
+#print(np.sort(Eloc_real_ED_J2_0))
 
+# print()
+# print(phase_histpgram(phase_psi))
+# print()
+# print(phase_histpgram(phase_psi_ED))
+# print()
+# print(phase_histpgram(phase_psi_ED_J2_0))
+
+phase_psi=phase_psi-phase_psi[ind]
+phase_psi_ED=phase_psi_ED-phase_psi_ED[ind]
+phase_psi_ED_J2_0=phase_psi_ED_J2_0-phase_psi_ED_J2_0[ind]
+
+inds=np.where(np.cos(phase_psi_ED_J2_0-phase_psi_ED)<0.0)[0]
+
+phase_hist_ED, _ = np.histogram(np.cos(phase_psi_ED_J2_0-phase_psi_ED) ,bins=2,range=(-1.0,1.0), density=False, )
+phase_hist, _ = np.histogram(np.cos(phase_psi_ED[inds]-phase_psi[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
+phase_hist_J2_0, _ = np.histogram(np.cos(phase_psi_ED_J2_0[inds]-phase_psi[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
+
+print('ED  vs ED(J2=0):  T:F  :  {0:d}:{1:d}'.format(phase_hist_ED[1]  ,phase_hist_ED[0])  )
+print('DNN vs ED:        T:F  :  {0:d}:{1:d}'.format(phase_hist[1]     ,phase_hist[0])     )
+print('DNN vs ED(J2=0):  T:F  :  {0:d}:{1:d}'.format(phase_hist_J2_0[1],phase_hist_J2_0[0]))
 
 
