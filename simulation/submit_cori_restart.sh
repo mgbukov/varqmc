@@ -36,7 +36,7 @@ echo "module load cray-hdf5" >> submission.sh
 echo "source activate jax-noGPU" >> submission.sh
 
 
-data_dir="data/2020_03_15-19_12_08--NG-L_6-MC_restart2"
+data_dir="data/2020_03_15-19_12_08--NG-L_6-MC_restart"
 
 
 ### CPU

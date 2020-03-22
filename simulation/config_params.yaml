@@ -6,7 +6,7 @@ NN_shape_str: (36--12,36--24--12)
 NN_type: DNN
 N_MC_chains: 1
 N_MC_points: 100000
-N_iterations: 1000
+N_iterations: 5000
 batchnorm: false
 load_data: false
 minibatch_size: 100
