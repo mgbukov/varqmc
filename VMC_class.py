@@ -43,9 +43,9 @@ from cpp_code import Neural_Net
 from cpp_code import integer_to_spinstate
 from cpp_code import scale_cpx
 
-from natural_grad import natural_gradient
 from MC_lib import MC_sampler
 from energy_lib import Energy_estimator
+from optimizer import optimizer
 
 
 import datetime
@@ -57,19 +57,19 @@ np.set_printoptions(threshold=np.inf)
 
 
 
-def read_str(NN_shape_str):
+def read_str(tuple_str):
 
 	shape_tuple=()
 
-	NN_shape_str=NN_shape_str.replace('(','')
-	NN_shape_str=NN_shape_str.replace(')','')
-	NN_shape_str=NN_shape_str.split(',')
+	tuple_str=tuple_str.replace('(','')
+	tuple_str=tuple_str.replace(')','')
+	tuple_str=tuple_str.split(',')
 
 
-	for NN_str in NN_shape_str:
+	for NN_str in tuple_str:
 		shape_tuple+=(NN_str,)
 
-	return shape_tuple, len(NN_shape_str)
+	return shape_tuple, len(tuple_str)
 
 
 
@@ -101,10 +101,17 @@ class VMC(object):
 		self.sign = params_dict['sign'] # -1: Marshal rule is on; +1 Marshal rule is off
 
 		self.mode=params_dict['mode'] # exact or MC simulation
-		self.optimizer=params_dict['optimizer']
+		
+		self.opt=read_str(params_dict['opt'])[0]
+
+		step_size_str=read_str(params_dict['step_size'])[0]
+		self.step_sizes=[np.float(step_size_str[0]), np.float(step_size_str[1])]
+
+		self.cost=read_str(params_dict['cost'])[0]
+		self.TDVP_opt=read_str(params_dict['TDVP_opt'])[0]
+
 		self.grad_update_mode=params_dict['grad_update_mode']
 		self.alt_iters=params_dict['alt_iter'] # only effective in real-decoupled mode
-		self.TDVP_opt=params_dict['TDVP_opt']
 		
 
 		self.NN_type=params_dict['NN_type'] # DNN vs CNN
@@ -152,7 +159,7 @@ class VMC(object):
 						  mode=self.mode,
 						  L=self.L,
 						  J2=self.J2,
-						  opt=self.optimizer,
+						  opt=self.opt,
 						  NNstrct=self.NN_shape_str,
 						  MCpts=self.N_MC_points,
 						  Nprss=self.comm.Get_size(),
@@ -164,9 +171,9 @@ class VMC(object):
 		
 		self._create_file_name(model_params)
 		self._create_NN(load_data=self.load_data)
-		self._create_optimizer()
 		self._create_energy_estimator()
 		self._create_MC_sampler()
+		self._create_optimizer()
 
 
 		# create log file and directory
@@ -285,63 +292,29 @@ class VMC(object):
 
 
 
-	def update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
-		layers_type=list(layers.keys())
-		for j, layer_type in enumerate(layers_type):
-			if 'batch_norm' in layer_type:
-				self.DNN.apply_fun_args_dyn[j]['fixpoint_iter']=set_fixpoint_iter
-				#print(self.DNN.apply_fun_args_dyn[j]['mean'])
-
-				
-
-
-
 
 	def _create_NN(self, load_data=False):
 
+		NN_shape_str, M = read_str(self.NN_shape_str)
 		
-		if ',' in self.NN_shape_str:
+		self.shapes=tuple({} for _ in range(M) )
 
-			NN_shape_str, M=read_str(self.NN_shape_str)
-			
+		neurons=tuple([] for _ in range(M))
+		for j in range(M):
+			for neuron in NN_shape_str[j].split('--'):
+				neurons[j].append(int(neuron))
 
-			self.shapes=tuple({} for _ in range(M) )
-
-			neurons=tuple([] for _ in range(M))
-			for j in range(M):
-				for neuron in NN_shape_str[j].split('--'):
-					neurons[j].append(int(neuron))
-
-				assert(neurons[j][0]==self.L**2)	
+			assert(neurons[j][0]==self.L**2)	
 		
-		else:
-			self.shapes={}
-			neurons=[]
-			for neuron in self.NN_shape_str.split('--'):
-				neurons.append(int(neuron))
-
-			assert(neurons[0]==self.L**2)
-
+		
 			
 	
 		if self.NN_type == 'DNN':
+			for j in range(M):
+				for i in range(len(neurons[j])-1):
+					self.shapes[j]['layer_{0:d}'.format(i+1)]=[neurons[j][i],neurons[j][i+1]]
 
-			if ',' in self.NN_shape_str:
-
-				for j in range(M):
-					for i in range(len(neurons[j])-1):
-						self.shapes[j]['layer_{0:d}'.format(i+1)]=[neurons[j][i],neurons[j][i+1]]
-
-			else:
-				for i in range(len(neurons)-1):
-					self.shapes['layer_{0:d}'.format(i+1)]=[neurons[i],neurons[i+1]]
-		
-			# self.shapes=dict(layer_1 = [self.L**2, 8], 
-			# 			#	 layer_2 = [12       ,  6],
-			# 			#	 layer_3 = [4       ,  2], 
-			# 			)
-			# self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}'.format(value[1]) for value in self.shapes.values() )
-
+	
 
 		elif self.NN_type == 'CNN':
 			self.shapes=dict( layer_1 = dict(out_chan=1, filter_shape=(2,2), strides=(1,1), ),
@@ -353,13 +326,12 @@ class VMC(object):
 
 		### create Neural network
 		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
-		#self.DNN.update_params(load_params())
-	
+		
 
 		# jit functions
-		self.evaluate_NN_dyn=self.DNN.evaluate_dyn
+		#self.evaluate_NN_dyn=self.DNN.evaluate_dyn
 		
-		self.evaluate_NN=jit(self.DNN.evaluate)
+		#self.evaluate_NN=jit(self.DNN.evaluate)
 		#self.evaluate_NN=self.DNN.evaluate
 		#print("\n\nNN evaluation NOT JITTED !!!\n\n")
 		
@@ -369,212 +341,39 @@ class VMC(object):
 
 	def _create_optimizer(self):
 
-		@jit
-		def loss_log_mod_psi(NN_params,batch,):
-			log_psi = self.DNN.evaluate_log(NN_params,batch,)
-			return jnp.sum(log_psi)
-			
+		# log net
+		if self.opt[0]=='RK':
+			raise NotImplementedError("not implemented")
 
-		@jit
-		def loss_phase_psi(NN_params,batch,):
-			phase_psi = self.DNN.evaluate_phase(NN_params,batch,)	
-			return jnp.sum(phase_psi)
+		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN.NN_Tree_log, label='log',  step_size=self.step_sizes[0], )
+		self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params_log, self.n_iter)
+		self.opt_log.define_grad_func(self.DNN.evaluate_log, TDVP_opt=self.TDVP_opt[0],  )
+		self.opt_log.init_opt_state(self.DNN.params_log)
+		
+		# phase net
+		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN.NN_Tree_phase, label='phase', step_size=self.step_sizes[1], )
+		self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params_phase, self.n_iter)
+		self.opt_phase.define_grad_func(self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy )
+		self.opt_phase.init_opt_state(self.DNN.params_phase)
+		
 
-		@jit
-		def grad_log_psi(NN_params,batch,):
-
-			# dlog_psi_s   = vmap(partial(grad(loss_log_mod_psi),   NN_params))(batch, )
-			# dphase_psi_s = vmap(partial(grad(loss_phase_psi), NN_params))(batch, )
-
-
-			# dlog_psi_s   = vmap(jit(grad(loss_log_mod_psi)),   in_axes=(None,0,) )(NN_params,batch, )
-			# dphase_psi_s = vmap(jit(grad(loss_phase_psi)), in_axes=(None,0,) )(NN_params,batch, )
-
-			
-			dlog_psi_s   = vmap(partial(jit(grad(loss_log_mod_psi)),   NN_params))(batch, )
-			dphase_psi_s = vmap(partial(jit(grad(loss_phase_psi)), NN_params))(batch, )
-
-
-			dlog_psi = []
-
-			for (dlog_psi_W,dphase_psi_W) in zip(self.DNN.NN_Tree.flatten(dlog_psi_s),self.DNN.NN_Tree.flatten(dphase_psi_s)):
-				dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
-
-			# for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
-			# 	for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # loop over NN params
-			# 		dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
-
-
-			# for (dlog_psi_tower,dphase_psi_tower) in zip(dlog_psi_s,dphase_psi_s): # loop over layers
-			# 	for (dlog_psi_layer,dphase_psi_layer) in zip(dlog_psi_tower,dphase_psi_tower): # loop over layers
-			# 		for (dlog_psi_W,dphase_psi_W) in zip(dlog_psi_layer,dphase_psi_layer): # loop over NN params
-			# 			dlog_psi.append( (dlog_psi_W+1j*dphase_psi_W).reshape(self.N_batch,-1) )
-
-	
-			return jnp.concatenate(dlog_psi, axis=1)
-
-
-		@jit
-		def grad_log_mod_psi(NN_params,batch,):
-
-			dlog_psi_s   = vmap(partial(jit(grad(loss_log_mod_psi)),   NN_params))(batch, )
-			
-			dlog_psi = []
-			for dlog_psi_W in self.DNN.NN_Tree.flatten(dlog_psi_s):
-				dlog_psi.append( dlog_psi_W.reshape(self.N_batch,-1) )
-
-			# for dlog_psi_layer in dlog_psi_s: # loop over layers
-			# 	for dlog_psi_W in dlog_psi_layer: # loop over NN params
-			# 		dlog_psi.append( dlog_psi_W.reshape(self.N_batch,-1) )
-
-			return jnp.concatenate(dlog_psi, axis=1)
-
-
-		@jit
-		def grad_log_phase(NN_params,batch,):
-
-			dphase_psi_s = vmap(partial(jit(grad(loss_phase_psi)), NN_params))(batch, )
-	
-			dlog_psi = []
-			for dphase_psi_W in self.DNN.NN_Tree.flatten(dphase_psi_s):
-				dlog_psi.append( 1j*dphase_psi_W.reshape(self.N_batch,-1) )
-
-
-			# for dphase_psi_layer in dphase_psi_s: # loop over layers
-			# 	for dphase_psi_W in dphase_psi_layer: # loop over NN params
-			# 		dlog_psi.append( 1j*dphase_psi_W.reshape(self.N_batch,-1) )
-
-			
-			return jnp.concatenate(dlog_psi, axis=1)
-
-
-
-		def compute_grad_log_psi(NN_params,batch,iteration=0):
-
-			if self.grad_update_mode=='normal':
-				dlog_psi=grad_log_psi(NN_params,batch)
-
-			elif self.grad_update_mode=='alternating':
-				if (iteration//self.alt_iters)%2==1: # phase grads
-					dlog_psi=grad_log_phase(NN_params,batch)
-
-				else: # log_mod_psi grads
-					dlog_psi=grad_log_mod_psi(NN_params,batch)
-
-			elif self.grad_update_mode=='phase':
-				dlog_psi=grad_log_phase(NN_params,batch)
-
-			elif self.grad_update_mode=='log_mod':
-				dlog_psi=grad_log_mod_psi(NN_params,batch)
-				
-
-			return dlog_psi
-
-
-	
-		self.NG=natural_gradient(self.comm,self.N_MC_points,self.N_batch, self.DNN.N_varl_params_vec, compute_grad_log_psi, self.DNN.NN_Tree, self.NN_dtype, self.grad_update_mode, self.TDVP_opt, self.start_iter )
-		self.NG.init_global_variables(self.n_iter)
-		self.NG.run_debug_helper=self.run_debug_helper
-		self.NG.alt_iters=self.alt_iters
-
-
-		# jax self.optimizer
-		if self.optimizer=='NG':
-			self.learning_rates=np.array([1E-2,1E-2]) # 51E-3
-			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=1.0)
-			self.opt_state = self.opt_init(self.DNN.params)
-
-		elif self.optimizer=='adam':
-
-			if self.load_data:
-				raise("Loading data not supported for adam yet")
-			
-			self.learning_rates=np.array([1.0,1.0,])
-			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=1E-3, b1=0.9, b2=0.99, eps=1e-08)
-			self.opt_state = self.opt_init(self.DNN.params)
-
-			# Energy cost function
-			if self.mode=='exact':
-
-				@jax.partial(jit, static_argnums=(2,3))
-				def loss_energy_exact(NN_params,batch,params_dict,iteration):
-					if self.grad_update_mode=='normal':
-						log_psi, phase_psi = self.DNN.evaluate_dyn(NN_params,batch,)			
-						Energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag ))
-
-					elif self.grad_update_mode=='alternating':
-						if (iteration//self.alt_iters)%2==1: # phase grads
-							phase_psi = self.DNN.evaluate_phase(NN_params,batch,)
-							Energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(phase_psi*params_dict['E_diff'].imag ))
-						else:
-							log_psi = self.DNN.evaluate_log(NN_params,batch,)
-							Energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real ))
-
-					elif self.grad_update_mode=='log_mod':
-						log_psi = self.DNN.evaluate_log(NN_params,batch,)
-						Energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real ))
-
-					elif self.grad_update_mode=='phase':
-						phase_psi = self.DNN.evaluate_phase(NN_params,batch,)
-						Energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(phase_psi*params_dict['E_diff'].imag ))
-
-					return Energy
-
-				self.compute_grad=jit(grad(loss_energy_exact), static_argnums=(2,3))
-			
-			elif self.mode=='MC':
-
-				@jax.partial(jit, static_argnums=(2,3))
-				def loss_energy_MC(NN_params,batch,params_dict,iteration):
-					if self.grad_update_mode=='normal':
-						log_psi, phase_psi = self.DNN.evaluate_dyn(NN_params,batch,)
-						Energy=2.0*jnp.sum(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
-
-					elif self.grad_update_mode=='alternating':
-						if (iteration//self.alt_iters)%2==1: # phase grads
-							phase_psi = self.DNN.evaluate_phase(NN_params,batch,)
-							Energy=2.0*jnp.sum(phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
-						else:
-							log_psi = self.DNN.evaluate_log(NN_params,batch,)
-							Energy=2.0*jnp.sum(log_psi*params_dict['E_diff'].real)/params_dict['N_MC_points']
-
-					elif self.grad_update_mode=='log_mod':
-						log_psi = self.DNN.evaluate_log(NN_params,batch,)
-						Energy=2.0*jnp.sum(log_psi*params_dict['E_diff'].real)/params_dict['N_MC_points']
-
-					elif self.grad_update_mode=='phase':
-						phase_psi = self.DNN.evaluate_phase(NN_params,batch,)
-						Energy=2.0*jnp.sum(phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
-
-					return Energy
-
-				self.compute_grad=jit(grad(loss_energy_MC), static_argnums=(2,3))
-
-			
-		elif self.optimizer=='RK':
-
-			print("\n\nsingle solver currently available\n\n")
-			exit()
-
-			step_size=1E-4
-			self.NG.init_RK_params(step_size)
-
-		#self.step_size=step_size
 
 		# define variable to keep track of the DNN params update
-		#n_iter=6
 		if self.comm.Get_rank()==0:
-			self.params_update=np.zeros((self.n_iter,self.DNN.N_varl_params),dtype=np.float64)
+			self.params_log_update_lastiters=np.zeros((self.n_iter,self.DNN.N_varl_params_log),dtype=np.float64)
+			self.params_phase_update_lastiters=np.zeros((self.n_iter,self.DNN.N_varl_params_phase),dtype=np.float64)
 		else:
-			self.params_update=np.array([[None],[None]])
+			self.params_log_update_lastiters=np.array([[None],[None]])
+			self.params_phase_update_lastiters=np.array([[None],[None]])
 
 
+		self.r2=np.zeros(2)
 
 	
 
 	def _create_energy_estimator(self):
 		### Energy estimator
-		self.E_estimator=Energy_estimator(self.comm,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign,) # contains all of the physics
+		self.E_estimator=Energy_estimator(self.comm,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 		
 	def _create_MC_sampler(self, ):
@@ -608,7 +407,7 @@ class VMC(object):
 		# sys_data = self.comm.bcast(sys_data, root=0)
 
 
-		# self.sys_time=sys_data + self.optimizer
+		# self.sys_time=sys_data + self.opt
 
 		# self.data_dir=os.getcwd()+'/data/'+self.sys_time
 
@@ -652,15 +451,15 @@ class VMC(object):
 		logfile_name= 'LOGFILE--MPIprss_{0:d}'.format(self.comm.Get_rank()) + '.txt'
 		self.logfile = create_open_file(logfile_dir+logfile_name)
 		self.E_estimator.logfile=self.logfile
-		self.NG.logfile=self.logfile
-
+		
 		# redircet warnings to log
 		def customwarn(message, category, filename, lineno, file=None, line=None):
 			self.logfile.write('\n'+warnings.formatwarning(message, category, filename, lineno)+'\n')
 		warnings.showwarning = customwarn
 
 		
-		self.debug_file_SF           =self.savefile_dir_debug + 'debug-SF_data'            #+'--' + self.file_name
+		self.debug_file_SF_log       =self.savefile_dir_debug + 'debug-SF_data_log'            #+'--' + self.file_name
+		self.debug_file_SF_phase     =self.savefile_dir_debug + 'debug-SF_data_phase'
 		self.debug_file_logpsi       =self.savefile_dir_debug + 'debug-logpsi_data'        #+'--' + self.file_name
 		self.debug_file_phasepsi     =self.savefile_dir_debug + 'debug-phasepsi_data'      #+'--' + self.file_name
 		self.debug_file_intkets      =self.savefile_dir_debug + 'debug-intkets_data'       #+'--' + self.file_name
@@ -675,16 +474,20 @@ class VMC(object):
 
 			self.file_energy= create_open_file(self.savefile_dir+'energy'+common_str)
 			#self.file_energy_std= create_open_file(self.savefile_dir+'energy_std--'+common_str)
-			self.file_loss= create_open_file(self.savefile_dir+'loss'+common_str)
+			self.file_loss_log= create_open_file(self.savefile_dir+'loss_log'+common_str)
+			self.file_loss_phase= create_open_file(self.savefile_dir+'loss_phase'+common_str)
 			#self.file_r2= create_open_file(self.savefile_dir+'r2--'+common_str)
 			self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram'+common_str)
 
 			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+common_str)
-			self.file_opt_data= create_open_file(self.savefile_dir+'opt_data'+common_str)
+			self.file_opt_data_log= create_open_file(self.savefile_dir+'opt_data_log'+common_str)
+			self.file_opt_data_phase= create_open_file(self.savefile_dir+'opt_data_phase'+common_str)
 
 
 		### timing vector
 		self.timing_vec=np.zeros((self.N_iterations+1,),dtype=np.float64)
+		self.opt_log.logfile=self.logfile
+		self.opt_phase.logfile=self.logfile
 		
 
 	def _compute_phase_hist(self, phases, weigths):
@@ -718,16 +521,39 @@ class VMC(object):
 		#file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
 		file_name='NNparams'+'--iter_{0:05d}'.format(iteration) 
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
-			pickle.dump([self.DNN.params,self.DNN.apply_fun_args,self.MC_tool.log_psi_shift,], handle, protocol=pickle.HIGHEST_PROTOCOL)
+			pickle.dump([self.DNN.params_log, self.DNN.params_phase, 
+						 self.DNN.apply_fun_args_log, self.DNN.apply_fun_args_phase,
+						 self.MC_tool.log_psi_shift,
+						 ], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-	def save_sim_data(self, iteration, loss, r2, phase_hist):
+	def save_sim_data(self, iteration, grads_max, r2, phase_hist):
 
 		# data
 		self.file_energy.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.E_MC_std_g))
 		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
 		
-		self.file_loss.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.10f} : {5:0.10f} : {6:0.10f} : {7:0.10f} : {8:0.10f}\n".format(iteration, r2, self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm, self.NG.S_logcond, loss[0], loss[1], ))
+
+		######################################################
+
+
+		data_tuple=(iteration, r2[0], grads_max[0], )
+		if self.opt_log.cost=='SR':
+			data_tuple+= (self.opt_log.NG.dE, self.opt_log.NG.F_norm, self.opt_log.NG.S_norm, self.opt_log.NG.S_logcond, )
+		else:
+			data_tuple+= (0.0, 0.0, 0.0, 0.0)
+		self.file_loss_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.10f}: {6:0.10f}\n".format(*data_tuple))
 		
+
+		data_tuple=(iteration, r2[1], grads_max[1], )
+		if self.opt_phase.cost=='SR':
+			data_tuple+= (self.opt_phase.NG.dE, self.opt_phase.NG.F_norm, self.opt_phase.NG.S_norm, self.opt_phase.NG.S_logcond, )
+		else:
+			data_tuple+= (0.0, 0.0, 0.0, 0.0)
+		self.file_loss_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.10f}: {6:0.10f}\n".format(*data_tuple))
+
+		
+		######################################################
+
 
 		MC_data_1="{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])
 		MC_data_2=' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "
@@ -736,12 +562,44 @@ class VMC(object):
 		self.file_MC_data.write(MC_data_1  +  MC_data_2  +  MC_data_3 +  MC_data_4 + "\n") #		
 		
 
-		self.file_opt_data.write("{0:d} : {1:05d} : {2:0.10f} : {3:0.10f} : {4:0.14f} : {5:0.10f}\n".format(iteration, self.NG.counter, self.NG.RK_step_size, self.NG.RK_time, self.NG.delta, self.NG.tol, ))
+		######################################################
 
+
+		if self.opt_log.cost=='SR':
+			data_cost=(self.opt_log.NG.delta, self.opt_log.NG.tol,) 
+		else:
+			data_cost=(0.0,0.0,)
+
+		if self.opt_log.opt=='RK':
+			data_opt=(self.opt_log.Runge_Kutta.counter, self.opt_log.Runge_Kutta.step_size, self.opt_log.Runge_Kutta.time, )
+		else:
+			data_opt=(0,0.0,0.0,)
+
+		data_tuple=(iteration,)+data_cost+data_opt
+		self.file_opt_data_log.write("{0:d} : {1:08f} : {2:0.10f} : {3:d} : {4:0.14f} : {5:0.10f}\n".format(*data_tuple))
+
+
+		if self.opt_phase.cost=='SR':
+			data_cost=(self.opt_phase.NG.delta, self.opt_phase.NG.tol,) 
+		else:
+			data_cost=(0.0,0.0,)
+
+		if self.opt_phase.opt=='RK':
+			data_opt=(self.opt_phase.Runge_Kutta.counter, self.opt_phase.Runge_Kutta.step_size, self.opt_phase.Runge_Kutta.time, )
+		else:
+			data_opt=(0,0.0,0.0,)
+
+		data_tuple=(iteration,)+data_cost+data_opt
+		self.file_opt_data_phase.write("{0:d} : {1:08f} : {2:0.10f} : {3:d} : {4:0.14f} : {5:0.10f}\n".format(*data_tuple))
+
+
+		######################################################
 
 		
 		self.file_phase_hist.write("{0:d} : ".format(iteration) + ''.join("{0:0.6f}, ".format(value) for value in phase_hist) + '\n' )
 
+
+		######################################################
 
 		# record current iteration number
 		self.params_dict['stop_iter']=iteration+1
@@ -751,11 +609,17 @@ class VMC(object):
 		yaml.dump(self.params_dict, config_params_yaml)
 		config_params_yaml.close()
 
+
+		######################################################
+
+
 		# flush data files
 		self.file_energy.flush()
-		self.file_loss.flush()
+		self.file_loss_log.flush()
+		self.file_loss_phase.flush()
 		self.file_MC_data.flush()
-		self.file_opt_data.flush()
+		self.file_opt_data_log.flush()
+		self.file_opt_data_phase.flush()
 		self.file_phase_hist.flush()
 
 
@@ -764,8 +628,12 @@ class VMC(object):
 
 		# record DNN params update
 		if self.comm.Get_rank()==0:
-			self.params_update[:-1,...]=self.params_update[1:,...]
-			self.params_update[-1,...]*=0.0
+			self.params_log_update_lastiters[:-1,...]=self.params_log_update_lastiters[1:,...]
+			self.params_log_update_lastiters[-1,...]*=0.0
+
+			self.params_phase_update_lastiters[:-1,...]=self.params_phase_update_lastiters[1:,...]
+			self.params_phase_update_lastiters[-1,...]*=0.0
+
 
 
 	def run_debug_helper(self, run=False,):
@@ -779,13 +647,21 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 	
 			# check for nans and infs
-			if run or (not np.isfinite(self.NG.S_matrix).all() ) or (not np.isfinite(self.NG.F_vector).all() ) or  (not np.isfinite(self.Eloc_mean_g).all() ):
+			if run or (not self.opt_log.is_finite ) or (not self.opt_phase.is_finite ) or (not np.isfinite(self.Eloc_mean_g).all() ):
 				
-				with open(self.debug_file_SF+'.pkl', 'wb') as handle:
+				if self.opt_log.cost=='SR':
+					with open(self.debug_file_SF_log+'.pkl', 'wb') as handle:
 
-					pickle.dump([self.NG.S_lastiters, self.NG.F_lastiters, self.NG.delta,], 
-									handle, protocol=pickle.HIGHEST_PROTOCOL
-								)
+						pickle.dump([self.opt_log.NG.S_lastiters,   self.opt_log.NG.F_lastiters,   self.opt_log.NG.delta, ], 
+										handle, protocol=pickle.HIGHEST_PROTOCOL
+									)
+
+				if self.opt_phase.cost=='SR':
+					with open(self.debug_file_SF_phase+'.pkl', 'wb') as handle:
+
+						pickle.dump([self.opt_phase.NG.S_lastiters, self.opt_phase.NG.F_lastiters, self.opt_phase.NG.delta,], 
+										handle, protocol=pickle.HIGHEST_PROTOCOL
+									)
 
 				with open(self.debug_file_logpsi+'.pkl', 'wb') as handle:
 
@@ -813,7 +689,7 @@ class VMC(object):
 
 				with open(self.debug_file_params_update+'.pkl', 'wb') as handle:
 
-					pickle.dump([self.params_update, ], 
+					pickle.dump([self.params_log_update_lastiters, self.params_phase_update_lastiters,], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
@@ -836,18 +712,7 @@ class VMC(object):
 			exit()
 
 
-	
 
-	def discard_outliars(self,):
-
-		inds=self.E_estimator.inds_outliers
-
-		self.MC_tool.spinstates_ket[inds,...]=0
-		self.MC_tool.log_mod_kets[inds]=0.0
-		self.MC_tool.phase_kets[inds]=0.0
-
-		self.E_estimator.Eloc_real[inds]=0.0
-		self.E_estimator.Eloc_imag[inds]=0.0
 
 
 	def train(self, start_iter=0):
@@ -890,12 +755,11 @@ class VMC(object):
 
 
 			##### evaluate model
-			self.get_training_data(iteration,self.DNN.params)
+			self.get_training_data(iteration,)
 			#self.get_Stot_data(self.DNN.params)
 
 			#####
 			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}, E_imag={2:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g, self.Eloc_mean_g.imag, )
-			E_str+="	with lr's {0:0.6f} and {1:0.6f}.\n".format(self.learning_rates[0], self.learning_rates[1] )
 			if self.comm.Get_rank()==0:
 				#E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g[-1,...]).shape[0] )
 				print(E_str)
@@ -903,7 +767,7 @@ class VMC(object):
 
 
 			if self.mode=='exact':
-				olap_str='overlap = {0:0.10f}.\n\n'.format(self.Eloc_params_dict['overlap'])
+				olap_str='overlap = {0:0.10f}.\n\n'.format(self.Eloc_params_dict_log['overlap'])
 				if self.comm.Get_rank()==0:
 					print(olap_str)
 				self.logfile.write(olap_str)
@@ -918,7 +782,7 @@ class VMC(object):
 			# 	_b1=prev_it_data[0] - self.Eloc_mean_g.real
 			# 	_b2=np.abs(self.Eloc_mean_g.imag)
 			# 	_b3=1E1*prev_it_data[2] - self.E_MC_std_g 
-			# 	_b4=self.NG.F_norm/self.NG.S_norm
+			# 	
 			# 	if _b1<-1.0 or _b2 < -0.1 or _b3 < 0: 
 			# 		# file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(iteration-1) #+ self.file_name
 			# 		# with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
@@ -958,12 +822,12 @@ class VMC(object):
 
 
 				#### update DNN parameters
-				loss, r2 = self.update_NN_params(iteration)
+				grads_max = self.update_NN_params(iteration)
 
 
 				##### store simulation data
 				if self.mode=='exact':		
-					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.Eloc_params_dict['abs_psi_2'])
+					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.Eloc_params_dict_log['abs_psi_2'])
 				else:
 					mod_psi_2=np.exp(2.0*(self.MC_tool.log_mod_kets-self.MC_tool.log_psi_shift))
 					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,mod_psi_2)
@@ -973,7 +837,7 @@ class VMC(object):
 
 				if self.comm.Get_rank()==0 and self.save_data:
 					#if not(self.load_data and (start_iter==iteration)):
-					self.save_sim_data(iteration,loss,r2,phase_hist)
+					self.save_sim_data(iteration,grads_max,self.r2,phase_hist)
 
 
 			prss_time=time.time()-ti
@@ -990,8 +854,12 @@ class VMC(object):
 
 			# synch
 			prev_it_data[0], prev_it_data[1], prev_it_data[2]=self.Eloc_mean_g.real, self.Eloc_mean_g.imag, self.E_MC_std_g
-			prev_it_data[3], prev_it_data[4]=self.NG.S_norm, self.NG.F_norm
 			
+
+			# run debug helper
+			self.run_debug_helper()
+			
+
 			iteration+=1
 			self.comm.Barrier()
 
@@ -1010,7 +878,7 @@ class VMC(object):
 
 
 		if self.comm.Get_rank()==0 and self.save_data:
-			timing_matrix_filename = '/simulation_time--start_iter_{0:d}--'.format(start_iter) + self.file_name + '.txt'
+			timing_matrix_filename = '/simulation_time--start_iter_{0:d}'.format(start_iter) + '.txt'
 			np.savetxt(self.data_dir+timing_matrix_filename,timing_matrix.T,delimiter=',')
 			
 		
@@ -1018,8 +886,8 @@ class VMC(object):
 		self.logfile.close()
 		self.file_energy.close()
 		#self.file_energy_std.close()
-		self.file_loss.close()
-		#self.file_r2.close()
+		self.file_loss_log.close()
+		self.file_loss_phase.close()
 		self.file_phase_hist.close()
 
 
@@ -1027,6 +895,15 @@ class VMC(object):
 		self.run_debug_helper(run=True,)
 
 
+	'''
+
+	def _update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
+		layers_type=list(layers.keys())
+		for j, layer_type in enumerate(layers_type):
+			if 'batch_norm' in layer_type:
+				self.DNN.apply_fun_args_dyn[j]['fixpoint_iter']=set_fixpoint_iter
+			
+	
 
 	def compute_batchnorm_params(self,NN_params,N_iter):
 	
@@ -1038,9 +915,9 @@ class VMC(object):
 			# draw MC sample
 			acceptance_ratio_g = self.MC_tool.sample(self.DNN, compute_phases=False)
 			
-			self.update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=True)
+			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=True)
 			log_psi, phase_psi = self.evaluate_NN_dyn(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
-			self.update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=False)
+			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=False)
 
 			#norm_str="iter: {0:d}, min(log_psi)={1:0.8f}, max(log_psi)={2:0.8f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
 			psi_str="log_psi_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
@@ -1057,20 +934,20 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 			print(MC_str)
 
-
+	'''
 			
 
-	def get_training_data(self,iteration,NN_params):
+	def get_training_data(self,iteration,):
 
 		##### get spin configs #####
 		if self.mode=='exact':
-			self.MC_tool.exact(self.evaluate_NN,self.DNN, self.E_estimator)
+			self.MC_tool.exact(self.DNN, )
 			
 		elif self.mode=='MC':
 			ti=time.time()
 			
 			# sample
-			acceptance_ratio_g = self.MC_tool.sample(self.DNN)
+			acceptance_ratio_g = self.MC_tool.sample(self.DNN, )
 			
 			MC_str="MC with acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
 			self.logfile.write(MC_str)
@@ -1087,9 +964,12 @@ class VMC(object):
 		print(psi_str)
 
 
+
+
+
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.evaluate_NN,self.DNN,NN_params,self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.minibatch_size)
+		self.E_estimator.compute_local_energy(self.DNN,self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
 		
 		Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		self.logfile.write(Eloc_str)
@@ -1102,128 +982,82 @@ class VMC(object):
 			self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
 			abs_psi_2=self.count*np.abs(self.psi)**2
 
-			# print('abs_psi_2')
-			# print(mod_kets)
-			# print(abs_psi_2)
-			# print(np.sum(abs_psi_2), np.linalg.norm(mod_kets[self.inv_index]), self.MC_tool.log_psi_shift, np.mean(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.min(self.MC_tool.log_mod_kets))
-
-			self.Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
+			Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
 			overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
-			self.Eloc_params_dict['overlap']=overlap
-
+			Eloc_params_dict['overlap']=overlap
 
 		
 		elif self.mode=='MC':
-			self.Eloc_params_dict=dict(N_MC_points=self.N_MC_points)
-
-
-		#discard outliers
-		# if len(self.E_estimator.inds_outliers)>0:
-		# 	print('discarding outliars...\n')
-		# 	self.discard_outliars()	
+			Eloc_params_dict=dict(N_MC_points=self.N_MC_points)
 
 		
-		self.Eloc_mean_g, self.Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(mode=self.mode,Eloc_params_dict=self.Eloc_params_dict)
+		self.Eloc_mean_g, self.Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(Eloc_params_dict)
 		self.Eloc_std_g=np.sqrt(self.Eloc_var_g)
 		self.E_MC_std_g=self.Eloc_std_g/np.sqrt(self.N_MC_points)
 		
 
-		self.Eloc_params_dict['E_diff']=E_diff_real+1j*E_diff_imag
-		self.Eloc_params_dict['Eloc_mean']=self.Eloc_mean_g
-		self.Eloc_params_dict['Eloc_var']=self.Eloc_var_g
+		Eloc_params_dict['Eloc_mean']=self.Eloc_mean_g
+		Eloc_params_dict['Eloc_var']=self.Eloc_var_g
 
+		self.Eloc_params_dict_log=Eloc_params_dict.copy()
+		self.Eloc_params_dict_phase=Eloc_params_dict.copy()
+
+		self.Eloc_params_dict_log['E_diff']  =E_diff_real
+		self.Eloc_params_dict_phase['E_diff']=E_diff_imag
+		
 		##### total batch
 		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)
 
-		return self.batch, self.Eloc_params_dict
+		#return self.batch, self.Eloc_params_dict
 		
-
-	def get_Stot_data(self,NN_params): 
-		# check SU(2) conservation
-		self.E_estimator.compute_local_energy(self.evaluate_NN,NN_params,self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,SdotS=True)
-		self.SdotSloc_mean, SdotS_var, SdotS_diff_real, SdotS_diff_imag = self.E_estimator.process_local_energies(mode=self.mode,Eloc_params_dict=self.Eloc_params_dict,SdotS=True)
-		self.SdotS_MC_std=np.sqrt(SdotS_var/self.N_MC_points)
-
 
 	def update_NN_params(self,iteration):
 
 		ti=time.time()
 
-		if self.optimizer=='RK':
-			# compute updated NN parameters
-			self.DNN.params = self.NG.Runge_Kutta(self.DNN.params,self.batch,self.Eloc_params_dict,self.mode,self.get_training_data)
-			loss=self.NG.max_grads
-			grads=self.NG.dy_star - 1.0/6.0*(self.NG.dy-self.NG.dy_star)
-
-		else:
-			##### compute gradients
-			if self.optimizer=='NG':
-				# compute enatural gradients
-				grads=self.NG.compute(self.DNN.params,self.batch,self.Eloc_params_dict,mode=self.mode)
-				loss=self.NG.max_grads
-				self.NG.update_params() # update NG params
-
-				S_str="NG: norm(S)={0:0.14f}, norm(F)={1:0.14f}, norm(F_log)={2:0.14f}, norm(F_phase)={3:0.14f}, S_condnum={4:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.F_log_norm, self.NG.F_phase_norm, self.NG.S_logcond) 		
-				if self.comm.Get_rank()==0:
-					print(S_str)
-				self.logfile.write(S_str)
+		if self.grad_update_mode=='normal':
+			self.DNN.params_log,   self.DNN.params_log_update[:]  , self.r2[0]   = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
+			self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
 
 
-			elif self.optimizer=='adam':
-				# compute adam gradients
-				grads_MPI=self.DNN.NN_Tree.ravel( self.compute_grad(self.DNN.params,self.batch,self.Eloc_params_dict, iteration) )
-				
-				# sum up MPI processes
-				grads=np.zeros_like(grads_MPI)
-				self.comm.Allreduce(grads_MPI._value, grads,  op=MPI.SUM)
-				loss=[np.max(grads),0.0]
-				
-				
-			##### apply gradients
+		elif self.grad_update_mode=='alternating':
+			if (iteration//self.alt_iters)%2==1: # phase grads
+				self.DNN.params_log_update*=0.0
+				self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
 
-			left_ind = 0
-			for j, right_ind in enumerate(self.DNN.N_varl_params_vec):
-				grads[left_ind:left_ind+right_ind]*=self.learning_rates[j]
-				left_ind+=right_ind
+			else: # log grads
+				self.DNN.params_log, self.DNN.params_log_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
+				self.DNN.params_phase_update*=0.0
 
-			
-			self.opt_state = self.opt_update(iteration, self.DNN.NN_Tree.unravel(grads) , self.opt_state)
+		elif self.grad_update_mode=='phase':
+			self.DNN.params_log_update*=0.0
+			r2_log=0.0
+			self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
 
-			self.DNN.params = self.get_params(self.opt_state)
-			self.DNN.params_update=grads
+
+		elif self.grad_update_mode=='log_mod':
+			self.DNN.params_log, self.DNN.params_log_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
+			self.DNN.params_phase_update*=0.0
+			r2_phase=0.0
 
 
 
-
-
-			
-		##### compute loss
-		r2=self.NG.r2_cost
+		##### compute max gradients
+		grads_max=[np.max(np.abs(self.DNN.params_log_update)),np.max(np.abs(self.DNN.params_phase_update)),]
 		
 
 		# record gradients
+
 		if self.comm.Get_rank()==0:
-			self.params_update[-1,...]=grads
+			self.params_log_update_lastiters[-1,...]=self.DNN.params_log_update
+			self.params_phase_update_lastiters[-1,...]=self.DNN.params_phase_update
 
-
-
-
-
-		
-
-		print('GRADS', r2, loss, self.NG.delta)
-		#exit()
-
-		# b_str="reg layer params: {}\n".format( self.DNN.params[0][-1] )
-		# self.logfile.write(b_str)
-		# if self.comm.Get_rank()==0:
-		# 	print(b_str)
 
 		grad_str="total gradients/NG calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		self.logfile.write(grad_str)
 		if self.comm.Get_rank()==0:
-			print(grad_str)
+			print(grad_str)	
 		
-		return loss, r2
+		return grads_max
 
 

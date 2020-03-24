@@ -132,7 +132,7 @@ class MC_sampler():
 		#exit()
 
 		if compute_phases:
-			self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), )#._value
+			self.phase_kets[:]=DNN.evaluate_phase(DNN.params_phase, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), )#._value
 
 		#print(self.phase_kets)
 		#exit()
@@ -178,14 +178,12 @@ class MC_sampler():
 
 
 
-	def exact(self,evaluate_NN,DNN, E_estimator,):
+	def exact(self, DNN,):
 
-		self.log_mod_kets[:], self.phase_kets[:] = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), DNN.apply_fun_args )
+		self.log_mod_kets[:] = DNN.evaluate_log(DNN.params_log,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites),  )
+		self.phase_kets[:]   = DNN.evaluate_phase(DNN.params_phase,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites),  )
 		
 		#print(self.log_mod_kets)
-		#exit()
-
-		#print("MEAN log_psi: ",  np.sum(E_estimator.count*self.log_mod_kets)/E_estimator.basis.Ns,  np.max(self.log_mod_kets)  )
 		#exit()
 
 		self.log_psi_shift=np.max(self.log_mod_kets[:])#._value
@@ -201,16 +199,6 @@ class MC_sampler():
 		# print(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)[-1,...])
 
 		#exit()
-
-
-		
-		# for j, spin_config in enumerate(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)):
-		# 	print(spin_config[0,...].reshape(4,4))
-		# 	print()
-		
-		# print(log_psi)
-		# print()
-		# exit()
 
 
 		self.debug_helper()

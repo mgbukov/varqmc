@@ -189,10 +189,10 @@ def Phase_arg(output_layer_shape,center=True, scale=True, a_init=ones, b_init=ze
         
         output_shape=(input_shape[0],1)
         
-        return output_shape, (b,)
+        return output_shape, ()
 
     def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
-        b,   = params
+        #b,   = params
 
         #print(x[-1,...].sum(), x[-2,...].sum(), x[-16,...].sum())
 

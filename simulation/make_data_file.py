@@ -4,6 +4,17 @@ import datetime
 import yaml
 
 
+
+def read_str(tuple_str):
+
+	shape_tuple=()
+
+	tuple_str=tuple_str.replace('(','')
+	tuple_str=tuple_str.replace(')','')
+	tuple_str=tuple_str.split(',')
+
+
+	return tuple_str[0]+'_'+tuple_str[1]
 		
 
 def create_params_file(params):
@@ -22,7 +33,7 @@ def create_params_file(params):
 	sys_data = comm.bcast(sys_data, root=0)
 
 
-	sys_time=sys_data + params['optimizer'] + '-L_{0:d}-{1:s}'.format(params['L'],params['mode'])
+	sys_time=sys_data + read_str(params['opt'])+ '-' + read_str(params['cost']) + '-L_{0:d}-{1:s}'.format(params['L'],params['mode'])
 
 
 	data_dir=os.getcwd()+'/data/'+sys_time

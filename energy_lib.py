@@ -37,7 +37,7 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
 
 class Energy_estimator():
 
-	def __init__(self,comm,J2,N_MC_points,N_batch,L,N_symm,NN_type,sign,):
+	def __init__(self,comm,mode,J2,N_MC_points,N_batch,L,N_symm,NN_type,sign,minibatch_size):
 
 		# MPI commuicator
 		self.comm=comm
@@ -45,6 +45,9 @@ class Energy_estimator():
 		self.N_batch=N_batch
 		self.NN_type=NN_type
 		self.logfile=None
+		self.mode=mode
+
+		self.minibatch_size=minibatch_size
 
 
 		###### define model parameters ######
@@ -78,27 +81,6 @@ class Energy_estimator():
 		self.J2=J2
 		self.L=L
 
-	
-
-		####### SdotS term
-		zz_list=[[1.0,i,j] for i in range(N_sites) for j in range(N_sites) if j<i]
-		pm_list=[[sign**(sublattice[i])*sign**(sublattice[j])*0.5,i,j] for i in range(N_sites) for j in range(N_sites) if j<i]
-
-		# zz_list=[[1.0,i,j] for i in range(N_sites) for j in range(N_sites)]
-		# pm_list=[[sign**(sublattice[i])*sign**(sublattice[j])*0.5,i,j] for i in range(N_sites) for j in range(N_sites)]
-		
-
-		self.static_off_diag_SdotS=[ ["+-",pm_list],["-+",pm_list] ]
-		self.static_diag_SdotS=[ ["zz",zz_list], ]
-
-
-		static_list_offdiag_SdotS = _consolidate_static(self.static_off_diag_SdotS)
-		static_list_diag_SdotS = _consolidate_static(self.static_diag_SdotS)
-
-
-		self._n_offdiag_terms_SdotS=len(static_list_offdiag_SdotS)
-		self._static_list_offdiag_SdotS=static_list_offdiag_SdotS
-		self._static_list_diag_SdotS=static_list_diag_SdotS
 
 
 		###### setting up Hamiltonian site-coupling lists
@@ -193,8 +175,7 @@ class Energy_estimator():
 		self.H=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis,dtype=np.float64) #
 		self.H_symm=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis_symm,dtype=np.float64)
 		
-		self.SdotS=hamiltonian(self.static_off_diag_SdotS+self.static_diag_SdotS, [], basis=self.basis,dtype=np.float64)
-
+		
 		ref_states, index, inv_index, count=np.unique(self.basis_symm.representative(self.basis.states), return_index=True, return_inverse=True, return_counts=True)
 		self.ref_states=ref_states
 		self.count=count
@@ -261,45 +242,92 @@ class Energy_estimator():
 		self.comm.Gatherv([self.Eloc_imag,  MPI.DOUBLE], [self.Eloc_imag_g[-1,:], MPI.DOUBLE], root=0)
 
 
-	def _reset_locenergy_params(self,SdotS=False):
+	def _reset_locenergy_params(self,):
 
 		#######
-		if SdotS:
-			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.float64)
-			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,self.N_sites*self.N_symm),dtype=np.int8)
-			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms_SdotS,),dtype=self.basis_type)
-			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms_SdotS,dtype=np.uint32)
-			self._n_per_term=np.zeros(self._n_offdiag_terms_SdotS,dtype=np.int32)
-		else:
-			self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.float64)
-			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.int8)
-			self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
-			self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
-			self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
+		self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.float64)
+		self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.int8)
+		self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
+		self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
+		self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
 
 
 		self._Eloc_cos=np.zeros(self.N_batch, dtype=np.float64)
 		self._Eloc_sin=np.zeros(self.N_batch, dtype=np.float64)
 
 		self.Eloc_real=np.zeros_like(self._Eloc_cos)
-		self.Eloc_imag=np.zeros_like(self._Eloc_cos)	
+		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
+		self.Eloc_diag=np.zeros_like(self._Eloc_cos)	
 
 
-	def compute_local_energy(self,evaluate_NN,DNN,NN_params,ints_ket,log_kets,phase_kets,log_psi_shift,minibatch_size,SdotS=False):
+	def reestimate_local_energy(self, NN_params_phase, batch, params_dict_phase):
+
+
+		phase_kets = DNN.evaluate_phase(NN_params_phase, batch)
+
+		phase_psi_bras = self.evalute_s_primes(DNN.evalute_phase,DNN.params_phase,)
+
+		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras,phase_psi_bras,)
+
+
+		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.process_local_energies(params_dict_phase)
+
+		params_dict_phase['E_diff']=E_diff_imag
+		params_dict_phase['Eloc_mean']=Eloc_mean_g
+		params_dict_phase['Eloc_var']=Eloc_var_g
 		
 
-		if SdotS:
-			static_list_offdiag=self._static_list_offdiag_SdotS	
-			static_list_diag=self._static_list_diag_SdotS
-		else:
-			static_list_offdiag=self._static_list_offdiag
-			static_list_diag=self._static_list_diag
+		return params_dict
+
+
+
+	def compute_local_energy(self,DNN,ints_ket,log_kets,phase_kets,log_psi_shift,):
 		
+		self.compute_s_primes(ints_ket,)
+
+		unique_str="{0:d}/{1:d} unique configs; using minibatch size {2:d}.\n".format(self.nn_uq, self.nn, self.minibatch_size)
+		if self.logfile!=None:
+			self.logfile.write(unique_str)
+
+
+		log_psi_bras = self.evalute_s_primes(DNN.evaluate_log,DNN.params_log,)
+		log_psi_bras-=log_psi_shift
+		
+
+		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
+		if self.logfile!=None:
+			self.logfile.write(psi_str)
+		if self.comm.Get_rank()==0:
+			print(psi_str)
+		
+
+		phase_psi_bras = self.evalute_s_primes(DNN.evaluate_phase,DNN.params_phase,)
+
+
+		self.compute_Eloc(log_kets, phase_kets, log_psi_bras,phase_psi_bras,)
+
+
+		self.log_kets=log_kets
+		self.log_psi_bras=log_psi_bras
+
+
+
+	def compute_s_primes(self,ints_ket,):
+
 		# preallocate variables
-		self._reset_locenergy_params(SdotS=SdotS)
+		self._reset_locenergy_params()
 
+
+		# diag matrix elements, only real part
+		for opstr,indx,J in self._static_list_diag:
+
+			indx=np.asarray(indx,dtype=np.int32)
+			update_diag_ME(ints_ket,self.Eloc_diag,opstr,indx,J) 
+
+
+		# off-diag matrix elements
 		nn=0
-		for j,(opstr,indx,J) in enumerate(static_list_offdiag):
+		for j,(opstr,indx,J) in enumerate(self._static_list_offdiag):
 			
 			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
@@ -324,33 +352,35 @@ class Energy_estimator():
 
 		# evaluate network on unique representatives only
 
-		_ints_bra_uq, index, inv_index, count=np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, return_counts=True)
+		_ints_bra_uq, index, inv_index, =np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, )
 		nn_uq=_ints_bra_uq.shape[0]
 
 
-		unique_str="{0:d}/{1:d} unique configs; using minibatch size {2:d}.\n".format(nn_uq, nn, minibatch_size)
-		if self.logfile!=None:
-			self.logfile.write(unique_str)
+		self.nn=nn
+		self.nn_uq=nn_uq
+		self.index=index
+		self.inv_index=inv_index
 
+
+	def evalute_s_primes(self,evaluate_NN,NN_params,):
 
 		### evaluate network using minibatches
 
-		if minibatch_size > 0:
+		if self.minibatch_size > 0:
 		
-			num_complete_batches, leftover = divmod(nn_uq, minibatch_size)
+			num_complete_batches, leftover = divmod(self.nn_uq, self.minibatch_size)
 			N_minibatches = num_complete_batches + bool(leftover)
 
-			data=self._spinstates_bra[:nn][index]
-			batches = data_stream(data,minibatch_size,nn_uq,N_minibatches)
+			data=self._spinstates_bra[:self.nn][self.index]
+			batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
 
 			# preallocate data
-			log_psi_bras=np.zeros(nn_uq,dtype=np.float64)
-			phase_psi_bras=np.zeros(nn_uq,dtype=np.float64)
-
+			prediction_bras=np.zeros(self.nn_uq,dtype=np.float64)
+			
 			for j in range(N_minibatches):
 
 				batch, batch_idx = next(batches)
-				log_psi_bras[batch_idx], phase_psi_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
+				prediction_bras[batch_idx]   = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),  )
 				
 				# with disable_jit():
 				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
@@ -358,94 +388,27 @@ class Energy_estimator():
 				#print(log_psi_bras[batch_idx]-log)
 				#print(log[:2])
 
-				
-			log_psi_bras=log_psi_bras[inv_index] - log_psi_shift
-			phase_psi_bras=phase_psi_bras[inv_index]
-
 
 		else:
 
 			### evaluate network on entire sample
-			log_psi_bras, phase_psi_bras = evaluate_NN(NN_params,self._spinstates_bra[:nn][index].reshape(nn_uq,self.N_symm,self.N_sites),)
-			log_psi_bras=log_psi_bras[inv_index]._value - log_psi_shift
-			phase_psi_bras=phase_psi_bras[inv_index]._value
+			prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(self.nn_uq,self.N_symm,self.N_sites),  )._value
 
 
 
-		# Eloc_cos=self._MEs[:nn]*np.exp(log_psi_bras-log_kets)*np.cos(phase_psi_bras)
-		# Eloc_sin=self._MEs[:nn]*np.exp(log_psi_bras-log_kets)*np.sin(phase_psi_bras)
-		
-		# cos_phase_kets=np.cos(phase_kets)
-		# sin_phase_kets=np.sin(phase_kets)
+		return prediction_bras[self.inv_index]
 
-		# indxs=(np.exp(log_psi_bras-log_kets)>1.0)
-
-		# print()
-		# print(np.exp(log_psi_bras-log_kets))
-		# print()
-		# print(log_psi_bras)
-		# print()
-		# print( (Eloc_cos*cos_phase_kets) )
-		# print()
-		# print( (Eloc_cos*cos_phase_kets)[indxs] )
-		# print()
-		# print(Eloc_cos.sum()*cos_phase_kets, Eloc_sin.sum()*sin_phase_kets)
-		# print()
-		# print(log_kets)
-		# exit()
 
 		#######
 
+	def compute_Eloc(self, log_kets, phase_kets, log_psi_bras,phase_psi_bras,  ):
 
-		#np.set_printoptions(threshold=np.inf, suppress=True)
-
-		phase_kets = (phase_kets+np.pi)%(2*np.pi) - np.pi
-		phase_psi_bras = (phase_psi_bras+np.pi)%(2*np.pi) - np.pi
-
-		ind=np.argmax(log_kets)
-		a=phase_kets[ind]
-		phase_kets=phase_kets-a
-		phase_psi_bras=phase_psi_bras-a
-
-
-		# print(phase_kets)
-		# print()
-		# for phi, log in zip(phase_psi_bras, log_psi_bras):
-		# 	print(phi,np.exp(2.0*log))
-		#print(phase_psi_bras)
-
-		# import matplotlib
-		# import matplotlib.pyplot as plt
-
-		# fig, ax = plt.subplots(nrows=1, ncols=2)
-
-
-		# ax[0].plot(phase_kets,log_kets,'.b',markersize=0.5)
-		# ax[0].set_xlim([-2*np.pi,2*np.pi])
-		# ax[0].set_ylim([-10,0])
-
-		# ax[1].plot(phase_psi_bras,log_psi_bras,'.r',markersize=0.5)
-		# ax[1].set_xlim([-2*np.pi,2*np.pi])
-		# ax[1].set_ylim([-10,0])
-
-		# plt.show(	)
-
-		# exit()
-
-
-		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
-		if self.logfile!=None:
-			self.logfile.write(psi_str)
-		if self.comm.Get_rank()==0:
-			print(psi_str)
 		
-
 		# compute real and imaginary part of local energy
 		self._n_per_term=self._n_per_term[self._n_per_term>0]
-		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term,self._ints_ket_ind[:nn],self._MEs[:nn],log_psi_bras,phase_psi_bras,log_kets)
+		c_offdiag_sum(self._Eloc_cos, self._Eloc_sin, self._n_per_term,self._ints_ket_ind[:self.nn],self._MEs[:self.nn],log_psi_bras,phase_psi_bras,log_kets)
 		
-		#print(self._Eloc_cos)
-
+	
 		cos_phase_kets=np.cos(phase_kets)
 		sin_phase_kets=np.sin(phase_kets)
 
@@ -453,13 +416,8 @@ class Energy_estimator():
 		self.Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets
 		self.Eloc_imag = self._Eloc_sin*cos_phase_kets - self._Eloc_cos*sin_phase_kets
 
-		#print(self.Eloc_real)
-
-		# diag matrix elements, only real part
-		for opstr,indx,J in static_list_diag:
-
-			indx=np.asarray(indx,dtype=np.int32)
-			update_diag_ME(ints_ket,self.Eloc_real,opstr,indx,J) 
+		# add diagonal contribution
+		self.Eloc_real+=self.Eloc_diag
 
 
 		#################################
@@ -468,53 +426,14 @@ class Energy_estimator():
 		self.debug_helper()
 
 
-		"""
-		lower, upper = 0.0,0.0
-		q25, q75, iqr = 0.0, 0.0, 0.0
-		if self.comm.Get_rank()==0:
-			(lower, upper), (q25, q75, iqr) = compute_outliers(self.Eloc_real_g[-1,...])
-		lower = self.comm.bcast(lower, root=0)
-		upper = self.comm.bcast(upper, root=0)
-		q25 = self.comm.bcast(q25, root=0)
-		q75 = self.comm.bcast(q75, root=0)
-		iqr = self.comm.bcast(iqr, root=0)
 
-		# identify outliers
-		#outliers = [Eloc_s for Eloc_s in self.Eloc_real if Eloc_s < lower or Eloc_s > upper]
-		self.inds_outliers=np.where( np.logical_or(self.Eloc_real < lower , self.Eloc_real > upper) )[0]
+	def process_local_energies(self,Eloc_params_dict,):
 
-		#outliers_str='Eloc outliers:\n   {0}\nwith inds:\n   {1}\n'.format(self.Eloc_real[self.inds_outliers],self.inds_outliers)
-		outliers_stats_str='Percentiles: 25th={0:.3f}, 75th={1:.3f}, IQR={2:.3f}.\n'.format(q25, q75, iqr, )
-		outliers_str='Eloc outliers:\n   {}\n'.format(self.Eloc_real[self.inds_outliers],)
-
-		if self.logfile!=None:
-			self.logfile.write(outliers_stats_str)
-			self.logfile.write(outliers_str)
-	
-		print(outliers_stats_str)
-		print(outliers_str)
-		"""
-
-		if SdotS:
-			self.SdotS_real=2.0*self.Eloc_real # double off-diagonal contribution
-			self.SdotS_real=self.Eloc_real+0.75*self.N_sites # diagonal contribution
-
-			self.SdotS_imag=2.0*self.Eloc_imag # double off-diagonal contribution
-
-
-		return log_psi_bras, phase_psi_bras
-
-
-	def process_local_energies(self,mode='MC',Eloc_params_dict=None,SdotS=False):
-
-		if SdotS:
-			loc=self.SdotS_real+1j*self.SdotS_imag
-		else:
-			loc=self.Eloc_real+1j*self.Eloc_imag
-
+		
+		loc=self.Eloc_real+1j*self.Eloc_imag
 
 	
-		if mode=='MC':
+		if self.mode=='MC':
 
 			Eloc_mean_g=np.zeros(1, dtype=np.complex128)
 			Eloc_var_g=np.zeros(1, dtype=np.float64)
@@ -534,18 +453,16 @@ class Energy_estimator():
 			Eloc_var_g=Eloc_var_g[0]
 
 
-		elif mode=='exact':
+		elif self.mode=='exact':
 			abs_psi_2=Eloc_params_dict['abs_psi_2']
 			Eloc_mean_g=np.sum(loc*abs_psi_2).real
 			Eloc_var_g=np.sum(abs_psi_2*np.abs(loc)**2) - Eloc_mean_g**2
 			
 
-		if SdotS:
-			E_diff_real=self.SdotS_real-Eloc_mean_g.real
-			E_diff_imag=self.SdotS_imag-Eloc_mean_g.imag
-		else:
-			E_diff_real=self.Eloc_real-Eloc_mean_g.real
-			E_diff_imag=self.Eloc_imag-Eloc_mean_g.imag
+
+		E_diff_real=self.Eloc_real-Eloc_mean_g.real
+		E_diff_imag=self.Eloc_imag-Eloc_mean_g.imag
+
 
 
 		self.Eloc_mean_g=Eloc_mean_g
