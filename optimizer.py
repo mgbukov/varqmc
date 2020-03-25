@@ -72,7 +72,12 @@ class optimizer(object):
 
 		elif self.opt=='RK':
 
-			self.Runge_Kutta=Runge_Kutta_solver(self.step_size, self.NN_Tree, self.compute_grad, reestimate_local_energy)
+			if self.cost=='SR':
+				compute_r2=self.NG.compute_r2_cost
+			else:
+				compute_r2=lambda x: 0.0
+
+			self.Runge_Kutta=Runge_Kutta_solver(self.step_size, self.NN_Tree, self.compute_grad, reestimate_local_energy, compute_r2)
 			self.opt_state=None
 			self.opt_init=None
 			self.get_params=None
@@ -141,7 +146,7 @@ class optimizer(object):
 
 			self.compute_grad=self.NG.compute
 
-		self._init_optimizer(reestimate_local_energy)
+		self._init_optimizer(reestimate_local_energy, )
 
 
 	def return_grad(self, iteration, NN_params, batch, params_dict, ):
@@ -149,12 +154,18 @@ class optimizer(object):
 		# compute gradients
 		if self.opt=='RK':
 			grads=self.Runge_Kutta.run(NN_params,batch,params_dict,)
-			NN_params_new=self.NN_Tree.unravel(grads)
+			NN_params_new=self.NN_Tree.unravel( self.NN_Tree.ravel(NN_params) + grads)
 
 			if self.cost=='SR':
-				self.NG.update_NG_params(grads,self_time=self.Runge_Kutta.time)
+				self.NG.update_NG_params(grads,self.Runge_Kutta.step_size,self_time=self.Runge_Kutta.time)
 				self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
-				r2=self.NG.compute_r2_cost(params_dict)
+				
+				S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
+				if self.comm.Get_rank()==0:
+					print(S_str)
+				self.logfile.write(S_str)
+
+				r2=self.Runge_Kutta.r2
 			else:
 				r2=0.0
 		
@@ -163,7 +174,7 @@ class optimizer(object):
 				
 		
 			if self.cost=='SR':
-				self.NG.update_NG_params(grads) # update NG params
+				self.NG.update_NG_params(grads,self.step_size) # update NG params
 				self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
 
 				S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		

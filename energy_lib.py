@@ -37,10 +37,13 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
 
 class Energy_estimator():
 
-	def __init__(self,comm,mode,J2,N_MC_points,N_batch,L,N_symm,NN_type,sign,minibatch_size):
+	def __init__(self,comm,DNN,mode,J2,N_MC_points,N_batch,L,N_symm,NN_type,sign,minibatch_size):
 
 		# MPI commuicator
 		self.comm=comm
+		self.DNN=DNN
+
+
 		self.N_MC_points=N_MC_points
 		self.N_batch=N_batch
 		self.NN_type=NN_type
@@ -251,24 +254,26 @@ class Energy_estimator():
 		self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 		self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
 
+		self.Eloc_diag=np.zeros(self.N_batch, dtype=np.float64)	
+
+
+	def _reset_Eloc_vars(self,):
 
 		self._Eloc_cos=np.zeros(self.N_batch, dtype=np.float64)
 		self._Eloc_sin=np.zeros(self.N_batch, dtype=np.float64)
 
 		self.Eloc_real=np.zeros_like(self._Eloc_cos)
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
-		self.Eloc_diag=np.zeros_like(self._Eloc_cos)	
-
+		
 
 	def reestimate_local_energy(self, NN_params_phase, batch, params_dict_phase):
 
 
-		phase_kets = DNN.evaluate_phase(NN_params_phase, batch)
+		phase_kets = self.DNN.evaluate_phase(NN_params_phase, batch)
 
-		phase_psi_bras = self.evalute_s_primes(DNN.evalute_phase,DNN.params_phase,)
+		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,NN_params_phase,)
 
-		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras,phase_psi_bras,)
-
+		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras,)
 
 		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.process_local_energies(params_dict_phase)
 
@@ -277,11 +282,11 @@ class Energy_estimator():
 		params_dict_phase['Eloc_var']=Eloc_var_g
 		
 
-		return params_dict
+		return params_dict_phase
 
 
 
-	def compute_local_energy(self,DNN,ints_ket,log_kets,phase_kets,log_psi_shift,):
+	def compute_local_energy(self,ints_ket,log_kets,phase_kets,log_psi_shift,):
 		
 		self.compute_s_primes(ints_ket,)
 
@@ -290,7 +295,7 @@ class Energy_estimator():
 			self.logfile.write(unique_str)
 
 
-		log_psi_bras = self.evalute_s_primes(DNN.evaluate_log,DNN.params_log,)
+		log_psi_bras = self.evalute_s_primes(self.DNN.evaluate_log,self.DNN.params_log,)
 		log_psi_bras-=log_psi_shift
 		
 
@@ -301,11 +306,9 @@ class Energy_estimator():
 			print(psi_str)
 		
 
-		phase_psi_bras = self.evalute_s_primes(DNN.evaluate_phase,DNN.params_phase,)
+		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,self.DNN.params_phase,)
 
-
-		self.compute_Eloc(log_kets, phase_kets, log_psi_bras,phase_psi_bras,)
-
+		self.compute_Eloc(log_kets, phase_kets, log_psi_bras, phase_psi_bras,)
 
 		self.log_kets=log_kets
 		self.log_psi_bras=log_psi_bras
@@ -401,8 +404,10 @@ class Energy_estimator():
 
 		#######
 
+
 	def compute_Eloc(self, log_kets, phase_kets, log_psi_bras,phase_psi_bras,  ):
 
+		self._reset_Eloc_vars()
 		
 		# compute real and imaginary part of local energy
 		self._n_per_term=self._n_per_term[self._n_per_term>0]

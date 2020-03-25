@@ -373,7 +373,7 @@ class VMC(object):
 
 	def _create_energy_estimator(self):
 		### Energy estimator
-		self.E_estimator=Energy_estimator(self.comm,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
+		self.E_estimator=Energy_estimator(self.comm,self.DNN,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 		
 	def _create_MC_sampler(self, ):
@@ -529,7 +529,7 @@ class VMC(object):
 	def save_sim_data(self, iteration, grads_max, r2, phase_hist):
 
 		# data
-		self.file_energy.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.E_MC_std_g))
+		self.file_energy.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.Eloc_std_g, self.E_MC_std_g))
 		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
 		
 
@@ -776,38 +776,38 @@ class VMC(object):
 			#exit()
 
 
-
+			'''
 			##### check energy and undo update and restart sampling: (1.05*, max_value=1E-1) and 0.5 for reduction
-			# if iteration>0 and self.mode=='MC': 
-			# 	_b1=prev_it_data[0] - self.Eloc_mean_g.real
-			# 	_b2=np.abs(self.Eloc_mean_g.imag)
-			# 	_b3=1E1*prev_it_data[2] - self.E_MC_std_g 
-			# 	
-			# 	if _b1<-1.0 or _b2 < -0.1 or _b3 < 0: 
-			# 		# file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(iteration-1) #+ self.file_name
-			# 		# with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-			# 		# 	self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
-			# 		# 	self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
+			if iteration>0 and self.mode=='MC': 
+				_b1=prev_it_data[0] - self.Eloc_mean_g.real
+				_b2=np.abs(self.Eloc_mean_g.imag)
+				_b3=1E1*prev_it_data[2] - self.E_MC_std_g 
 				
-			# 		# revert DNN params update; 
-			# 		self.DNN.params=self.DNN.NN_Tree.unravel(self.DNN.NN_Tree.ravel(self.DNN.params)+self.DNN.params_update)
+				if _b1<-1.0 or _b2 < -0.1 or _b3 < 0: 
+					# file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(iteration-1) #+ self.file_name
+					# with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+					# 	self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
+					# 	self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
+				
+					# revert DNN params update; 
+					self.DNN.params=self.DNN.NN_Tree.unravel(self.DNN.NN_Tree.ravel(self.DNN.params)+self.DNN.params_update)
 
-			# 		mssg="restarting iteration: dE={0:0.6f}, dE_std={1:0.6f}, dnorm={2:0.10f},\n".format(_b1, _b3, _b4)
+					mssg="restarting iteration: dE={0:0.6f}, dE_std={1:0.6f}, dnorm={2:0.10f},\n".format(_b1, _b3, _b4)
 
-			# 		if self.comm.Get_rank()==0:
-			# 			print(mssg)
-			# 		self.logfile.write(mssg)
+					if self.comm.Get_rank()==0:
+						print(mssg)
+					self.logfile.write(mssg)
 
-			# 		# decrease learning rate
-			# 		self.learning_rates*=0.5
+					# decrease learning rate
+					self.learning_rates*=0.5
 
-			# 		continue # restart sampling
-			# 	else:
+					continue # restart sampling
+				else:
 
-			# 		# increase learning rats
-			# 		if np.max(self.learning_rates)<1E-1:
-			# 			self.learning_rates*=1.01
-
+					# increase learning rats
+					if np.max(self.learning_rates)<1E-1:
+						self.learning_rates*=1.1
+			'''
 
 
 
@@ -969,7 +969,7 @@ class VMC(object):
 
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.DNN,self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
+		self.E_estimator.compute_local_energy(self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
 		
 		Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		self.logfile.write(Eloc_str)
