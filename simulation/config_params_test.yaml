@@ -7,11 +7,11 @@ NN_shape_str: (16--12,16--24--12)
 NN_type: DNN
 N_MC_chains: 2
 MC_thermal: true
-N_MC_points: 107 #100 #
-mode: exact # MC #   
+N_MC_points: 200 # 107 #
+mode: MC # exact #   
 batchnorm: false
 minibatch_size: 2000
-grad_update_mode: normal # phase # alternating # log_mod # 
+grad_update_mode: normal # log_mod # phase #  alternating # 
 alt_iter: 20 # of iterations to keep each alternating update for  
 TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
 opt: (sgd,RK) # adam, sgd, RK

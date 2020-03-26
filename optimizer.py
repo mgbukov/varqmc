@@ -22,7 +22,7 @@ class optimizer(object):
 		self.label=label
 
 		self.comm=comm
-		self.step_size=step_size
+		
 		self.opt=opt
 		self.cost=cost
 		self.mode=mode
@@ -35,10 +35,17 @@ class optimizer(object):
 		else:
 			self.RK=False
 
+		if self.opt=='NG' and self.cost=='energy':
+			raise ValueError("NG incompatible with energy cost!")
+
 		if self.opt=='adam' and self.cost=='SR':
 			raise ValueError('adam incompatible with SR cost!')
 
 		self.is_finite=True
+
+		self.iteration=0
+		self.step_size=step_size
+		self.time=0.0
 
 
 	
@@ -50,25 +57,22 @@ class optimizer(object):
 		self.N_varl_params=N_varl_params
 		self.n_iter=n_iter
 
-		# # define variable to keep track of the DNN params update
-		# if self.comm.Get_rank()==0:
-		# 	self.grads=np.zeros((self.n_iter,self.N_varl_params),dtype=np.float64)
-		# else:
-		# 	self.grads=np.array([[None],[None]])
-
 
 	def init_opt_state(self,NN_params):
-		if self.opt != 'RK':
+		if self.opt == 'adam':
 			self.opt_state = self.opt_init(NN_params)
 		
 
 	def _init_optimizer(self, reestimate_local_energy):
 		
 		if self.opt=='adam':
-			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=self.step_size, b1=0.9, b2=0.99, eps=1e-08)
+			self.opt_init, self.opt_update, self.get_params = optimizers.adam(step_size=self.step_size, b1=0.99, b2=0.999, eps=1e-08)
 			
 		elif self.opt=='sgd':
-			self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=self.step_size)
+			#self.opt_init, self.opt_update, self.get_params = optimizers.sgd(step_size=self.step_size)
+			self.opt_state=None
+			self.opt_init=None
+			self.get_params=None
 
 		elif self.opt=='RK':
 
@@ -168,28 +172,52 @@ class optimizer(object):
 				r2=self.Runge_Kutta.r2
 			else:
 				r2=0.0
+
+			self.time+=self.Runge_Kutta.step_size
 		
-		else:
+		elif self.opt=='sgd':
 			grads=self.compute_grad(NN_params,batch,params_dict,)
 				
-		
-			if self.cost=='SR':
-				self.NG.update_NG_params(grads,self.step_size) # update NG params
-				self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
+			self.NG.update_NG_params(grads,self.step_size) # update NG params
+			self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
 
-				S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
-				if self.comm.Get_rank()==0:
-					print(S_str)
-				self.logfile.write(S_str)
+			S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
+			if self.comm.Get_rank()==0:
+				print(S_str)
+			self.logfile.write(S_str)
 
-				r2=self.NG.compute_r2_cost(params_dict)
-			else:
-				r2=0.0
+			r2=self.NG.compute_r2_cost(params_dict)
+
+			# adaptive step size
+			
+			# max_grad=np.max(np.abs(grads))
+			# if max_grad<0.1: # increase
+			# 	print('increasing step size')
+			# 	self.step_size*=min(1.01, 1.0/max_grad)
+			# elif max_grad>50.0: # decrease step size
+			# 	print('decreasing step size')
+			# 	self.step_size*=0.9
+
+			# print('step_size', self.step_size, max_grad, self.label)
+			
+			NN_params_new=self.NN_Tree.unravel( self.NN_Tree.ravel(NN_params) - self.step_size * grads )
+			
+			self.time+=self.step_size
+
+		elif self.opt=='adam':
+			grads=self.compute_grad(NN_params,batch,params_dict,)
+			r2=0.0
 
 			self.opt_state = self.opt_update(iteration, self.NN_Tree.unravel(grads) , self.opt_state)
 			NN_params_new=self.get_params(self.opt_state)
+			
+			self.time+=self.step_size
 
+		else:
+			raise ValueError("unrecognized optimizer {}!".format(self.opt))
 		
+
+		self.iteration+=1
 		return NN_params_new, grads, r2
 		
 

@@ -42,14 +42,14 @@ class natural_gradient():
 		self.cg_maxiter=1E4
 		self.tol=1E-7 # CG tolerance
 
-		#self.step_size=1.0
+		self.step_size=1.0
 
 		if self.RK:
 			self.delta=0.0 # NG S matrix regularization strength
 			self.grad_clip=1E4
 		else:
 			self.delta=100.0 # S-matrix regularizer
-			self.grad_clip=50.0
+			self.grad_clip=1E4 #50.0
 
 
 		
@@ -301,7 +301,6 @@ class natural_gradient():
 
 
 class Runge_Kutta_solver():
-
 
 	def __init__(self,step_size, NN_Tree, return_grads, reestimate_local_energy, compute_r2):
 

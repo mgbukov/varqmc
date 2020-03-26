@@ -56,6 +56,19 @@ np.set_printoptions(threshold=np.inf)
 #from misc.MC_weights import *
 
 
+def truncate_file(file_name, start_iter):
+
+	with open(file_name) as file:	
+		lines=file.readlines()
+		keep_lines=[]
+		for i,line in enumerate(lines):
+			if i < start_iter:
+				keep_lines.append(line)
+
+	with open(file_name, 'w') as file:
+		for line in keep_lines:
+			file.write(line)
+
 
 def read_str(tuple_str):
 
@@ -71,6 +84,25 @@ def read_str(tuple_str):
 
 	return shape_tuple, len(tuple_str)
 
+
+def load_opt_data(opt,file_name,start_iter):
+
+	with open(file_name) as file:
+		for i in range(start_iter):
+			opt_data_str = file.readline().rstrip().split(' : ')	
+
+	opt.iteration=int(opt_data_str[0])+1
+	opt.NG.delta=np.float64(opt_data_str[1])
+	opt.NG.tol=np.float64(opt_data_str[2])
+
+	opt.time=np.float64(opt_data_str[5])
+
+	if opt.opt=='RK':
+		opt.Runge_Kutta.counter=int(opt_data_str[3])
+		opt.Runge_Kutta.step_size=np.float64(opt_data_str[4])
+		opt.Runge_Kutta.time=np.float64(opt_data_str[5])
+	else:
+		opt.step_size=np.float64(opt_data_str[4])
 
 
 class VMC(object):
@@ -185,7 +217,7 @@ class VMC(object):
 			self._create_logs()
 
 			if self.load_data:
-				self._load_data()
+				self._load_data(self.start_iter, truncate_files=True)
 
 
 		# add variables to yaml file
@@ -222,16 +254,13 @@ class VMC(object):
 
 
 
-	def _load_data(self):
-
-
-		start_iter=self.start_iter
+	def _load_data(self, start_iter, truncate_files=True):
 
 		### load MC data
 		
-		with open(self.file_MC_data.name) as file:	
-			for i in range(start_iter):				
-				MC_data_str = file.readline().rstrip().split(' : ')
+		with open(self.file_MC_data.name) as file:
+			for i in range(start_iter):
+					MC_data_str = file.readline().rstrip().split(' : ')				
 
 		it_MC, acceptance_ratio_g, acceptance_ratios, s0_g, sf_g =  MC_data_str
 
@@ -242,53 +271,56 @@ class VMC(object):
 		m_l=self.N_MC_chains*self.comm.Get_rank()
 		m_r=self.N_MC_chains*(self.comm.Get_rank()+1)
 
-		print(self.comm.Get_rank(),self.MC_tool.s0_g[m_l:m_r], self.MC_tool.sf_g[m_l:m_r], )
-
 		self.DNN._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
 
+
+
 		### load DNN params
-
-		#file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter) + self.file_name
-		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(self.start_iter)
+		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter)
 
 		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-			self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
-			self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
+			self.DNN.params_log, self.DNN.params_phase, \
+			self.DNN.apply_fun_args_log, self.DNN.apply_fun_args_phase, \
+			self.MC_tool.log_psi_shift = pickle.load(handle)
+			
+		self.opt_log.init_opt_state(self.DNN.params_log)
+		self.opt_phase.init_opt_state(self.DNN.params_phase)
 
-		self.opt_state = self.opt_init(self.DNN.params)
 
-		#file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(self.start_iter-1) + self.file_name
-		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(self.start_iter-1) + self.file_name
+		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter-1) 
 		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-			DNN_params_old,_,_ = pickle.load(handle)
+			DNN_params_log_old, DNN_params_phase_old, _ ,_ , _ = pickle.load(handle)
 
 		
-		self.NG.nat_grad_guess[:]=self.DNN.NN_Tree.ravel(DNN_params_old)-self.DNN.NN_Tree.ravel(self.DNN.params)
+		if self.opt_log.cost=='SR':
+			self.opt_log.NG.nat_grad_guess[:]  = (self.DNN.NN_Tree_log.ravel(DNN_params_log_old)-self.DNN.NN_Tree_log.ravel(self.DNN.params_log) )/self.opt_log.step_size
+
+		if self.opt_phase.cost=='SR':
+			self.opt_phase.NG.nat_grad_guess[:]= (self.DNN.NN_Tree_phase.ravel(DNN_params_phase_old)-self.DNN.NN_Tree_phase.ravel(self.DNN.params_phase) )/self.opt_phase.step_size
 
 
-		### load NG data
 
-		with open(self.file_opt_data.name) as file:	
-			for i in range(start_iter):				
-				opt_data_str = file.readline().rstrip().split(' : ')
 
+		### load opt data
+		load_opt_data(self.opt_log, self.file_opt_data_log.name, start_iter)
+		load_opt_data(self.opt_phase, self.file_opt_data_phase.name, start_iter)
 		
-		self.NG.iteration=int(opt_data_str[0])+1
-		self.NG.counter=int(opt_data_str[1])
-		self.NG.RK_step_size=np.float64(opt_data_str[2])
-		self.NG.RK_time=np.float64(opt_data_str[3])
-		self.NG.delta=np.float64(opt_data_str[4])
-		self.NG.tol=np.float64(opt_data_str[5])
 
 
-		with open(self.file_loss.name) as file:	
-			for i in range(start_iter+1):				
-				loss_data_str = file.readline().rstrip().split(' : ')
-
-
+		# truncate remaining files
+		if truncate_files:
+			truncate_file(self.file_MC_data.name, start_iter)
+			truncate_file(self.file_opt_data_log.name, start_iter)
+			truncate_file(self.file_opt_data_phase.name, start_iter)
+			# clean rest of files
+			truncate_file(self.file_energy.name, start_iter)
+			truncate_file(self.file_loss_log.name, start_iter)
+			truncate_file(self.file_loss_phase.name, start_iter)
+			truncate_file(self.file_phase_hist.name, start_iter)
+	
 		#####
-		
-		assert(int(it_MC)+1==self.NG.iteration)
+		assert(int(it_MC)+1==self.opt_log.iteration)
+		assert(int(it_MC)+1==self.opt_phase.iteration)
 
 
 
@@ -573,10 +605,10 @@ class VMC(object):
 		if self.opt_log.opt=='RK':
 			data_opt=(self.opt_log.Runge_Kutta.counter, self.opt_log.Runge_Kutta.step_size, self.opt_log.Runge_Kutta.time, )
 		else:
-			data_opt=(0,0.0,0.0,)
+			data_opt=(self.opt_log.iteration,self.opt_log.step_size,self.opt_log.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_log.write("{0:d} : {1:08f} : {2:0.10f} : {3:d} : {4:0.14f} : {5:0.10f}\n".format(*data_tuple))
+		self.file_opt_data_log.write("{0:d} : {1:14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
 
 
 		if self.opt_phase.cost=='SR':
@@ -587,10 +619,10 @@ class VMC(object):
 		if self.opt_phase.opt=='RK':
 			data_opt=(self.opt_phase.Runge_Kutta.counter, self.opt_phase.Runge_Kutta.step_size, self.opt_phase.Runge_Kutta.time, )
 		else:
-			data_opt=(0,0.0,0.0,)
+			data_opt=(self.opt_phase.iteration,self.opt_phase.step_size,self.opt_phase.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_phase.write("{0:d} : {1:08f} : {2:0.10f} : {3:d} : {4:0.14f} : {5:0.10f}\n".format(*data_tuple))
+		self.file_opt_data_phase.write("{0:d} : {1:14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
 
 
 		######################################################
@@ -714,6 +746,68 @@ class VMC(object):
 
 
 
+	def save_all_data(self,iteration,start_iter):
+
+		if iteration<self.N_iterations+start_iter:
+
+			#### check point DNN parameters
+			if self.comm.Get_rank()==0 and self.save_data:
+				self.check_point(iteration)
+
+
+			#### update DNN parameters
+			grads_max = self.update_NN_params(iteration)
+
+
+			##### store simulation data
+			if self.mode=='exact':		
+				phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.Eloc_params_dict_log['abs_psi_2'])
+			else:
+				mod_psi_2=np.exp(2.0*(self.MC_tool.log_mod_kets-self.MC_tool.log_psi_shift))
+				phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,mod_psi_2)
+
+			# print(phase_hist)
+			# exit()
+
+			if self.comm.Get_rank()==0 and self.save_data:
+				#if not(self.load_data and (start_iter==iteration)):
+				self.save_sim_data(iteration,grads_max,self.r2,phase_hist)
+
+
+	def repeat_iteration(self,iteration,prev_it_data, go_back_iters=0):
+
+		repeat=False
+		if iteration>self.start_iter+go_back_iters and self.mode=='MC':
+
+			_b1=prev_it_data[0]-self.Eloc_mean_g.real
+			_b2=np.abs(self.Eloc_mean_g.imag)
+			_b3=6E0*prev_it_data[2] - self.E_MC_std_g 
+			
+			if (_b2 > 5.0/np.sqrt(self.N_MC_points) and self.Eloc_mean_g.real < 0.0) or (_b3 < 0 and self.Eloc_mean_g.real < 0.0): 
+
+				mssg="!!!  restarting iteration {0:d}: dE={1:0.6f}, {0:d}: dE_std={2:0.6f}, E_imag={3:0.10f}  !!!\n".format(iteration, _b1, _b3, _b2)
+				if self.comm.Get_rank()==0:
+					print(mssg)
+				self.logfile.write(mssg)
+				
+				# load data
+				self._load_data(iteration-1-go_back_iters, truncate_files=False)
+				iteration=iteration-go_back_iters
+
+				# decrease learning rate
+				# self.opt_log.step_size*=0.95
+				# self.opt_phase.step_size*=0.95
+				
+				# if self.opt_log.opt=='RK':
+				# 	self.opt_log.Runge_Kutta.step_size*=0.95
+				
+				# if self.opt_phase.opt=='RK':
+				# 	self.opt_phase.Runge_Kutta.step_size*=0.95
+
+				repeat=True
+		
+		return repeat, iteration
+
 
 	def train(self, start_iter=0):
 
@@ -756,7 +850,7 @@ class VMC(object):
 
 			##### evaluate model
 			self.get_training_data(iteration,)
-			#self.get_Stot_data(self.DNN.params)
+
 
 			#####
 			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}, E_imag={2:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g, self.Eloc_mean_g.imag, )
@@ -776,68 +870,15 @@ class VMC(object):
 			#exit()
 
 
-			'''
-			##### check energy and undo update and restart sampling: (1.05*, max_value=1E-1) and 0.5 for reduction
-			if iteration>0 and self.mode=='MC': 
-				_b1=prev_it_data[0] - self.Eloc_mean_g.real
-				_b2=np.abs(self.Eloc_mean_g.imag)
-				_b3=1E1*prev_it_data[2] - self.E_MC_std_g 
-				
-				if _b1<-1.0 or _b2 < -0.1 or _b3 < 0: 
-					# file_name='/NN_params/NNparams'+'--iter_{0:05d}--'.format(iteration-1) #+ self.file_name
-					# with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-					# 	self.DNN.params,self.DNN.apply_fun_args,_ = pickle.load(handle)
-					# 	self.DNN.apply_fun_args_dyn=self.DNN.apply_fun_args
-				
-					# revert DNN params update; 
-					self.DNN.params=self.DNN.NN_Tree.unravel(self.DNN.NN_Tree.ravel(self.DNN.params)+self.DNN.params_update)
 
-					mssg="restarting iteration: dE={0:0.6f}, dE_std={1:0.6f}, dnorm={2:0.10f},\n".format(_b1, _b3, _b4)
+			##### check energy variance, undo update and restart sampling back 10 iterations
+			# repeat, iteration = self.repeat_iteration(iteration,prev_it_data,go_back_iters=0)
+			# if repeat:
+			# 	continue
 
-					if self.comm.Get_rank()==0:
-						print(mssg)
-					self.logfile.write(mssg)
-
-					# decrease learning rate
-					self.learning_rates*=0.5
-
-					continue # restart sampling
-				else:
-
-					# increase learning rats
-					if np.max(self.learning_rates)<1E-1:
-						self.learning_rates*=1.1
-			'''
-
-
-
-			
 			
 			##### save data
-			if iteration<self.N_iterations+start_iter:
-
-				#### check point DNN parameters
-				if self.comm.Get_rank()==0 and self.save_data:
-					self.check_point(iteration)
-
-
-				#### update DNN parameters
-				grads_max = self.update_NN_params(iteration)
-
-
-				##### store simulation data
-				if self.mode=='exact':		
-					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.Eloc_params_dict_log['abs_psi_2'])
-				else:
-					mod_psi_2=np.exp(2.0*(self.MC_tool.log_mod_kets-self.MC_tool.log_psi_shift))
-					phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,mod_psi_2)
-
-				# print(phase_hist)
-				# exit()
-
-				if self.comm.Get_rank()==0 and self.save_data:
-					#if not(self.load_data and (start_iter==iteration)):
-					self.save_sim_data(iteration,grads_max,self.r2,phase_hist)
+			self.save_all_data(iteration,start_iter)
 
 
 			prss_time=time.time()-ti
@@ -1040,11 +1081,13 @@ class VMC(object):
 			self.DNN.params_phase_update*=0.0
 			r2_phase=0.0
 
-
+		#print(self.opt_phase.Runge_Kutta.step_size, self.opt_phase.step_size)
 
 		##### compute max gradients
 		grads_max=[np.max(np.abs(self.DNN.params_log_update)),np.max(np.abs(self.DNN.params_phase_update)),]
 		
+		#print('HERE', grads_max)
+		#exit()
 
 		# record gradients
 
