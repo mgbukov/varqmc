@@ -1,21 +1,24 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 6
+N_iterations: 500
 NN_dtype: real-decoupled # cpx #
-NN_shape_str: (36--12,36--24--12) 
+NN_shape_str: (36--12,36--24--12)  
 NN_type: DNN
-N_MC_chains: 1
-N_MC_points: 100000
-N_iterations: 5000
-batchnorm: false
-load_data: false
-minibatch_size: 100
-mode: MC
-grad_update_mode: normal #alternating # phase  #  log_mod
-TDVP_opt: 'svd' # 'inv' # 'cg' #
-alt_iter: 20  
+N_MC_chains: 2
 MC_thermal: true
-optimizer: NG
-save_data: true
+N_MC_points: 20000
+mode: MC # exact #   
+batchnorm: false
+minibatch_size: 2000
+grad_update_mode: normal # log_mod # phase #  alternating # 
+alt_iter: 20 # of iterations to keep each alternating update for  
+TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
+opt: (sgd,RK) # adam, sgd, RK
+step_size: (6E-3,5E-3) # initial step sizes
+cost: (SR,SR) # SR, energy
 seed: 0
+save_data: true
+load_data: false
 start_iter: 0
+
