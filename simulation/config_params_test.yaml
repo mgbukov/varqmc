@@ -7,8 +7,8 @@ NN_shape_str: (16--12,16--24--12)
 NN_type: DNN
 N_MC_chains: 2
 MC_thermal: true
-N_MC_points: 200 # 107 #
-mode: MC # exact #   
+N_MC_points: 200 #  107 #
+mode: MC # exact #  
 batchnorm: false
 minibatch_size: 2000
 grad_update_mode: normal # log_mod # phase #  alternating # 

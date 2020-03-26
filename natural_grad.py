@@ -212,16 +212,17 @@ class natural_gradient():
 		info=0
 
 		if self.TDVP_opt == 'cg':
-			nat_grad, info = cg(S,F,x0=nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol) # 
+			self.nat_grad[:], info = cg(S,F,x0=nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol) # 
 		
 		elif self.TDVP_opt == 'inv':
-			nat_grad=jnp.dot(jnp.linalg.inv(S), F).block_until_ready()._value
+			self.nat_grad[:]=jnp.dot(jnp.linalg.inv(S), F).block_until_ready()._value
 		
 		elif self.TDVP_opt == 'svd':
-			lmbda, V = np.linalg.eigh(S,)
-			nat_grad = np.dot(V ,  np.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2)), np.dot(V.T.conj(), F) ) )
+			lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
+			lmbda*=self.S_norm
+			self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2)), jnp.dot(V.T.conj(), F) ) )
 
-		return nat_grad, info
+		return info
 
 
 	def compute(self,NN_params,batch,Eloc_params_dict,):
@@ -262,7 +263,7 @@ class natural_gradient():
 		info=1
 		while info>0 and self.cg_maxiter<1E5:
 			
-			self.nat_grad[:], info = self._TDVP_solver(self.S_matrix,self.F_vector, self.nat_grad_guess)
+			info = self._TDVP_solver(self.S_matrix,self.F_vector, self.nat_grad_guess)
 				
 			# affects CG solver only
 			if info>0:
@@ -350,15 +351,11 @@ class Runge_Kutta_solver():
 			### RK step 1
 			self.k1[:]=-self.step_size*initial_grad
 			
-			#print(Eloc_params_dict['Eloc_mean'], self.step_size)
-			
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(params+self.k1)
 			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k2[:]=-self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 			self.dy[:]=0.5*self.k1 + 0.5*self.k2
-
-			#print(Eloc_params_dict['Eloc_mean'])
 
 			#######
 			### RK step 1
@@ -369,8 +366,6 @@ class Runge_Kutta_solver():
 			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k4[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
-			#print(Eloc_params_dict['Eloc_mean'])
-
 			# first half-step solution difference
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
 			
@@ -379,8 +374,6 @@ class Runge_Kutta_solver():
 			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k5[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
-			#print(Eloc_params_dict['Eloc_mean'])
-
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(params+self.dy_star+self.k5)
 			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
@@ -388,9 +381,6 @@ class Runge_Kutta_solver():
 
 			# second half-step solution difference
 			self.dy_star[:]+=0.5*self.k5 + 0.5*self.k6
-
-
-			#print(Eloc_params_dict['Eloc_mean'])
 
 			#######
 			

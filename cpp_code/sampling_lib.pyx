@@ -257,6 +257,44 @@ def c_offdiag_sum(
 
 ###########################
 
+ctypedef np.uint16_t (*nb_func_type)(const int,const int,const int) nogil;
+
+
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_0(int x, int y, int L) nogil:
+    return ((x+1)%L+L)%L+L*y
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_1(int x, int y, int L) nogil:
+    return ((x-1)%L+L)%L+L*y
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_2(int x, int y, int L) nogil:
+    return x+L*(((y+1)%L+L)%L)
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_3(int x, int y, int L) nogil:
+    return x+L*(((y-1)%L+L)%L)
+
+
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_4(int x, int y, int L) nogil:
+    return ((x+1)%L+L)%L+L*(((y+1)%L+L)%L)
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_5(int x, int y, int L) nogil:
+    return ((x-1)%L+L)%L+L*(((y+1)%L+L)%L)
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_6(int x, int y, int L) nogil:
+    return ((x+1)%L+L)%L+L*(((y-1)%L+L)%L)
+
+@cython.boundscheck(False)
+cdef np.uint16_t neighbors_func_7(int x, int y, int L) nogil:
+    return ((x-1)%L+L)%L+L*(((y-1)%L+L)%L)
+
 
 
 
@@ -289,6 +327,7 @@ cdef class Neural_Net:
 
    
     cdef vector[double] log_psi_s, log_psi_t
+    cdef vector[nb_func_type] neighbors
     
     cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
@@ -302,7 +341,7 @@ cdef class Neural_Net:
 
 
     cdef uniform_real_distribution[double] random_float
-    cdef uniform_int_distribution[int] random_int, rand_int_ordinal
+    cdef uniform_int_distribution[int] random_int, random_int8, rand_int_ordinal
     cdef vector[mt19937] RNGs # hold a C++ instance
         
 
@@ -552,7 +591,23 @@ cdef class Neural_Net:
 
         self.random_float = uniform_real_distribution[double](0.0,1.0)
         self.random_int = uniform_int_distribution[int](0,self.N_sites-1)
+        self.random_int8 = uniform_int_distribution[int](0,7) # 8 = 4 nn + 4nnn on square lattice
         self.rand_int_ordinal = uniform_int_distribution[int](0,choose_n_k(self.N_sites, self.N_sites//2))
+
+        
+        self.neighbors.resize(8)
+
+        self.neighbors[0]=neighbors_func_0
+        self.neighbors[1]=neighbors_func_1
+        self.neighbors[2]=neighbors_func_2
+        self.neighbors[3]=neighbors_func_3
+        self.neighbors[4]=neighbors_func_4
+        self.neighbors[5]=neighbors_func_5
+        self.neighbors[6]=neighbors_func_6
+        self.neighbors[7]=neighbors_func_7
+
+
+
 
 
     def _init_MC_data(self, s0_vec=None, sf_vec=None, ):
@@ -804,6 +859,7 @@ cdef class Neural_Net:
 
         return N_accepted, np.sum(N_MC_proposals);
    
+
     
     @cython.boundscheck(False)
     cdef int _MC_core(self, int N_MC_points,
@@ -828,13 +884,15 @@ cdef class Neural_Net:
         cdef int i=0, k=0; # counters
         cdef int N_accepted=0;
         cdef int thread_id = threadid();
+
+        cdef int x,y;
         
 
         cdef double mod_psi_s=0.0, mod_psi_t=0.0;
-        cdef double eps; # acceptance random float
+        cdef double eps, delta; # acceptance random float
 
         cdef basis_type t;
-        cdef np.uint16_t _i,_j;
+        cdef np.uint16_t _i,_j,_k;
 
         
         # draw random initial state
@@ -884,9 +942,20 @@ cdef class Neural_Net:
             t=s;
             while(t==s):
                 _i = self.random_int(rng)
-                _j = self.random_int(rng)
+
+                # drwa random number to decide whethr to look for local or nonlocal update
+                delta = self.random_float(rng);
+                if delta>0.5: # local update
+                    x=_i%_L;
+                    y=_i//_L;
+                    
+                    _k=self.random_int8(rng)
+                    _j = self.neighbors[_k](x,y,_L)
+                else: # any update
+                    _j = self.random_int(rng)
                 
                 t = swap_bits(s,_i,_j);
+
             
 
             self.spin_config(self.N_sites,t,&spinstate_t[0]);
