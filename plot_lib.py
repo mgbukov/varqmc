@@ -40,6 +40,21 @@ def format_func(value, tick_number):
 		return r"${0}\pi$".format(N // 2)
 
 
+def _load_data(file_name,N_variables):
+
+	# preallocate lists
+	data=tuple([] for _ in range(N_variables))
+
+	with open(file_name, 'r') as f:
+		for j,row in enumerate(f):
+			for k, var in enumerate(row.strip().split(":"), ):
+				data[k].append(np.float64(var))
+
+	data_array=()
+	for var in data:
+		data_array+=(np.array(var), )
+
+	return data_array
 
 
 ####################################
@@ -190,25 +205,8 @@ def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
 	# energy data
 
 	file_name= load_dir + 'energy' + params_str + '.txt'
+	iter_step, Eave_real, Eave_imag, Evar, Estd = _load_data(file_name,N_variables)
 
-	# preallocate lists
-	Eave_real=[]
-	Eave_imag=[]
-	Estd=[]
-
-	with open(file_name, 'r') as f:
-		for j,row in enumerate(f):
-			row_list=row.strip().split(" : ")
-
-			Eave_real.append(float(row_list[1]))
-			Eave_imag.append(float(row_list[2]))
-			Estd.append(float(row_list[3]))
-
-
-	iter_step=np.array(iter_step)
-	Eave_real=np.array(Eave_real)
-	Eave_imag=np.array(Eave_imag)
-	Estd=np.array(Estd)
 
 
 	#####################
@@ -264,48 +262,30 @@ def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
 
 
 
-def plot_NG(load_dir, plotfile_dir, params_str,L,J2, save=True):
-
-	file_name= load_dir + 'opt_data' + params_str + '.txt'
 
 
-	# preallocate lists
-	iter_step=[]
-	NG_counter=[]
-	NG_RK_step_size=[]
-	NG_RK_time=[]
-	NG_delta=[]
-	NG_tol=[]
+def plot_delta(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
-	with open(file_name, 'r') as f:
-		for j,row in enumerate(f):
-			row_list=row.strip().split(" : ")
+	
+	N_variables=6
 
-			iter_step.append(int(row_list[0]))
-			NG_counter.append(float(row_list[1]))
-			NG_RK_step_size.append(float(row_list[2]))
-			NG_RK_time.append(float(row_list[3]))
-			NG_delta.append(float(row_list[4]))
-			NG_tol.append(float(row_list[5]))
+	file_name= load_dir + 'opt_data_log' + params_str + '.txt'
+	iter_step_log, delta_log, tol_log, counter_log, step_size_log, time_log = _load_data(file_name,N_variables)
 
 
-	iter_step=np.array(iter_step)
-	NG_counter=np.array(NG_counter)
-	NG_RK_step_size=np.array(NG_RK_step_size)
-	NG_RK_time=np.array(NG_RK_time)
-	NG_delta=np.array(NG_delta)
-	NG_tol=np.array(NG_tol)
+	file_name= load_dir + 'opt_data_phase' + params_str + '.txt'
+	iter_step_phase, delta_phase, tol_phase, counter_phase, step_size_phase, time_phase = _load_data(file_name,N_variables)
 
 
-
-	plt.plot(iter_step, NG_delta )
+	plt.plot(iter_step_log, delta_log, 'r', label='log net' )
+	plt.plot(iter_step_phase, delta_phase, 'b', label='phase net' )
 
 	plt.xlabel('iteration')
 	plt.ylabel('$\\delta_\\mathrm{SR}$')
 
 	plt.yscale('log')
 
-	#plt.legend()
+	plt.legend()
 	plt.grid()
 	plt.tight_layout()
 
@@ -325,50 +305,20 @@ def plot_NG(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
-	file_name= load_dir + 'loss' + params_str + '.txt'
 
+	N_variables=8
 
-	# preallocate lists
-	iter_step=[]
-	r2=[] 
-	S_norm=[] 
-	F_norm=[] 
-	F_log_norm=[] 
-	F_phase_norm=[] 
-	S_logcond=[] 
-	F_max=[]
-	alpha_max=[]
+	file_name= load_dir + 'loss_log' + params_str + '.txt'
+	iter_step_log, r2_log, max_grad_log, dE_log, curv_log, F_norm_log, S_norm_log, S_logcond_log = _load_data(file_name,N_variables)
 
-
-	with open(file_name, 'r') as f:
-		for j,row in enumerate(f):
-			row_list=row.strip().split(" : ")
-	
-			iter_step.append(float(row_list[0]))
-			r2.append(float(row_list[1])) 
-			S_norm.append(float(row_list[2])) 
-			F_norm.append(float(row_list[3]))
-			F_log_norm.append(float(row_list[4])) 
-			F_phase_norm.append(float(row_list[5]))
-			S_logcond.append(float(row_list[6]))
-			F_max.append(float(row_list[7]))
-			alpha_max.append(float(row_list[8]))
-
-
-	iter_step=np.array(iter_step)
-	r2=np.array(r2)
-	S_norm=np.array(S_norm)
-	F_norm=np.array(F_norm)
-	F_log_norm=np.array(F_log_norm)
-	F_phase_norm=np.array(F_phase_norm)
-	S_logcond=np.array(S_logcond)
-	F_max=np.array(F_max)
-	alpha_max=np.array(alpha_max)
+	file_name= load_dir + 'loss_phase' + params_str + '.txt'
+	iter_step_phase, r2_phase, max_grad_phase, dE_phase, F_norm_phase, S_norm_phase, S_logcond_phase = _load_data(file_name,N_variables)
 
 
 	### plot r2
 
-	plt.plot(iter_step, r2, '.r')
+	plt.plot(iter_step_log, r2_log, '.r', label='log net')
+	plt.plot(iter_step_phase, r2_phase, '.b', label='phase net')
 	plt.xlabel('iteration')
 	plt.ylabel('$r^2$')
 	plt.ylim(-0.01,1.01)
@@ -387,18 +337,37 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	### plot alpha
 
-	plt.plot(iter_step, alpha_max,'.b' )
+	plt.plot(iter_step_log, max_grad_log,'.r', label='log net' )
+	#plt.plot(iter_step_phase, max_grad_phase,'.b', label='phase net' )
 	plt.xlabel('iteration')
-	plt.ylabel('$\\mathrm{max}_k(\\alpha_k)$')
+	plt.ylabel('$\\mathrm{max}_k|\\alpha_k|$')
 	#plt.ylim(-0.01,1.01)
-	#plt.legend()
+	plt.legend()
 	
 	plt.grid()
 	plt.tight_layout()
 
 
 	if save:
-		plt.savefig(plotfile_dir + 'alpha_max.pdf')
+		plt.savefig(plotfile_dir + 'alpha_max_log.pdf')
+		plt.close()
+	else:
+		plt.show()
+
+
+	#plt.plot(iter_step_log, max_grad_log,'.r', label='log net' )
+	plt.plot(iter_step_phase, max_grad_phase,'.b', label='phase net' )
+	plt.xlabel('iteration')
+	plt.ylabel('$\\mathrm{max}_k|\\alpha_k|$')
+	#plt.ylim(-0.01,1.01)
+	plt.legend()
+	
+	plt.grid()
+	plt.tight_layout()
+
+
+	if save:
+		plt.savefig(plotfile_dir + 'alpha_max_phase.pdf')
 		plt.close()
 	else:
 		plt.show()
@@ -406,11 +375,12 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	### plot S norm
 
-	plt.plot(iter_step, S_norm, '.r', )
+	plt.plot(iter_step_log, S_norm_log, '.r', label='log net'  )
+	plt.plot(iter_step_phase, S_norm_phase,'.b', label='phase net' )
 	plt.xlabel('iteration')
 	plt.ylabel('$||S||$')
 	#plt.ylim(-0.01,1.01)
-	#plt.legend()
+	plt.legend()
 	
 	plt.grid()
 	plt.tight_layout()
@@ -425,11 +395,12 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	### plot S cont
 
-	plt.plot(iter_step, np.exp(S_logcond), '.b', )
+	plt.plot(iter_step_log, S_logcond_log, '.r', label='log net' )
+	plt.plot(iter_step_phase, S_logcond_phase,'.b', label='phase net' )
 	plt.xlabel('iteration')
-	plt.ylabel('$\\mathrm{cond}(S)$')
+	plt.ylabel('$\\log(\\mathrm{cond}(S))$')
 	#plt.ylim(-0.01,1.01)
-	#plt.legend()
+	plt.legend()
 	
 	plt.grid()
 	plt.tight_layout()
@@ -444,11 +415,10 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	### plot F vector
 
-	plt.plot(iter_step, F_log_norm, '.b', label='$||F^\\mathrm{log}||$')
-	plt.plot(iter_step, F_phase_norm, '.g', label='$||F^{\\phi}||$')
-	plt.plot(iter_step, F_norm, '.r', label='$||F||$', markersize=2.0)
+	plt.plot(iter_step_log, F_norm_log, '.r', label='log net')
+	plt.plot(iter_step_phase, F_norm_phase, '.b', label='phase net')
 	plt.xlabel('iteration')
-	#plt.ylabel('')
+	plt.ylabel('$||F_k||$')
 	#plt.ylim(-0.01,1.01)
 	plt.legend()
 	
@@ -463,20 +433,21 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 		plt.show()
 
 
-	### plot max_F
 
-	plt.plot(iter_step, F_max, '.c', label='$||\\mathrm{max}_k(F_k)$')
+	### plot dE vector
+	plt.plot(iter_step_log, curv_log, '.m', label='log', )
+	plt.plot(iter_step_phase, curv_phase, '.c', label='phase net', )
 	plt.xlabel('iteration')
-	plt.ylabel('$\\mathrm{max}_k(F_k)$')
+	plt.ylabel('$\\dot\\alpha^t S \\dor\\alpha$')
 	#plt.ylim(-0.01,1.01)
-	#plt.legend()
+	plt.legend()
 	
 	plt.grid()
 	plt.tight_layout()
 
 
 	if save:
-		plt.savefig(plotfile_dir + 'F_max.pdf')
+		plt.savefig(plotfile_dir + 'curvatures.pdf')
 		plt.close()
 	else:
 		plt.show()
@@ -484,38 +455,19 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 
 
+
+
 def plot_energy(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
+	if J2==0:
+		E_GS_dict={'L=4':-11.228483 ,'L=6':-24.43939}
+	else:
+		E_GS_dict={'L=4':-8.45792 ,'L=6':-18.13716}
+
+	N_variables=5
+
 	file_name= load_dir + 'energy' + params_str + '.txt'
-
-
-	if J2==0.0:
-		E_GS_dict={"L=4":-11.228483, "L=6":-24.43939}
-	elif J2==0.5:
-		E_GS_dict={"L=4":-8.45792,   "L=6":-18.13716}
-
-
-
-	# preallocate lists
-	iter_step=[]
-	Eave_real=[]
-	Eave_imag=[]
-	Estd=[]
-
-	with open(file_name, 'r') as f:
-		for j,row in enumerate(f):
-			row_list=row.strip().split(" : ")
-
-			iter_step.append(int(row_list[0]))
-			Eave_real.append(float(row_list[1]))
-			Eave_imag.append(float(row_list[2]))
-			Estd.append(float(row_list[3]))
-
-
-	iter_step=np.array(iter_step)
-	Eave_real=np.array(Eave_real)
-	Eave_imag=np.array(Eave_imag)
-	Estd=np.array(Estd)
+	iter_step, Eave_real, Eave_imag, Evar, Estd = _load_data(file_name,N_variables)
 
 
 	E_GS=E_GS_dict['L={0:d}'.format(L)]

@@ -78,10 +78,12 @@ class optimizer(object):
 
 			if self.cost=='SR':
 				compute_r2=self.NG.compute_r2_cost
+				NG=self.NG
 			else:
 				compute_r2=lambda x: 0.0
+				NG=None
 
-			self.Runge_Kutta=Runge_Kutta_solver(self.step_size, self.NN_Tree, self.compute_grad, reestimate_local_energy, compute_r2)
+			self.Runge_Kutta=Runge_Kutta_solver(self.step_size, self.NN_Tree, self.compute_grad, reestimate_local_energy, compute_r2, NG)
 			self.opt_state=None
 			self.opt_init=None
 			self.get_params=None
@@ -157,11 +159,11 @@ class optimizer(object):
 
 		# compute gradients
 		if self.opt=='RK':
-			grads=self.Runge_Kutta.run(NN_params,batch,params_dict,)
+			grads=self.Runge_Kutta.run(NN_params,batch,params_dict.copy(),)
 			NN_params_new=self.NN_Tree.unravel( self.NN_Tree.ravel(NN_params) + grads)
 
 			if self.cost=='SR':
-				self.NG.update_NG_params(grads,self.Runge_Kutta.step_size,self_time=self.Runge_Kutta.time)
+				self.NG.update_NG_params(grads,self_time=self.Runge_Kutta.time)
 				self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
 				
 				S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
@@ -170,15 +172,16 @@ class optimizer(object):
 				self.logfile.write(S_str)
 
 				r2=self.Runge_Kutta.r2
+				self.NG.dE=self.Runge_Kutta.dE*self.Runge_Kutta.step_size
 			else:
 				r2=0.0
 
 			self.time+=self.Runge_Kutta.step_size
 		
 		elif self.opt=='sgd':
-			grads=self.compute_grad(NN_params,batch,params_dict,)
+			grads=self.compute_grad(NN_params,batch,params_dict.copy(),)
 				
-			self.NG.update_NG_params(grads,self.step_size) # update NG params
+			self.NG.update_NG_params(grads,) # update NG params
 			self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
 
 			S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
@@ -186,7 +189,8 @@ class optimizer(object):
 				print(S_str)
 			self.logfile.write(S_str)
 
-			r2=self.NG.compute_r2_cost(params_dict)
+			r2=self.NG.compute_r2_cost(params_dict.copy())
+			self.NG.dE*=self.step_size
 
 			# adaptive step size
 			
@@ -200,7 +204,7 @@ class optimizer(object):
 
 			# print('step_size', self.step_size, max_grad, self.label)
 			
-			NN_params_new=self.NN_Tree.unravel( self.NN_Tree.ravel(NN_params) - self.step_size * grads )
+			NN_params_new=self.NN_Tree.unravel(self.NN_Tree.ravel(NN_params) - self.step_size*grads )
 			
 			self.time+=self.step_size
 

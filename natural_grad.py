@@ -33,6 +33,7 @@ class natural_gradient():
 		self.TDVP_opt = TDVP_opt # 'svd' # 'inv' # 'cg' #
 
 		self.dE=0.0
+		self.curvature=0.0
 		
 
 		self.debug_mode=True
@@ -280,37 +281,40 @@ class natural_gradient():
 
 		# normalize gradients
 		self.dE=2.0*np.dot(self.F_vector,self.nat_grad)
+		self.curvature=np.sqrt( np.dot(self.nat_grad, np.dot(self.S_matrix, self.nat_grad) ) )
 
-		# if not self.RK:
-		# 	self.nat_grad /= np.sqrt(0.5*self.dE)
-			
-		return self.nat_grad
+		if not self.RK:	
+			return self.nat_grad/self.curvature
+		else:
+			return self.nat_grad
+
+		#return self.nat_grad #/self.curvature
 		
 		
 
-	def update_NG_params(self,grad_guess,step_size,self_time=1.0):
+	def update_NG_params(self,grad_guess,self_time=1.0):
 
-		
 		if self.delta>self.tol:
 			self.delta *= np.exp(-0.075*self_time)
 		
 
 		self.nat_grad_guess[:]=grad_guess
-		self.dE*=step_size
-		
 		#self.iteration+=1
 
 
 class Runge_Kutta_solver():
 
-	def __init__(self,step_size, NN_Tree, return_grads, reestimate_local_energy, compute_r2):
+	def __init__(self,step_size, NN_Tree, return_grads, reestimate_local_energy, compute_r2, NG):
 
 		self.NN_Tree=NN_Tree
 		self.return_grads=return_grads
 
+		self.NG=NG
+
 		self.reestimate_local_energy=reestimate_local_energy
 		self.compute_r2=compute_r2
 		self.r2=0.0
+		self.dE=0.0
 
 		# RK params
 		self.step_size=step_size
@@ -321,8 +325,13 @@ class Runge_Kutta_solver():
 		self.counter=0
 		self.iteration=0
 			
+		self.S_matrix=np.zeros((NN_Tree.N_varl_params, NN_Tree.N_varl_params),dtype=np.float64)
+
 		self.dy=np.zeros(NN_Tree.N_varl_params,dtype=np.float64)
 		self.dy_star=np.zeros_like(self.dy)
+
+		self.init_grad=np.zeros_like(self.dy)
+		self.params=np.zeros_like(self.dy)
 
 		self.k1=np.zeros_like(self.dy)
 		self.k2=np.zeros_like(self.dy)
@@ -330,62 +339,74 @@ class Runge_Kutta_solver():
 		self.k4=np.zeros_like(self.dy)
 		self.k5=np.zeros_like(self.dy)
 		self.k6=np.zeros_like(self.dy)
-
+		
 
 
 	def run(self,NN_params,batch,Eloc_params_dict,):
 
 		# flatten weights
-		params=self.NN_Tree.ravel(NN_params,)
-		
-		max_param=jnp.max(jnp.abs(params)).block_until_ready()
-		#max_param=jnp.max(np.abs(params[:32]+1j*params[32:]))
+		self.params[:]=self.NN_Tree.ravel(NN_params,)
 
-		initial_grad=self.return_grads(NN_params,batch,Eloc_params_dict,)
+		#params_norm=jnp.max(jnp.abs(params)).block_until_ready()
+		params_norm=jnp.linalg.norm(self.params).block_until_ready()
+		
+		self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)
+		self.S_matrix[:,:]=self.NG.S_matrix
+
+		#initial_curvature=self.NG.curvature
 		self.r2=self.compute_r2(Eloc_params_dict)
+		self.dE=self.NG.dE
 		self.counter+=1
 
 		error_ratio=0.0
 		while error_ratio<1.0:
 
 			### RK step 1
-			self.k1[:]=-self.step_size*initial_grad
-			
+			self.k1[:]=-self.step_size*self.init_grad
+		
 			### RK step 2
-			NN_params_shifted=self.NN_Tree.unravel(params+self.k1)
-			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			NN_params_shifted=self.NN_Tree.unravel(self.params+self.k1)
+			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k2[:]=-self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
+
+			# full-step solution difference
 			self.dy[:]=0.5*self.k1 + 0.5*self.k2
+
 
 			#######
 			### RK step 1
-			self.k3[:]=-0.5*self.step_size*initial_grad # 0.5*k1
+			self.k3[:]=-0.5*self.step_size*self.init_grad # 0.5*k1
 			
 			### RK step 2
-			NN_params_shifted=self.NN_Tree.unravel(params+self.k3)
-			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			NN_params_shifted=self.NN_Tree.unravel(self.params+self.k3)
+			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k4[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# first half-step solution difference
 			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
-			
+		
+
 			### RK step 1
-			NN_params_shifted=self.NN_Tree.unravel(params+self.dy_star)
-			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star)
+			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k5[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			### RK step 2
-			NN_params_shifted=self.NN_Tree.unravel(params+self.dy_star+self.k5)
-			Eloc_params_dict = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star+self.k5)
+			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k6[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# second half-step solution difference
 			self.dy_star[:]+=0.5*self.k5 + 0.5*self.k6
 
+
+
 			#######
-			
-			norm=np.max(np.abs(self.dy-self.dy_star))/max_param
-			
+			norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) )/params_norm
+			#norm=np.max(np.dot(self.NG.S_matrix, self.dy-self.dy_star) )/params_norm
+			#norm=np.max(np.abs(self.dy-self.dy_star))/params_norm
+
+		
 			error_ratio=6.0*self.RK_tol/norm
 
 			self.step_size*=min(2.0,max(0.2,0.9*error_ratio**self.RK_inv_p))
@@ -397,7 +418,7 @@ class Runge_Kutta_solver():
 		self.iteration+=1
 		self.time+=self.step_size
 		
-		print('RK_steps={0:d}-step_size={1:0.15f}-time={2:0.4f}.\n'.format(self.counter, self.step_size, self.time,) )
+		print('RK_steps={0:d}-step_size={1:0.15f}-time={2:0.4f}-norm={3:0.14f}.\n'.format(self.counter, self.step_size, self.time, norm, ) )
 
 
 		return self.dy_star # - 1.0/6.0*(self.dy-self.dy_star)

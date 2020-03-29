@@ -328,6 +328,7 @@ cdef class Neural_Net:
    
     cdef vector[double] log_psi_s, log_psi_t
     cdef vector[nb_func_type] neighbors
+    cdef double prop_threshold
     
     cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
@@ -345,9 +346,11 @@ cdef class Neural_Net:
     cdef vector[mt19937] RNGs # hold a C++ instance
         
 
-    def __init__(self,comm,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
+    def __init__(self,comm,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0,prop_threshold=0.5):
 
         self.N_sites=_L*_L
+        self.prop_threshold=prop_threshold
+
 
         self.comm=comm
         self.MPI_rank=self.comm.Get_rank()
@@ -366,7 +369,7 @@ cdef class Neural_Net:
         self._init_MC_data()
 
 
-    def _init_NN(self,rng,shapes,NN_type,NN_dtype):
+    def _init_NN(self,rng,shapes,NN_type,NN_dtype,):
 
         self.NN_type=NN_type
         self.NN_dtype=NN_dtype
@@ -945,10 +948,10 @@ cdef class Neural_Net:
 
                 # drwa random number to decide whethr to look for local or nonlocal update
                 delta = self.random_float(rng);
-                if delta>0.5: # local update
+                if delta>self.prop_threshold: # local update
                     x=_i%_L;
                     y=_i//_L;
-                    
+
                     _k=self.random_int8(rng)
                     _j = self.neighbors[_k](x,y,_L)
                 else: # any update

@@ -160,6 +160,7 @@ class VMC(object):
 		self.start_iter=params_dict['start_iter']
 
 		### MC sampler
+		self.MC_prop_threshold=params_dict['MC_prop_threshold']
 		self.thermal=params_dict['MC_thermal']
 		self.N_MC_points=params_dict['N_MC_points']
 		self.N_MC_chains = params_dict['N_MC_chains'] # number of MC chains to run in parallel
@@ -357,7 +358,7 @@ class VMC(object):
 
 
 		### create Neural network
-		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed )
+		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 		
 
 		# jit functions
@@ -570,18 +571,18 @@ class VMC(object):
 
 		data_tuple=(iteration, r2[0], grads_max[0], )
 		if self.opt_log.cost=='SR':
-			data_tuple+= (self.opt_log.NG.dE, self.opt_log.NG.F_norm, self.opt_log.NG.S_norm, self.opt_log.NG.S_logcond, )
+			data_tuple+= (self.opt_log.NG.dE, self.opt_log.NG.curvature, self.opt_log.NG.F_norm, self.opt_log.NG.S_norm, self.opt_log.NG.S_logcond, )
 		else:
-			data_tuple+= (0.0, 0.0, 0.0, 0.0)
-		self.file_loss_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.10f}: {6:0.10f}\n".format(*data_tuple))
+			data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
+		self.file_loss_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple))
 		
 
 		data_tuple=(iteration, r2[1], grads_max[1], )
 		if self.opt_phase.cost=='SR':
-			data_tuple+= (self.opt_phase.NG.dE, self.opt_phase.NG.F_norm, self.opt_phase.NG.S_norm, self.opt_phase.NG.S_logcond, )
+			data_tuple+= (self.opt_phase.NG.dE, self.opt_phase.NG.curvature, self.opt_phase.NG.F_norm, self.opt_phase.NG.S_norm, self.opt_phase.NG.S_logcond, )
 		else:
-			data_tuple+= (0.0, 0.0, 0.0, 0.0)
-		self.file_loss_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.10f}: {6:0.10f}\n".format(*data_tuple))
+			data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
+		self.file_loss_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple))
 
 		
 		######################################################
@@ -608,7 +609,7 @@ class VMC(object):
 			data_opt=(self.opt_log.iteration,self.opt_log.step_size,self.opt_log.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_log.write("{0:d} : {1:14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
+		self.file_opt_data_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
 
 
 		if self.opt_phase.cost=='SR':
@@ -622,7 +623,7 @@ class VMC(object):
 			data_opt=(self.opt_phase.iteration,self.opt_phase.step_size,self.opt_phase.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_phase.write("{0:d} : {1:14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
+		self.file_opt_data_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
 
 
 		######################################################
