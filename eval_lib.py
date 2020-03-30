@@ -2,7 +2,7 @@ import sys,os
 import numpy as np 
 import pickle
 
-sys.path.append("..")
+#sys.path.append("..")
 
 from cpp_code import integer_to_spinstate, representative
 from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum
@@ -24,7 +24,7 @@ def phase_histpgram(phase_psi, n_bins=40):
 
 
 
-def extract_ED_signs(rep_spin_configs_ints,L,J2):
+def extract_ED_data(rep_spin_configs_ints,L,J2):
 
 	
 	rep_spin_configs_ints_uq, index, inv_index, count=np.unique(rep_spin_configs_ints, return_index=True, return_inverse=True, return_counts=True)
@@ -122,7 +122,7 @@ def extract_ED_signs(rep_spin_configs_ints,L,J2):
 	return log_psi_sample, sign_psi_sample, mult_sample, p_sample, sign_psi_sample_J2_0
 
 
-def MC_sample(load_dir,NN_params,N_MC_points=10,reps=False):
+def MC_sample(load_dir,params_log,N_MC_points=10,reps=False):
 
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
 	params['N_MC_points']=N_MC_points
@@ -130,7 +130,7 @@ def MC_sample(load_dir,NN_params,N_MC_points=10,reps=False):
 				
 
 	DNN_psi_MC=VMC(load_dir,params_dict=params,train=False)
-	DNN_psi_MC.DNN.update_params(NN_params)
+	DNN_psi_MC.DNN.params_log=params_log
 
 	acceptance_ratio_g = DNN_psi_MC.MC_tool.sample(DNN_psi_MC.DNN)
 	print('\nacc ratio: {0:0.8f}.\n'.format(acceptance_ratio_g[0]))
@@ -159,27 +159,64 @@ def compute_reps(spin_configs_ints, L):
 
 
 
-def evaluate_DNN(load_dir,NN_params, spin_configs_ints, log_psi_shift=0.0,):
+def evaluate_DNN(load_dir,params_log, params_phase, spin_configs_ints, log_psi_shift=0.0,):
 
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
 	params['N_MC_points']=spin_configs_ints.shape[0]
 	params['save_data']=False
 
 	DNN_psi=VMC(load_dir,params_dict=params,train=False)
-	DNN_psi.DNN.update_params(NN_params)
+	DNN_psi.DNN.params_log=params_log
+	DNN_psi.DNN.params_phase=params_phase
 
 
 	spinstates_ket=np.zeros((DNN_psi.N_MC_points*DNN_psi.MC_tool.N_features,), dtype=np.int8)
 	integer_to_spinstate(spin_configs_ints, spinstates_ket, DNN_psi.DNN.N_features, NN_type=DNN_psi.DNN.NN_type)
 
-	log_psi, phase_psi = DNN_psi.evaluate_NN(NN_params, spinstates_ket.reshape(DNN_psi.N_MC_points*DNN_psi.MC_tool.N_symm,DNN_psi.MC_tool.N_sites), DNN_psi.DNN.apply_fun_args)
+	log_psi = DNN_psi.DNN.evaluate_log(params_log, spinstates_ket.reshape(DNN_psi.N_MC_points*DNN_psi.MC_tool.N_symm,DNN_psi.MC_tool.N_sites), )
+	phase_psi = DNN_psi.DNN.evaluate_phase(params_phase, spinstates_ket.reshape(DNN_psi.N_MC_points*DNN_psi.MC_tool.N_symm,DNN_psi.MC_tool.N_sites), )
 
 
 	return log_psi._value - log_psi_shift,   phase_psi._value
 
 
+def evaluate_sample(load_dir,params_log, params_phase,ints_ket,log_psi,phase_psi,log_psi_shift=0.0,):
 
-def compute_Eloc(load_dir,NN_params,ints_ket,log_psi,phase_psi,log_psi_shift=0.0,):
+	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
+	params['N_MC_points']=log_psi.shape[0]
+	params['save_data']=False
+
+
+	DNN_psi=VMC(load_dir,params_dict=params,train=False)
+	DNN_psi.DNN.params_log=params_log
+	DNN_psi.DNN.params_phase=params_phase
+
+	#DNN_psi.E_estimator.get_exact_kets()
+
+
+	phase_psi=np.array(phase_psi)
+	log_psi=np.array(log_psi)
+
+
+	DNN_psi.E_estimator.compute_s_primes(ints_ket,)
+
+
+	log_psi_bras = DNN_psi.E_estimator.evalute_s_primes(DNN_psi.DNN.evaluate_log,params_log,)
+	log_psi_bras-=log_psi_shift
+	
+
+	psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
+	print(psi_str)
+	
+
+	phase_psi_bras = DNN_psi.E_estimator.evalute_s_primes(DNN_psi.DNN.evaluate_phase,params_phase,)
+
+
+	return log_psi, phase_psi,  phase_psi_bras, log_psi_bras
+
+
+
+def compute_Eloc(load_dir,params_log, params_phase,ints_ket,log_psi,phase_psi,log_psi_shift=0.0,):
 
 	# ints_ket=np.array([ints_ket[0]])
 	# log_psi=np.array(log_psi[0])
@@ -192,7 +229,8 @@ def compute_Eloc(load_dir,NN_params,ints_ket,log_psi,phase_psi,log_psi_shift=0.0
 
 
 	DNN_psi=VMC(load_dir,params_dict=params,train=False)
-	DNN_psi.DNN.update_params(NN_params)
+	DNN_psi.DNN.params_log=params_log
+	DNN_psi.DNN.params_phase=params_phase
 
 	#DNN_psi.E_estimator.get_exact_kets()
 
@@ -201,7 +239,7 @@ def compute_Eloc(load_dir,NN_params,ints_ket,log_psi,phase_psi,log_psi_shift=0.0
 	log_psi=np.array(log_psi)
 
 
-	log_psi_bras, phase_psi_bras = DNN_psi.E_estimator.compute_local_energy(DNN_psi.evaluate_NN,DNN_psi.DNN,DNN_psi.DNN.params,ints_ket,log_psi,phase_psi,log_psi_shift,DNN_psi.minibatch_size)
+	DNN_psi.E_estimator.compute_local_energy(ints_ket, log_psi, phase_psi, log_psi_shift, )
 
 	return DNN_psi.E_estimator.Eloc_real, DNN_psi.E_estimator.Eloc_imag
 
@@ -278,7 +316,7 @@ def compute_Eloc_ED(load_dir,ints_ket,log_kets,phase_kets,L,J2,):
 	# evaluate values of s' configs
 	_ints_bra_rep_complete=compute_reps(_ints_bra_rep[:nn],L) # contains Z2 symmetry
 
-	log_psi_bras, sign_psi_bras, mult_bras, p_bras, sign_psi_bras_J2_0 = extract_ED_signs(_ints_bra_rep_complete,L,J2)
+	log_psi_bras, sign_psi_bras, mult_bras, p_bras, sign_psi_bras_J2_0 = extract_ED_data(_ints_bra_rep_complete,L,J2)
 	phase_psi_bras=np.pi*0.5*(sign_psi_bras+1.0)
 	phase_psi_bras_J2_0=np.pi*0.5*(sign_psi_bras_J2_0+1.0)
 

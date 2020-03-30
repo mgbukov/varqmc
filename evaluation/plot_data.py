@@ -38,6 +38,7 @@ save=True #False #
 
 
 
+iteration=386 # 499
 L=6
 J2=0.5
 opt='sgd_RK'
@@ -45,10 +46,10 @@ cost='SR_SR'
 mode='MC' # 'exact' #
 NN_dtype='real-decoupled'
 NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-N_MC_points=10000 # 107 #
-N_prss=260 # 
+N_MC_points=10000 # 107 # 
+N_prss=260 # 1 # 
 NMCchains=1 # 
-sys_time= '2020_03_26-15_29_49' 
+sys_time= '2020_03_29-07_36_53' 
 
 
 
@@ -56,7 +57,7 @@ sys_time= '2020_03_26-15_29_49'
 
 
 data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
-load_dir='data/' + data_name  + 'data_files/'
+load_dir='data/' + data_name  
 data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 #params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
 params_str=''
@@ -70,6 +71,13 @@ if not os.path.exists(plotfile_dir):
 
 
 ################
+
+
+plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=1000, save=save)
+
+
+
+load_dir+= 'data_files/'
 
 plot_delta(load_dir, plotfile_dir, params_str, L, J2, save=save)
 

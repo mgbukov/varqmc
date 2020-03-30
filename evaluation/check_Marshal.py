@@ -30,7 +30,7 @@ plt.tick_params(labelsize=20)
 
 ################
 
-from aux import *
+from eval_lib import *
 
 sys.path.append("..")
 
@@ -55,18 +55,18 @@ import yaml
 # sys_time='2020_03_15-16_39_47'
 
 
-n=-1
-iteration=37+n+1 # last line with saved E-data
-L=6
-J2=0.5
-opt='NG'
-mode='MC'
-NN_dtype='real-decoupled'
-NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-N_MC_points=100000
-N_prss=260
-NMCchains=1
-sys_time= '2020_03_15-19_12_08'
+# n=-1
+# iteration=37+n+1 # last line with saved E-data
+# L=6
+# J2=0.5
+# opt='NG'
+# mode='MC'
+# NN_dtype='real-decoupled'
+# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
+# N_MC_points=100000
+# N_prss=260
+# NMCchains=1
+# sys_time= '2020_03_15-19_12_08'
 
 
 # n=-1
@@ -97,6 +97,21 @@ sys_time= '2020_03_15-19_12_08'
 # sys_time= '2020_03_18-15_52_01' 
 
 
+n=-1
+iteration=500+n+1 # last line with saved E-data
+L=4
+J2=0.5
+opt='sgd_RK'
+cost='SR_SR'
+mode='exact' #'MC' # 
+NN_dtype='real-decoupled'
+NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
+N_MC_points=107 # 10000 # 
+N_prss=1 # 260 # 
+NMCchains=1 # 
+sys_time= '2020_03_29-17_15_46' 
+
+
 
 
 
@@ -104,11 +119,11 @@ sys_time= '2020_03_15-19_12_08'
 #### load debug data
 
 
-data_name = sys_time + '--{0:s}-L_{1:d}-{2:s}/'.format(opt,L,mode)
-load_dir='data/' + data_name 
+data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
+load_dir='data/' + data_name  #+ 'data_files/'
 data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
-params_str='model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
-#params_str=''
+#params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
+params_str=''
 
 # with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str + '.pkl', 'rb') as handle:
 # 	int_kets, = pickle.load(handle)
@@ -123,13 +138,12 @@ params_str='model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s
 
 ######################
 
-file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
+#file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
+file_name='NNparams'+'--iter_{0:05d}'.format(iteration)
 
 with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
-	NN_params, apply_fun_args, log_psi_shift = pickle.load(handle)
+	params_log, params_phase, apply_fun_args_log, apply_fun_args_phase, log_psi_shift = pickle.load(handle)
 
-Tree=NN_Tree(NN_params)
-NN_params_ravelled=Tree.ravel(NN_params)
 
 
 
@@ -148,10 +162,10 @@ if L==4:
 ############
 
 
-N_MC_points=1000 # MC points
+N_MC_points=100 # MC points
 
-with jax.disable_jit():
-	MC_tool = MC_sample(load_dir, NN_params,N_MC_points=N_MC_points, reps=True)
+#with jax.disable_jit():
+MC_tool = MC_sample(load_dir, params_log, N_MC_points=N_MC_points, reps=True)
 
 
 #rep_spin_configs_ints=compute_reps(int_kets[n,:],L)
@@ -166,10 +180,10 @@ rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
 
 
 
-log_psi, phase_psi = evaluate_DNN(load_dir,NN_params, rep_spin_configs_ints, )
+log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )
 sign_psi = np.exp(-1j*phase_psi)
 
-Eloc_Re, Eloc_Im=compute_Eloc(load_dir,NN_params,rep_spin_configs_ints,log_psi,phase_psi,)
+Eloc_Re, Eloc_Im=compute_Eloc(load_dir,params_log, params_phase,rep_spin_configs_ints,log_psi,phase_psi,)
 
 # local E for exact states
 print('DNN:', Eloc_Re.mean(), Eloc_Im.mean())
@@ -179,7 +193,7 @@ print('DNN:', Eloc_Re.mean(), Eloc_Im.mean())
 
 
 # get phases
-log_psi_ED, sign_psi_ED, mult_ED, p_ED, sign_psi_ED_J2_0 = extract_ED_signs(rep_spin_configs_ints,L,J2)
+log_psi_ED, sign_psi_ED, mult_ED, p_ED, sign_psi_ED_J2_0 = extract_ED_data(rep_spin_configs_ints,L,J2)
 phase_psi_ED = np.pi*0.5*(sign_psi_ED+1.0)
 phase_psi_ED_J2_0 = np.pi*0.5*(sign_psi_ED_J2_0+1.0)
 

@@ -3,6 +3,9 @@ import numpy as np
 import pickle
 import csv
 
+from eval_lib import *
+from cpp_code import integer_to_spinstate
+
 import matplotlib
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
@@ -40,6 +43,7 @@ def format_func(value, tick_number):
 		return r"${0}\pi$".format(N // 2)
 
 
+
 def _load_data(file_name,N_variables):
 
 	# preallocate lists
@@ -58,6 +62,77 @@ def _load_data(file_name,N_variables):
 
 
 ####################################
+
+
+def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=1000, save=True):
+
+	file_name= 'NNparams--iter_{0:05d}'.format(iteration) 
+
+
+	with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
+		params_log, params_phase, apply_fun_args_log, apply_fun_args_phase, log_psi_shift = pickle.load(handle)
+
+	# sample points
+	MC_tool = MC_sample(load_dir, params_log, N_MC_points=N_MC_points, reps=True)
+
+
+	rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
+
+	log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )
+	sign_psi = np.exp(-1j*phase_psi)
+
+
+	log_psi, phase_psi,  phase_psi_bras, log_psi_bras = evaluate_sample(load_dir,params_log, params_phase, rep_spin_configs_ints, log_psi,phase_psi,log_psi_shift=0.0)
+
+	# wrap phases
+	phase_psi = (phase_psi+np.pi)%(2*np.pi) - np.pi
+	phase_psi_bras = (phase_psi_bras+np.pi)%(2*np.pi) - np.pi
+
+	# shift phases
+	ind=np.argmax(log_psi)
+	a=phase_psi[ind]
+	phase_psi=phase_psi-a
+	phase_psi_bras=phase_psi_bras-a
+
+
+	fig, ax = plt.subplots(nrows=1, ncols=2, sharey=True)
+
+	xlim=[-2*np.pi,2*np.pi]
+	ylim=[-10.0,0.0]
+
+	ax[0].plot(phase_psi,log_psi,'.b',markersize=0.5)
+	ax[0].set_xlim(xlim)
+	ax[0].set_ylim(ylim)
+	ax[0].set_xlabel('$\\varphi_s$')
+	ax[0].set_ylabel('$\\log|\\psi_s|$')
+	ax[0].set_title('$s$-configs')
+	ax[0].xaxis.set_major_locator(plt.MultipleLocator(np.pi))
+	ax[0].xaxis.set_major_formatter(plt.FuncFormatter(format_func))
+	ax[0].grid(color='k', linestyle='-', linewidth=0.1)
+	ax[0].xaxis.set_ticks_position('both')
+	ax[0].yaxis.set_ticks_position('both')
+
+	ax[1].plot(phase_psi_bras,log_psi_bras,'.r',markersize=0.5)
+	ax[1].set_xlim(xlim)
+	ax[1].set_ylim(ylim)
+	ax[1].set_xlabel('$\\varphi_s$')
+	ax[1].set_title("$s'$-configs")
+	ax[1].xaxis.set_major_locator(plt.MultipleLocator(np.pi))
+	ax[1].xaxis.set_major_formatter(plt.FuncFormatter(format_func))
+	ax[1].grid(color='k', linestyle='-', linewidth=0.1)
+	ax[1].xaxis.set_ticks_position('both')
+	ax[1].yaxis.set_ticks_position('both')
+
+	plt.tight_layout()
+
+	if save:
+		plt.savefig(plotfile_dir + 'configs--iter_{0:05d}.png'.format(iteration))
+		plt.close()
+	else:
+		plt.show()
+
+
+
 
 
 def plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=True):
@@ -312,7 +387,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 	iter_step_log, r2_log, max_grad_log, dE_log, curv_log, F_norm_log, S_norm_log, S_logcond_log = _load_data(file_name,N_variables)
 
 	file_name= load_dir + 'loss_phase' + params_str + '.txt'
-	iter_step_phase, r2_phase, max_grad_phase, dE_phase, F_norm_phase, S_norm_phase, S_logcond_phase = _load_data(file_name,N_variables)
+	iter_step_phase, r2_phase, max_grad_phase, dE_phase, curv_phase, F_norm_phase, S_norm_phase, S_logcond_phase = _load_data(file_name,N_variables)
 
 
 	### plot r2
@@ -322,7 +397,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 	plt.xlabel('iteration')
 	plt.ylabel('$r^2$')
 	plt.ylim(-0.01,1.01)
-	#plt.legend()
+	plt.legend()
 	
 	plt.grid()
 	plt.tight_layout()
@@ -435,10 +510,10 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 
 	### plot dE vector
-	plt.plot(iter_step_log, curv_log, '.m', label='log', )
-	plt.plot(iter_step_phase, curv_phase, '.c', label='phase net', )
+	plt.plot(iter_step_log, curv_log, '.r', label='log', )
+	plt.plot(iter_step_phase, curv_phase, '.b', label='phase net', )
 	plt.xlabel('iteration')
-	plt.ylabel('$\\dot\\alpha^t S \\dor\\alpha$')
+	plt.ylabel('$\\dot\\alpha^t S \\dot\\alpha$')
 	#plt.ylim(-0.01,1.01)
 	plt.legend()
 	

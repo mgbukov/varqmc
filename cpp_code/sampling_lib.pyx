@@ -400,7 +400,7 @@ cdef class Neural_Net:
                 NN_arch_phase = {
                                         'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
                                         'nonlin_1': elementwise(logcosh),
-                                        'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=5E-2, init_value_b=5E-2), #init_value_W=5E-1, init_value_b=5E-1
+                                        'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=1E-2, init_value_b=1E-2), #init_value_W=5E-1, init_value_b=5E-1
                                         'nonlin_2': elementwise(logcosh),
                                         'reg': Phase_arg((shape_last_layer_phase[1],)),
                                     }
@@ -752,8 +752,9 @@ cdef class Neural_Net:
 
 
     @cython.boundscheck(False)
-    def update_params(self,params):
-        self.params=params
+    def update_params(self,params_log,params_phase):
+        self.params_log=params_log
+        self.params_phase=params_phase
 
 
 
