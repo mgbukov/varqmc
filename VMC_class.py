@@ -309,7 +309,8 @@ class VMC(object):
 
 
 		# truncate remaining files
-		if truncate_files:
+		self.comm.Barrier()
+		if truncate_files and self.comm.Get_rank()==0:
 			truncate_file(self.file_MC_data.name, start_iter)
 			truncate_file(self.file_opt_data_log.name, start_iter)
 			truncate_file(self.file_opt_data_phase.name, start_iter)
@@ -318,7 +319,7 @@ class VMC(object):
 			truncate_file(self.file_loss_log.name, start_iter)
 			truncate_file(self.file_loss_phase.name, start_iter)
 			truncate_file(self.file_phase_hist.name, start_iter)
-	
+		self.comm.Barrier()
 		#####
 		assert(int(it_MC)+1==self.opt_log.iteration)
 		assert(int(it_MC)+1==self.opt_phase.iteration)

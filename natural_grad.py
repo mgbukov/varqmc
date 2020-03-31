@@ -412,11 +412,6 @@ class Runge_Kutta_solver():
 			#######
 			if self.NG is not None:
 				norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) )/params_norm
-
-				print(np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) ), params_norm)
-				print(norm)
-				#exit()
-
 				#norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix/S_norm, self.dy-self.dy_star) ) )/params_norm
 				#norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
 			else:
@@ -427,15 +422,7 @@ class Runge_Kutta_solver():
 		
 			error_ratio=6.0*self.RK_tol/norm
 
-			print(self.step_size)
-
 			self.step_size*=min(2.0,max(0.2,0.9*error_ratio**self.RK_inv_p))
-
-			print(self.step_size)
-
-			print(np.max(np.abs(self.dy_star)))
-
-			exit()
 			
 			self.counter+=4 # five gradient calculations
 
