@@ -375,18 +375,15 @@ class VMC(object):
 	def _create_optimizer(self):
 
 		# log net
-		if self.opt[0]=='RK':
-			raise NotImplementedError("not implemented")
-
 		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN.NN_Tree_log, label='log',  step_size=self.step_sizes[0], )
 		self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params_log, self.n_iter)
-		self.opt_log.define_grad_func(self.DNN.evaluate_log, TDVP_opt=self.TDVP_opt[0],  )
+		self.opt_log.define_grad_func(self.DNN.evaluate_log, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
 		self.opt_log.init_opt_state(self.DNN.params_log)
 		
 		# phase net
 		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN.NN_Tree_phase, label='phase', step_size=self.step_sizes[1], )
 		self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params_phase, self.n_iter)
-		self.opt_phase.define_grad_func(self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy )
+		self.opt_phase.define_grad_func(self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy_phase )
 		self.opt_phase.init_opt_state(self.DNN.params_phase)
 		
 
@@ -784,7 +781,7 @@ class VMC(object):
 			_b2=np.abs(self.Eloc_mean_g.imag)
 			_b3=6E0*prev_it_data[2] - self.E_MC_std_g 
 			
-			if (_b2 > 5.0/np.sqrt(self.N_MC_points) and self.Eloc_mean_g.real < 0.0) or (_b3 < 0 and self.Eloc_mean_g.real < 0.0): 
+			if (_b2 > 5.0/np.sqrt(self.N_MC_points) and prev_it_data[0] < 0.0) or (_b3 < 0 and prev_it_data[0] < 0.0): 
 
 				mssg="!!!  restarting iteration {0:d}: dE={1:0.6f}, {0:d}: dE_std={2:0.6f}, E_imag={3:0.10f}  !!!\n".format(iteration, _b1, _b3, _b2)
 				if self.comm.Get_rank()==0:
@@ -792,6 +789,7 @@ class VMC(object):
 				self.logfile.write(mssg)
 				
 				# load data
+				self.comm.Barrier()
 				self._load_data(iteration-1-go_back_iters, truncate_files=False)
 				iteration=iteration-go_back_iters
 
@@ -872,10 +870,10 @@ class VMC(object):
 
 
 
-			##### check energy variance, undo update and restart sampling back 10 iterations
-			# repeat, iteration = self.repeat_iteration(iteration,prev_it_data,go_back_iters=0)
-			# if repeat:
-			# 	continue
+			#### check energy variance, undo update and restart sampling back 10 iterations
+			repeat, iteration = self.repeat_iteration(iteration,prev_it_data,go_back_iters=1)
+			if repeat:
+				continue
 
 			
 			##### save data
@@ -977,7 +975,58 @@ class VMC(object):
 			print(MC_str)
 
 	'''
+	
+	def reestimate_local_energy_log(self, NN_params_log, batch, params_dict,):
+
+		##### get spin configs #####
+		if self.mode=='exact':
+			self.MC_tool.exact(self.DNN, )
+
+		elif self.mode=='MC':
+			# sample
+			acceptance_ratio_g = self.MC_tool.sample(self.DNN, )
 			
+		# get log_psi statistics
+		# data_tuple=np.min(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.mean(self.MC_tool.log_mod_kets), np.std(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets)-np.min(self.MC_tool.log_mod_kets)
+		# psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(*data_tuple )
+		# self.logfile.write(psi_str)
+		# print(psi_str)
+
+
+
+		##### compute local energies #####
+		ti=time.time()
+		self.E_estimator.compute_local_energy(NN_params_log, self.DNN.params_phase, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift, verbose=False,)
+		
+		# Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
+		# self.logfile.write(Eloc_str)
+		# if self.comm.Get_rank()==0:
+		# 	print(Eloc_str)
+
+
+		if self.mode=='exact':
+			mod_kets=np.exp(self.MC_tool.log_mod_kets)
+			self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
+			abs_psi_2=self.count*np.abs(self.psi)**2
+
+			params_dict['abs_psi_2']=abs_psi_2
+			overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
+			params_dict['overlap']=overlap
+
+		
+		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(params_dict)
+
+		params_dict['E_diff']=E_diff_real
+		params_dict['Eloc_mean']=Eloc_mean_g
+		params_dict['Eloc_var']=Eloc_var_g
+
+			
+		##### total batch
+		batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)
+
+		return params_dict, batch
+	
+
 
 	def get_training_data(self,iteration,):
 
@@ -1011,7 +1060,7 @@ class VMC(object):
 
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
+		self.E_estimator.compute_local_energy(self.DNN.params_log, self.DNN.params_phase, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
 		
 		Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		self.logfile.write(Eloc_str)
@@ -1058,9 +1107,9 @@ class VMC(object):
 		ti=time.time()
 
 		if self.grad_update_mode=='normal':
-			self.DNN.params_log,   self.DNN.params_log_update[:]  , self.r2[0]   = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
 			self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
-
+			self.DNN.params_log,   self.DNN.params_log_update[:]  , self.r2[0]   = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
+			
 
 		elif self.grad_update_mode=='alternating':
 			if (iteration//self.alt_iters)%2==1: # phase grads

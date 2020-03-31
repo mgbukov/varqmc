@@ -91,20 +91,29 @@ def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=
 	# shift phases
 	ind=np.argmax(log_psi)
 	a=phase_psi[ind]
+	b=log_psi[ind]
+
 	phase_psi=phase_psi-a
 	phase_psi_bras=phase_psi_bras-a
 
+	log_psi=log_psi-b
+	log_psi_bras=log_psi_bras-b
+
+
+	#print(phase_psi)
+
+	############
 
 	fig, ax = plt.subplots(nrows=1, ncols=2, sharey=True)
 
 	xlim=[-2*np.pi,2*np.pi]
-	ylim=[-10.0,0.0]
+	ylim=[-20.0,1.0]
 
-	ax[0].plot(phase_psi,log_psi,'.b',markersize=0.5)
+	ax[0].plot(phase_psi,2.0*log_psi,'.b',markersize=0.5)
 	ax[0].set_xlim(xlim)
 	ax[0].set_ylim(ylim)
 	ax[0].set_xlabel('$\\varphi_s$')
-	ax[0].set_ylabel('$\\log|\\psi_s|$')
+	ax[0].set_ylabel('$2\\log|\\psi_s|$')
 	ax[0].set_title('$s$-configs')
 	ax[0].xaxis.set_major_locator(plt.MultipleLocator(np.pi))
 	ax[0].xaxis.set_major_formatter(plt.FuncFormatter(format_func))
@@ -112,7 +121,7 @@ def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=
 	ax[0].xaxis.set_ticks_position('both')
 	ax[0].yaxis.set_ticks_position('both')
 
-	ax[1].plot(phase_psi_bras,log_psi_bras,'.r',markersize=0.5)
+	ax[1].plot(phase_psi_bras,2.0*log_psi_bras,'.r',markersize=0.5)
 	ax[1].set_xlim(xlim)
 	ax[1].set_ylim(ylim)
 	ax[1].set_xlabel('$\\varphi_s$')
@@ -124,6 +133,7 @@ def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=
 	ax[1].yaxis.set_ticks_position('both')
 
 	plt.tight_layout()
+
 
 	if save:
 		plt.savefig(plotfile_dir + 'configs--iter_{0:05d}.png'.format(iteration))

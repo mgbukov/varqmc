@@ -41,7 +41,7 @@ class natural_gradient():
 		# CG params
 		self.check_on=False # toggles S-matrix checks
 		self.cg_maxiter=1E4
-		self.tol=1E-7 # CG tolerance
+		self.tol=1E-7 # 1E-7 # CG tolerance
 
 		self.step_size=1.0
 
@@ -223,6 +223,8 @@ class natural_gradient():
 			lmbda*=self.S_norm
 			self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2)), jnp.dot(V.T.conj(), F) ) )
 
+			#self.S_approx=jnp.dot(V ,  jnp.dot( np.diag((lmbda**2 + (self.tol)**2))/lmbda, V.T.conj() ) )
+			
 		return info
 
 
@@ -283,8 +285,9 @@ class natural_gradient():
 		self.dE=2.0*np.dot(self.F_vector,self.nat_grad)
 		self.curvature=np.sqrt( np.dot(self.nat_grad, np.dot(self.S_matrix, self.nat_grad) ) )
 
+
 		if not self.RK:	
-			return self.nat_grad/self.curvature
+			return self.nat_grad#/self.curvature
 		else:
 			return self.nat_grad
 
@@ -351,11 +354,16 @@ class Runge_Kutta_solver():
 		params_norm=jnp.linalg.norm(self.params).block_until_ready()
 		
 		self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)
-		self.S_matrix[:,:]=self.NG.S_matrix
-
+		
 		#initial_curvature=self.NG.curvature
-		self.r2=self.compute_r2(Eloc_params_dict)
-		self.dE=self.NG.dE
+		if self.NG is not None:
+			self.S_matrix[:,:]=self.NG.S_matrix
+			#self.S_matrix[:,:]=self.NG.S_approx
+			#S_norm=self.NG.S_norm
+
+			self.r2=self.compute_r2(Eloc_params_dict)
+			self.dE=self.NG.dE*self.step_size
+
 		self.counter+=1
 
 		error_ratio=0.0
@@ -366,7 +374,7 @@ class Runge_Kutta_solver():
 		
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.k1)
-			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k2[:]=-self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# full-step solution difference
@@ -379,7 +387,7 @@ class Runge_Kutta_solver():
 			
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.k3)
-			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k4[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# first half-step solution difference
@@ -388,12 +396,12 @@ class Runge_Kutta_solver():
 
 			### RK step 1
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star)
-			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k5[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star+self.k5)
-			self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
 			self.k6[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# second half-step solution difference
@@ -402,14 +410,32 @@ class Runge_Kutta_solver():
 
 
 			#######
-			norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) )/params_norm
-			#norm=np.max(np.dot(self.NG.S_matrix, self.dy-self.dy_star) )/params_norm
-			#norm=np.max(np.abs(self.dy-self.dy_star))/params_norm
+			if self.NG is not None:
+				norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) )/params_norm
+
+				print(np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) ), params_norm)
+				print(norm)
+				#exit()
+
+				#norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix/S_norm, self.dy-self.dy_star) ) )/params_norm
+				#norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
+			else:
+				norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
+				#norm=np.max(np.dot(self.NG.S_matrix, self.dy-self.dy_star) )/params_norm
+				#norm=np.max(np.abs(self.dy-self.dy_star))/params_norm
 
 		
 			error_ratio=6.0*self.RK_tol/norm
 
+			print(self.step_size)
+
 			self.step_size*=min(2.0,max(0.2,0.9*error_ratio**self.RK_inv_p))
+
+			print(self.step_size)
+
+			print(np.max(np.abs(self.dy_star)))
+
+			exit()
 			
 			self.counter+=4 # five gradient calculations
 

@@ -38,18 +38,18 @@ save=True #False #
 
 
 
-iteration=386 # 499
-L=6
+iteration=499
+L=4
 J2=0.5
-opt='sgd_RK'
+opt='RK_RK'
 cost='SR_SR'
-mode='MC' # 'exact' #
+mode='exact' #'MC' # 
 NN_dtype='real-decoupled'
 NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-N_MC_points=10000 # 107 # 
-N_prss=260 # 1 # 
+N_MC_points=107 # 10000 # 
+N_prss=1 # 260 # 
 NMCchains=1 # 
-sys_time= '2020_03_29-07_36_53' 
+sys_time= '2020_03_30-19_27_11' 
 
 
 
@@ -64,7 +64,7 @@ params_str=''
 
 plotfile_dir = 'data/' + data_name  + 'plots/'
 
-if not os.path.exists(plotfile_dir):
+if os.path.exists(load_dir) and (not os.path.exists(plotfile_dir)):
 	os.makedirs(plotfile_dir)
 
 

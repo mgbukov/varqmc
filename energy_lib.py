@@ -266,7 +266,7 @@ class Energy_estimator():
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
 		
 
-	def reestimate_local_energy(self, NN_params_phase, batch, params_dict_phase):
+	def reestimate_local_energy_phase(self, NN_params_phase, batch, params_dict):
 
 
 		phase_kets = self.DNN.evaluate_phase(NN_params_phase, batch)
@@ -275,18 +275,18 @@ class Energy_estimator():
 
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras,)
 
-		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.process_local_energies(params_dict_phase)
+		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.process_local_energies(params_dict)
 
-		params_dict_phase['E_diff']=E_diff_imag
-		params_dict_phase['Eloc_mean']=Eloc_mean_g
-		params_dict_phase['Eloc_var']=Eloc_var_g
+		params_dict['E_diff']=E_diff_imag
+		params_dict['Eloc_mean']=Eloc_mean_g
+		params_dict['Eloc_var']=Eloc_var_g
 		
 
-		return params_dict_phase
+		return params_dict, batch
 
 
 
-	def compute_local_energy(self,ints_ket,log_kets,phase_kets,log_psi_shift,):
+	def compute_local_energy(self,params_log,params_phase,ints_ket,log_kets,phase_kets,log_psi_shift, verbose=True, ):
 		
 		self.compute_s_primes(ints_ket,)
 
@@ -295,18 +295,18 @@ class Energy_estimator():
 			self.logfile.write(unique_str)
 
 
-		log_psi_bras = self.evalute_s_primes(self.DNN.evaluate_log,self.DNN.params_log,)
+		log_psi_bras = self.evalute_s_primes(self.DNN.evaluate_log, params_log,)
 		log_psi_bras-=log_psi_shift
 		
 
 		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
 		if self.logfile!=None:
 			self.logfile.write(psi_str)
-		if self.comm.Get_rank()==0:
+		if self.comm.Get_rank()==0 and verbose:
 			print(psi_str)
 		
 
-		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,self.DNN.params_phase,)
+		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,params_phase,)
 
 		self.compute_Eloc(log_kets, phase_kets, log_psi_bras, phase_psi_bras,)
 

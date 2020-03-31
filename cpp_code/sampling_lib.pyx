@@ -394,6 +394,12 @@ cdef class Neural_Net:
                                         'layer_1': GeneralDense_cpx(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-2),  # 5E-2
                                         'nonlin_1': elementwise(poly_real),
                                         'reg': Regularization((shape_last_layer_log[1],)),
+
+                                        # 'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-1),  # 5E-2
+                                        # 'nonlin_1': elementwise(logcosh),
+                                        # 'layer_2': GeneralDense(shapes_log['layer_2'], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1),  # 5E-2
+                                        # 'nonlin_2': elementwise(logcosh),
+                                        # 'reg': Regularization((shape_last_layer_log[1],)),
                             }
 
 

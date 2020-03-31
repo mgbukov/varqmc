@@ -172,7 +172,7 @@ class optimizer(object):
 				self.logfile.write(S_str)
 
 				r2=self.Runge_Kutta.r2
-				self.NG.dE=self.Runge_Kutta.dE*self.Runge_Kutta.step_size
+				self.NG.dE=self.Runge_Kutta.dE
 			else:
 				r2=0.0
 
