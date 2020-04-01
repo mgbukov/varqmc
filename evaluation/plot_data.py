@@ -40,7 +40,7 @@ save=True #False #
 
 iteration=199
 L=4
-J2=0.0
+J2=0.5
 opt='RK_RK'
 cost='SR_SR'
 mode='exact' #'MC' # 
@@ -49,7 +49,7 @@ NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
 N_MC_points=107 # 10000 # 
 N_prss=1 # 260 # 
 NMCchains=1 # 
-sys_time= '2020_03_31-14_12_42' 
+sys_time= '2020_03_31-16_06_57' 
 
 
 

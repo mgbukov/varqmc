@@ -1108,6 +1108,7 @@ class VMC(object):
 		ti=time.time()
 
 		if self.grad_update_mode=='normal':
+			# order is important !!! (energy_lib stores log-values)
 			self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
 			self.DNN.params_log,   self.DNN.params_log_update[:]  , self.r2[0]   = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
 			
