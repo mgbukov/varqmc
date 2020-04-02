@@ -389,32 +389,44 @@ cdef class Neural_Net:
                 shape_last_layer_log  =shapes[0]['layer_2']
                 shape_last_layer_phase=shapes[1]['layer_2']
 
+                const_log=0.001
+                const_phase=0.001
+
 
                 NN_arch_log = {
                                         # 'layer_1': GeneralDense_cpx(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-2),  # 5E-2
                                         # 'nonlin_1': elementwise(poly_real),
                                         # 'reg': Regularization((shape_last_layer_log[1],)),
 
-                                        'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-2),  # 5E-2
-                                        'nonlin_1': elementwise(logcosh2),
+                                        # 'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=np.sqrt(const_log/(shapes_log['layer_1'][0] + shapes_log['layer_1'][1]) ) ),  # 1E-2
+                                        # 'nonlin_1': elementwise(logcosh),
+                                        # 'layer_2': GeneralDense(shapes_log['layer_2'], ignore_b=False, init_value_W=np.sqrt(const_log/(shapes_log['layer_2'][0] + shapes_log['layer_2'][1]) ), init_value_b=np.sqrt(const_log/(shapes_log['layer_2'][0] + shapes_log['layer_2'][1]) )),  # 1E-1
+                                        # 'nonlin_2': elementwise(xtanh),
+                                        # 'reg': Regularization((shape_last_layer_log[1],)),
+
+                                        'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-1),  # 1E-2
+                                        'nonlin_1': elementwise(logcosh),
                                         'layer_2': GeneralDense(shapes_log['layer_2'], ignore_b=False, init_value_W=5E-2, init_value_b=5E-2),  # 5E-2
                                         'nonlin_2': elementwise(xtanh),
                                         'reg': Regularization((shape_last_layer_log[1],)),
+                            
                             }
 
 
                 NN_arch_phase = {
-                                        # 'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
+                                
+                                        # 'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=np.sqrt(const_phase/(shapes_phase['layer_1'][0] + shapes_phase['layer_1'][1]) ) ), #3E-1
                                         # 'nonlin_1': elementwise(logcosh),
-                                        # 'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=1E-2, init_value_b=1E-2), #init_value_W=5E-1, init_value_b=5E-1
+                                        # 'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=np.sqrt(const_phase/(shapes_phase['layer_2'][0] + shapes_phase['layer_2'][1])), init_value_b=np.sqrt(const_phase/(shapes_phase['layer_2'][0] + shapes_phase['layer_2'][1]) ) ), #init_value_W=1E-2, init_value_b=1E-2
                                         # 'nonlin_2': elementwise(logcosh),
                                         # 'reg': Phase_arg((shape_last_layer_phase[1],)),
 
                                         'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
-                                        'nonlin_1': elementwise(logcosh2),
+                                        'nonlin_1': elementwise(logcosh),
                                         'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=1E-2, init_value_b=1E-2), #init_value_W=5E-1, init_value_b=5E-1
-                                        'nonlin_2': elementwise(logcosh2),
+                                        'nonlin_2': elementwise(logcosh),
                                         'reg': Phase_arg((shape_last_layer_phase[1],)),
+                            
                             }
 
                 #self.NN_architecture=(NN_arch_log, NN_arch_phase)

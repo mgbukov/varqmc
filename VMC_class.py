@@ -773,36 +773,38 @@ class VMC(object):
 				self.save_sim_data(iteration,grads_max,self.r2,phase_hist)
 
 
-	def repeat_iteration(self,iteration,prev_it_data, go_back_iters=0):
+	def repeat_iteration(self,iteration,Eloc_mean_g,E_MC_std_g, go_back_iters=0, load_data=True):
 
 		repeat=False
 		if iteration>self.start_iter+go_back_iters and self.mode=='MC':
 
-			_b1=prev_it_data[0]-self.Eloc_mean_g.real
-			_b2=np.abs(self.Eloc_mean_g.imag)
-			_b3=6E0*prev_it_data[2] - self.E_MC_std_g 
-			
-			if (_b2 > 5.0/np.sqrt(self.N_MC_points) and prev_it_data[0] < 0.0) or (_b3 < 0 and prev_it_data[0] < 0.0): 
+			Eloc_mean_prev=self.prev_it_data[0]
+			_c1=Eloc_mean_prev-Eloc_mean_g.real
 
-				mssg="!!!  restarting iteration {0:d}: dE={1:0.6f}, {0:d}: dE_std={2:0.6f}, E_imag={3:0.10f}  !!!\n".format(iteration, _b1, _b3, _b2)
+			_c2=np.abs(Eloc_mean_g.imag)
+			_c3=6.0*self.prev_it_data[2] - E_MC_std_g 
+
+			_b2=_c2 > 3.0*E_MC_std_g
+			_b3=_c3 < 0.0
+
+			
+			if (_b2 or _b3): # and Eloc_mean_prev < 0.0: 
+
+				if _b2:
+					mssg="!!!  restarting iteration {0:d}: dE={1:0.6f}, E_imag={2:0.10f}  !!!\n".format(iteration, _c1, _c2, )
+				elif _b3:
+					mssg="!!!  restarting iteration {0:d}: dE={1:0.6f}, dE_std={2:0.6f}  !!!\n".format(iteration, _c1, _c3, )
+
+
 				if self.comm.Get_rank()==0:
 					print(mssg)
 				self.logfile.write(mssg)
 				
 				# load data
-				self.comm.Barrier()
-				self._load_data(iteration-1-go_back_iters, truncate_files=False)
-				iteration=iteration-go_back_iters
-
-				# decrease learning rate
-				# self.opt_log.step_size*=0.95
-				# self.opt_phase.step_size*=0.95
-				
-				# if self.opt_log.opt=='RK':
-				# 	self.opt_log.Runge_Kutta.step_size*=0.95
-				
-				# if self.opt_phase.opt=='RK':
-				# 	self.opt_phase.Runge_Kutta.step_size*=0.95
+				if load_data:
+					self.comm.Barrier()
+					self._load_data(iteration-1-go_back_iters, truncate_files=False)
+					iteration=iteration-go_back_iters
 
 				repeat=True
 		
@@ -823,7 +825,7 @@ class VMC(object):
 
 
 		# auxiliary variable
-		prev_it_data=np.zeros(5) # Eloc_real, Eloc_imag, Eloc_std, S_norm, F_norm
+		self.prev_it_data=np.zeros(5) # Eloc_real, Eloc_imag, Eloc_std, S_norm, F_norm
 
 		iteration=start_iter
 		while iteration < start_iter+self.N_iterations:
@@ -872,7 +874,7 @@ class VMC(object):
 
 
 			#### check energy variance, undo update and restart sampling back 10 iterations
-			repeat, iteration = self.repeat_iteration(iteration,prev_it_data,go_back_iters=1)
+			repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1)
 			if repeat:
 				continue
 
@@ -894,7 +896,7 @@ class VMC(object):
 
 
 			# synch
-			prev_it_data[0], prev_it_data[1], prev_it_data[2]=self.Eloc_mean_g.real, self.Eloc_mean_g.imag, self.E_MC_std_g
+			self.prev_it_data[0], self.prev_it_data[1], self.prev_it_data[2]=self.Eloc_mean_g.real, self.Eloc_mean_g.imag, self.E_MC_std_g
 			
 
 			# run debug helper
@@ -977,45 +979,53 @@ class VMC(object):
 
 	'''
 	
-	def reestimate_local_energy_log(self, NN_params_log, batch, params_dict,):
+	def reestimate_local_energy_log(self, iteration, NN_params_log, batch, params_dict,):
 
-		##### get spin configs #####
-		if self.mode=='exact':
-			self.MC_tool.exact(self.DNN, )
 
-		elif self.mode=='MC':
-			# sample
-			acceptance_ratio_g = self.MC_tool.sample(self.DNN, )
+		repeat=True
+		counter=0
+		while repeat and counter<10:
+
+			##### get spin configs #####
+			if self.mode=='exact':
+				self.MC_tool.exact(self.DNN, )
+
+			elif self.mode=='MC':
+				# sample
+				acceptance_ratio_g = self.MC_tool.sample(self.DNN, )
+				
+
+			##### compute local energies #####
+			ti=time.time()
+			self.E_estimator.compute_local_energy(NN_params_log, self.DNN.params_phase, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift, verbose=False,)
 			
-		# get log_psi statistics
-		# data_tuple=np.min(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.mean(self.MC_tool.log_mod_kets), np.std(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets)-np.min(self.MC_tool.log_mod_kets)
-		# psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(*data_tuple )
-		# self.logfile.write(psi_str)
-		# print(psi_str)
+
+			if self.mode=='exact':
+				mod_kets=np.exp(self.MC_tool.log_mod_kets)
+				self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
+				abs_psi_2=self.count*np.abs(self.psi)**2
+
+				params_dict['abs_psi_2']=abs_psi_2
+				overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
+				params_dict['overlap']=overlap
+
+			
+			Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(params_dict)
+			Eloc_std_g=np.sqrt(Eloc_var_g)
+			E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
 
 
+			# check quality of sample
+			repeat, iteration = self.repeat_iteration(iteration,Eloc_mean_g,E_MC_std_g,go_back_iters=0, load_data=False)
+			
+			if repeat and counter>=10:
+				mssg="Failed to draw a good MC sample in 10 attempts. Exiting!\n"
+				if self.comm.Get_rank()==0:
+					print(mssg)
+				self.logfile.write(mssg)
 
-		##### compute local energies #####
-		ti=time.time()
-		self.E_estimator.compute_local_energy(NN_params_log, self.DNN.params_phase, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift, verbose=False,)
-		
-		# Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
-		# self.logfile.write(Eloc_str)
-		# if self.comm.Get_rank()==0:
-		# 	print(Eloc_str)
+			counter+=1
 
-
-		if self.mode=='exact':
-			mod_kets=np.exp(self.MC_tool.log_mod_kets)
-			self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
-			abs_psi_2=self.count*np.abs(self.psi)**2
-
-			params_dict['abs_psi_2']=abs_psi_2
-			overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
-			params_dict['overlap']=overlap
-
-		
-		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(params_dict)
 
 		params_dict['E_diff']=E_diff_real
 		params_dict['Eloc_mean']=Eloc_mean_g

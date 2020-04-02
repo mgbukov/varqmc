@@ -155,8 +155,6 @@ class MC_sampler():
 		# normalize
 		self.log_mod_kets-=self.log_psi_shift
 
-		#print(self.log_mod_kets)
-		#exit()
 
 		### gather seeds
 

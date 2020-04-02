@@ -266,7 +266,7 @@ class Energy_estimator():
 		self.Eloc_imag=np.zeros_like(self._Eloc_cos)
 		
 
-	def reestimate_local_energy_phase(self, NN_params_phase, batch, params_dict):
+	def reestimate_local_energy_phase(self, iteration, NN_params_phase, batch, params_dict):
 
 
 		phase_kets = self.DNN.evaluate_phase(NN_params_phase, batch)

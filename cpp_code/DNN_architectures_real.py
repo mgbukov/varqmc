@@ -71,9 +71,6 @@ def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
 def logcosh(x):
     return jnp.log(jnp.cosh(x))
 
-@jit
-def logcosh2(x):
-    return jnp.log(jnp.cosh(x))-1.0
 
 @jit
 def xtanh(x):

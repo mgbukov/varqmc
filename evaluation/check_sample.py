@@ -7,6 +7,7 @@ import yaml
 path = "../."
 sys.path.insert(0,path)
 from plot_lib import *
+from eval_lib import *
 
 import matplotlib
 import matplotlib.colors as colors
@@ -38,38 +39,19 @@ save=True #False #
 
 
 
-# iteration=999
-# L=6
-# J2=0.5
-# opt='sgd_sgd' # 'RK_RK'
-# cost='SR_SR'
-# mode='MC' # 'exact' #
-# NN_dtype='real-decoupled'
-# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-# N_MC_points=10000 # 107 # 
-# N_prss=260 # 1 #  
-# NMCchains=1 # 
-# sys_time= '2020_03_30-12_34_34'
 
-
-
-iteration=299
-L=4
+iteration=999
+L=6
 J2=0.5
-opt='RK_RK' # 'sgd_sgd' # 
+opt='sgd_sgd' # 'RK_RK'
 cost='SR_SR'
-mode='exact' #
+mode='MC' # 'exact' #
 NN_dtype='real-decoupled'
 NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-N_MC_points=107 # 
-N_prss=1 #  
+N_MC_points=10000 # 107 # 
+N_prss=260 # 1 #  
 NMCchains=1 # 
-sys_time= '2020_04_01-17_20_35'
-
-
-
-
- 
+sys_time= '2020_03_30-12_34_34' 
 
 
 
@@ -82,34 +64,44 @@ data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 #params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
 params_str=''
 
-plotfile_dir = 'data/' + data_name  + 'plots/'
-
-if os.path.exists(load_dir) and (not os.path.exists(plotfile_dir)):
-	os.makedirs(plotfile_dir)
 
 
+# load sample
+n=-9
+with open(load_dir + 'debug_files/' + 'debug-' + 'Eloc_data' + params_str + '.pkl', 'rb') as handle:
+	Eloc_real, Eloc_imag = pickle.load(handle)
 
 
-################
+Eloc=(Eloc_real+1j*Eloc_imag)[n,:].ravel()
+
+N_bootstrap=1000
+N_batch=1000
+Eloc_mean_s, Eloc_std_s = bootstrap_sample(Eloc, N_bootstrap, N_batch )
 
 
-plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=1000, save=save)
+Eloc_real_min, Eloc_real_max = np.min(Eloc_mean_s.real), np.max(Eloc_mean_s.real)
+Eloc_imag_min, Eloc_imag_max = np.min(Eloc_mean_s.imag), np.max(Eloc_mean_s.imag)
+Eloc_imag_abs_min, Eloc_imag_abs_max = np.min(np.abs(Eloc_mean_s.imag)), np.max(np.abs(Eloc_mean_s.imag))
+
+Eloc_std_min, Eloc_std_max = np.min(Eloc_std_s), np.max(Eloc_std_s)
+
+
+print(Eloc_real_min,Eloc_real_max,  )
+print(Eloc_imag_min,Eloc_imag_max)
+print(Eloc_imag_abs_min, Eloc_imag_abs_max)
+print(Eloc.mean())
+print(Eloc_mean_s.mean())
+print()
+print(Eloc_std_min, Eloc_std_max, )
+print(np.abs(Eloc).std())
+print(Eloc_std_s.mean())
 
 
 
-load_dir+= 'data_files/'
 
-plot_delta(load_dir, plotfile_dir, params_str, L, J2, save=save)
 
-plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=save)
 
-plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=save)
 
-plot_energy( load_dir, plotfile_dir, params_str, L, J2, save=save)
-
-plot_loss( load_dir, plotfile_dir, params_str, L, J2, save=save)
-
-#phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True)
 
 
 

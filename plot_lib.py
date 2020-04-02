@@ -404,6 +404,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	plt.plot(iter_step_log, r2_log, '.r', label='log net')
 	plt.plot(iter_step_phase, r2_phase, '.b', label='phase net')
+	plt.plot(iter_step_phase, r2_log + r2_phase - 1.0, '.g', label='$r^2_\\mathrm{log}\\!+\\!r^2_\\mathrm{phase}\\!-\\!1$')
 	plt.xlabel('iteration')
 	plt.ylabel('$r^2$')
 	plt.ylim(-0.01,1.01)
@@ -415,6 +416,27 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	if save:
 		plt.savefig(plotfile_dir + 'r2.pdf')
+		plt.close()
+	else:
+		plt.show()
+
+
+	###############
+
+
+	plt.plot(iter_step_phase, r2_log + r2_phase - 1.0, '.g', label='total')
+	plt.xlabel('iteration')
+	plt.ylabel('$r^2$')
+	#plt.ylim(-0.01,1.01)
+	plt.yscale('log')
+	plt.legend()
+	
+	plt.grid()
+	plt.tight_layout()
+
+
+	if save:
+		plt.savefig(plotfile_dir + 'r2_total.pdf')
 		plt.close()
 	else:
 		plt.show()

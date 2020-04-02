@@ -163,8 +163,10 @@ class natural_gradient():
 
 
 	def compute_r2_cost(self,Eloc_params_dict):
+		# S a = F
 		Eloc_var=Eloc_params_dict['Eloc_var']
 		return ( (np.dot(self.nat_grad, np.dot(self.S_matrix,self.nat_grad)) - 2.0*np.dot(self.F_vector,self.nat_grad) + Eloc_var )/Eloc_var )
+		#return ( (np.dot(self.nat_grad, np.dot(self.S_matrix,self.nat_grad)) - 2.0*np.dot(self.F_vector,self.nat_grad) + Eloc_var )/Eloc_var )
 
 	def _S_matrix_checks(self):
 
@@ -374,7 +376,7 @@ class Runge_Kutta_solver():
 		
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.k1)
-			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
 			self.k2[:]=-self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# full-step solution difference
@@ -387,7 +389,7 @@ class Runge_Kutta_solver():
 			
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.k3)
-			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
 			self.k4[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# first half-step solution difference
@@ -396,12 +398,12 @@ class Runge_Kutta_solver():
 
 			### RK step 1
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star)
-			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
 			self.k5[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			### RK step 2
 			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star+self.k5)
-			Eloc_params_dict, batch = self.reestimate_local_energy(NN_params_shifted, batch, Eloc_params_dict)
+			Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
 			self.k6[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# second half-step solution difference

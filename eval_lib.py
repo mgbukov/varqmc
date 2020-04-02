@@ -122,6 +122,42 @@ def extract_ED_data(rep_spin_configs_ints,L,J2):
 	return log_psi_sample, sign_psi_sample, mult_sample, p_sample, sign_psi_sample_J2_0
 
 
+def _data_stream(data,minibatch_size,sample_size,N_minibatches):
+    rng = np.random.RandomState(0)
+    while True:
+        perm = rng.permutation(sample_size)
+        for i in range(N_minibatches):
+            batch_idx = perm[i * minibatch_size : (i + 1) * minibatch_size]
+            #batch_idx = np.arange(i*minibatch_size, min(sample_size, (i+1)*minibatch_size), 1)
+            yield data[batch_idx], batch_idx
+
+
+def bootstrap_sample(data, N_bootstrap, N_batch ):
+
+	N_MC_points=data.shape[0]
+
+	num_complete_batches, leftover = divmod(N_MC_points, N_batch)
+	N_minibatches = num_complete_batches + bool(leftover)
+
+	N_minibatches=1
+
+	batches = _data_stream(data,N_batch,N_MC_points,N_minibatches)	
+
+	Eloc_mean_s=np.zeros((N_bootstrap,N_minibatches,), dtype=np.complex128)
+	Eloc_std_s=np.zeros((N_bootstrap,N_minibatches),)
+
+	for i in range(N_bootstrap):
+		for j in range(N_minibatches):
+			batch, batch_idx = next(batches)
+
+			Eloc_mean_s[i,j]=np.mean(batch, axis=0)
+			Eloc_std_s[i,j]=np.std(np.abs(batch))
+
+	return Eloc_mean_s.ravel(), Eloc_std_s.ravel() 
+
+
+
+
 def MC_sample(load_dir,params_log,N_MC_points=10,reps=False):
 
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
