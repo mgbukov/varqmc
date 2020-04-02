@@ -1,4 +1,4 @@
-J2: 0.0
+J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 6
 N_iterations: 1000
