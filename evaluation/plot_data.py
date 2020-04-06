@@ -38,33 +38,13 @@ save=True #False #
 
 
 
-# iteration=999
-# L=6
-# J2=0.5
-# opt='sgd_sgd' # 'RK_RK'
-# cost='SR_SR'
-# mode='MC' # 'exact' #
-# NN_dtype='real-decoupled'
-# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-# N_MC_points=10000 # 107 # 
-# N_prss=260 # 1 #  
-# NMCchains=1 # 
-# sys_time= '2020_03_30-12_34_34'
-
-
-
-iteration=299
-L=4
-J2=0.5
+iteration=250
+J2=0.0
+L=6
 opt='RK_RK' # 'sgd_sgd' # 
 cost='SR_SR'
-mode='exact' #
-NN_dtype='real-decoupled'
-NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-N_MC_points=107 # 
-N_prss=1 #  
-NMCchains=1 # 
-sys_time= '2020_04_01-17_20_35'
+mode='MC' # 'exact' #
+sys_time= '2020_04_01-17_44_50'
 
 
 
@@ -78,7 +58,7 @@ sys_time= '2020_04_01-17_20_35'
 
 data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
 load_dir='data/' + data_name  
-data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
+#data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 #params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
 params_str=''
 

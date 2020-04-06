@@ -1,11 +1,13 @@
 import sys,os
 import numpy as np 
 import pickle
-import jax
+import yaml 
+#import jax
 
 path = "../."
 sys.path.insert(0,path)
-from cpp_code import NN_Tree
+from plot_lib import *
+from eval_lib import *
 
 import matplotlib
 import matplotlib.colors as colors
@@ -30,10 +32,6 @@ plt.tick_params(labelsize=20)
 
 ################
 
-from aux_funcs import *
-
-sys.path.append("..")
-
 from cpp_code import integer_to_spinstate
 from VMC_class import VMC
 import yaml 
@@ -43,48 +41,42 @@ import yaml
 
 
 n=-10 # steps before final blow-up
-max_iter=380 # last line with saved E-data
-L=4
+iteration=29+n+1 # 159 # last line with saved E-data
 J2=0.5
-opt='NG'
-mode='MC'
-NN_dtype='real-decoupled'
-NN_shape_str='(16--10,16--24--12)'
-N_MC_points=20000
-N_prss=130
-NMCchains=1
-sys_time='2020-03-10_22:32:06'
+L=4
+opt='RK_RK' # 'sgd_sgd' # 
+cost='SR_SR'
+mode='MC' # 'exact' #
+sys_time= '2020_04_06-12_12_39' # '2020_04_04-06_44_05'
 
 
 #### load debug data
 
 
-data_name = sys_time + '--{0:s}-L_{1:d}-{2:s}/'.format(opt,L,mode)
-load_dir='data/' + data_name 
-data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
-params_str='model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
+data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
+load_dir='data/' + data_name  
+params_str=''
 
 
-
-
-with open(load_dir + 'debug_files/' + 'debug-' + 'Eloc_data--' + params_str + '.pkl', 'rb') as handle:
+with open(load_dir + 'debug_files/' + 'debug-' + 'Eloc_data' + params_str + '.pkl', 'rb') as handle:
 	Eloc_real, Eloc_imag = pickle.load(handle)
 
-with open(load_dir + 'debug_files/' + 'debug-' + 'SF_data--' + params_str + '.pkl', 'rb') as handle:
-	S_lastiters, F_lastiters, delta = pickle.load(handle)
+with open(load_dir + 'debug_files/' + 'debug-' + 'SF_data_log' + params_str + '.pkl', 'rb') as handle:
+	S_log_lastiters, F_log_lastiters, delta_log = pickle.load(handle)
 
-with open(load_dir + 'debug_files/' + 'debug-' + 'logpsi_data--' + params_str + '.pkl', 'rb') as handle:
+with open(load_dir + 'debug_files/' + 'debug-' + 'SF_data_phase' + params_str + '.pkl', 'rb') as handle:
+	S_phase_lastiters, F_phase_lastiters, delta_phase = pickle.load(handle)
+
+with open(load_dir + 'debug_files/' + 'debug-' + 'logpsi_data' + params_str + '.pkl', 'rb') as handle:
 	logpsi_kets, _ = pickle.load(handle)
 	
-with open(load_dir + 'debug_files/' + 'debug-' + 'phasepsi_data--' + params_str + '.pkl', 'rb') as handle:
+with open(load_dir + 'debug_files/' + 'debug-' + 'phasepsi_data' + params_str + '.pkl', 'rb') as handle:
 	phasepsi_kets, = pickle.load(handle)
 
-# with open(load_dir + 'debug_files/' + 'debug-' + 'params_update_data--' + params_str + '.pkl', 'rb') as handle:
-# 	NN_params_update, = pickle.load(handle)
-# 	NN_params_update[:-1,...]=NN_params_update[1:,...]
-# 	NN_params_update[-1,...]=0.0
+with open(load_dir + 'debug_files/' + 'debug-' + 'params_update_data' + params_str + '.pkl', 'rb') as handle:
+	params_log_update_lastiters, params_phase_update_lastiters = pickle.load(handle)
 
-with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str + '.pkl', 'rb') as handle:
+with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data' + params_str + '.pkl', 'rb') as handle:
 	int_kets, = pickle.load(handle)
 	if L==4:
 		int_kets.astype(np.uint16)
@@ -92,21 +84,51 @@ with open(load_dir + 'debug_files/' + 'debug-' + 'intkets_data--' + params_str +
 		int_kets.astype(np.uint64) 
 
 
-######################
-iteration=max_iter+n+2
 
-file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
+######################
+
+file_name='NNparams'+'--iter_{0:05d}'.format(iteration) + params_str
 
 with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
-	NN_params, apply_fun_args, log_psi_shift = pickle.load(handle)
+	params_log, params_phase, apply_fun_args_log, apply_fun_args_phase, log_psi_shift = pickle.load(handle)
 
-Tree=NN_Tree(NN_params)
-NN_params_ravelled=Tree.ravel(NN_params)
+
+
+assert(log_psi_shift==_[n])
 
 
 ######################
 
+#print(np.mean(Eloc_real,axis=1))
+
+
+
 print('\niteration number: {0:d} with {1:d} unique spin configs & {2:d} unique Elocs & mean {3:0.4f}.\n'.format(iteration, np.unique(int_kets[n,:]).shape[0], np.unique(Eloc_real[n,:].round(decimals=10)).shape[0], np.mean(Eloc_real[n,:])) )
+
+#exit()
+
+log_psi, phase_psi = evaluate_DNN(load_dir,params_log, params_phase, int_kets[n,:4], log_psi_shift=0.0,)
+
+
+print(phase_psi)
+print(phasepsi_kets[n,:4])
+
+exit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

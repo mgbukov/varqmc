@@ -35,10 +35,6 @@ plt.tick_params(labelsize=20)
 
 ###################
 
-save=True #False # 
-
-
-
 
 iteration=999
 L=6

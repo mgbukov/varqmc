@@ -261,6 +261,58 @@ def plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=True):
 		plt.show()
 
 
+
+	######################################################
+
+	# plot against eigentime
+
+	N_variables=6
+	file_name= load_dir + 'opt_data_phase' + params_str + '.txt'
+	iter_step_phase, delta_phase, tol_phase, counter_phase, step_size_phase, time_phase = _load_data(file_name,N_variables)
+
+
+	ig, ax = plt.subplots(nrows=1, ncols=1)
+
+	im3 = ax.pcolor(time_phase,binned_phases, hist_vals, cmap='cool', norm=colors.LogNorm(vmin=1E-0, vmax=1E-4),)
+	#ax3[0].set_ylabel('phase distribution')
+	ax.set_xlabel('training step')
+	ax.set_xlim([0,time_phase.max()])
+	ax.set_ylim([-np.pi,np.pi])
+	#ax3.grid()
+	#ax.legend(handlelength=0,loc='lower left')
+
+	cbar_ax = inset_axes(ax,
+	                width="2.5%",  # width = 50% of parent_bbox width
+	                height="100%",  # height : 5%
+	                loc='lower left',
+	                bbox_to_anchor=(1.025, 0., 1, 1),
+	                bbox_transform=ax.transAxes,
+	                borderpad=0,           
+	                )
+
+	cbar_ax.set_yscale('log')
+
+	fig.colorbar(im3,cax=cbar_ax,ticks=[1E-4,1E-3,1E-2,1E-1,1E0])#
+
+	ax.yaxis.set_major_locator(plt.MultipleLocator(np.pi / 2))
+	ax.yaxis.set_major_formatter(plt.FuncFormatter(format_func))
+
+	ax.grid(color='k', linestyle='-', linewidth=0.1)
+	ax.yaxis.set_ticks_position('both')
+
+
+	#fig.delaxes(ax)
+
+	plt.tight_layout(rect=(0,0,0.9,1))
+
+	if save:
+		plt.savefig(plotfile_dir + 'phase_hist_eigentime.pdf')
+		plt.close()
+	else:
+		plt.show()
+
+
+
 def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
 
 	file_name= load_dir + 'phases_histogram' + params_str + '.txt'
@@ -424,12 +476,12 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 	###############
 
 
-	plt.plot(iter_step_phase, r2_log + r2_phase - 1.0, '.g', label='total')
+	plt.plot(iter_step_phase, r2_log + r2_phase - 1.0, '.g', )
 	plt.xlabel('iteration')
-	plt.ylabel('$r^2$')
+	plt.ylabel('$r^2_\\mathrm{log}\\!+\\!r^2_\\mathrm{phase}\\!-\\!1$')
 	#plt.ylim(-0.01,1.01)
 	plt.yscale('log')
-	plt.legend()
+	#plt.legend()
 	
 	plt.grid()
 	plt.tight_layout()
@@ -545,7 +597,7 @@ def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 	plt.plot(iter_step_log, curv_log, '.r', label='log', )
 	plt.plot(iter_step_phase, curv_phase, '.b', label='phase net', )
 	plt.xlabel('iteration')
-	plt.ylabel('$\\dot\\alpha^t S \\dot\\alpha$')
+	plt.ylabel('$\\sqrt{\\dot\\alpha^t S \\dot\\alpha}$')
 	#plt.ylim(-0.01,1.01)
 	plt.legend()
 	

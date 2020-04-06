@@ -273,7 +273,7 @@ class Energy_estimator():
 
 		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,NN_params_phase,)
 
-		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras,)
+		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
 		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.process_local_energies(params_dict)
 
@@ -288,17 +288,27 @@ class Energy_estimator():
 
 	def compute_local_energy(self,params_log,params_phase,ints_ket,log_kets,phase_kets,log_psi_shift, verbose=True, ):
 		
+		ti=time.time()
 		self.compute_s_primes(ints_ket,)
+
+		str_1="computing s_primes took {0:.4f} secs.\n".format(time.time()-ti)
+		if self.logfile!=None:
+			self.logfile.write(str_1)
+		if self.comm.Get_rank()==0 and verbose:
+			print(str_1)
+
+
 
 		unique_str="{0:d}/{1:d} unique configs; using minibatch size {2:d}.\n".format(self.nn_uq, self.nn, self.minibatch_size)
 		if self.logfile!=None:
 			self.logfile.write(unique_str)
 
 
+		ti=time.time()
 		log_psi_bras = self.evalute_s_primes(self.DNN.evaluate_log, params_log,)
 		log_psi_bras-=log_psi_shift
-		
 
+		
 		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
 		if self.logfile!=None:
 			self.logfile.write(psi_str)
@@ -307,6 +317,14 @@ class Energy_estimator():
 		
 
 		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,params_phase,)
+
+
+		str_2="evaluating s_primes took {0:.4f} secs.\n".format(time.time()-ti)
+		self.logfile.write(str_2)
+		if self.comm.Get_rank()==0 and verbose:
+			print(str_2)
+		
+
 
 		self.compute_Eloc(log_kets, phase_kets, log_psi_bras, phase_psi_bras,)
 
@@ -355,8 +373,13 @@ class Energy_estimator():
 
 		# evaluate network on unique representatives only
 
+		# if self.L==4:
 		_ints_bra_uq, index, inv_index, =np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, )
 		nn_uq=_ints_bra_uq.shape[0]
+		# else:
+		# 	nn_uq=nn
+		# 	index=np.arange(nn)
+		# 	inv_index=index
 
 
 		self.nn=nn
@@ -405,7 +428,7 @@ class Energy_estimator():
 		#######
 
 
-	def compute_Eloc(self, log_kets, phase_kets, log_psi_bras,phase_psi_bras,  ):
+	def compute_Eloc(self, log_kets, phase_kets, log_psi_bras,phase_psi_bras, debug_mode=True):
 
 		self._reset_Eloc_vars()
 		
@@ -428,7 +451,8 @@ class Energy_estimator():
 		#################################
 		#
 		# check variance of E_loc 
-		self.debug_helper()
+		if debug_mode:
+			self.debug_helper()
 
 
 
@@ -467,7 +491,6 @@ class Energy_estimator():
 
 		E_diff_real=self.Eloc_real-Eloc_mean_g.real
 		E_diff_imag=self.Eloc_imag-Eloc_mean_g.imag
-
 
 
 		self.Eloc_mean_g=Eloc_mean_g

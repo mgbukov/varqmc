@@ -166,7 +166,7 @@ class natural_gradient():
 		# S a = F
 		Eloc_var=Eloc_params_dict['Eloc_var']
 		return ( (np.dot(self.nat_grad, np.dot(self.S_matrix,self.nat_grad)) - 2.0*np.dot(self.F_vector,self.nat_grad) + Eloc_var )/Eloc_var )
-		#return ( (np.dot(self.nat_grad, np.dot(self.S_matrix,self.nat_grad)) - 2.0*np.dot(self.F_vector,self.nat_grad) + Eloc_var )/Eloc_var )
+		
 
 	def _S_matrix_checks(self):
 
@@ -243,7 +243,8 @@ class natural_gradient():
 		self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
 		#self.S_matrix += self.delta*np.linalg.norm(self.S_matrix)*np.eye(self.S_matrix.shape[0]) 
 
-		self.debug_helper()
+		if self.debug_mode:
+			self.debug_helper()
 
 
 		####################################################### 
@@ -279,7 +280,7 @@ class natural_gradient():
 		###############
 
 		# clip gradients
-		self.nat_grad[:]=np.where(np.abs(self.nat_grad) < self.grad_clip, self.nat_grad, self.grad_clip) 
+		# self.nat_grad[:]=np.where(np.abs(self.nat_grad) < self.grad_clip, self.nat_grad, self.grad_clip) 
 
 
 
@@ -355,16 +356,23 @@ class Runge_Kutta_solver():
 		#params_norm=jnp.max(jnp.abs(params)).block_until_ready()
 		params_norm=jnp.linalg.norm(self.params).block_until_ready()
 		
-		self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)
 		
 		#initial_curvature=self.NG.curvature
 		if self.NG is not None:
+			self.NG.debug_mode=True
+			self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)
+			self.NG.debug_mode=False
+
 			self.S_matrix[:,:]=self.NG.S_matrix
 			#self.S_matrix[:,:]=self.NG.S_approx
 			#S_norm=self.NG.S_norm
 
 			self.r2=self.compute_r2(Eloc_params_dict)
 			self.dE=self.NG.dE*self.step_size
+
+		else:
+			self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)
+			
 
 		self.counter+=1
 

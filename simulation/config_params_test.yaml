@@ -1,15 +1,15 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 6
-N_iterations: 3 # 1000
+L: 4
+N_iterations: 30 # 1000
 NN_dtype: real-decoupled # cpx #
-NN_shape_str: (36--12--8,36--24--12)  #  (16--12,16--24--12)  # 
+NN_shape_str: (16--24--12,16--24--12)  #  (16--12,16--24--12)  # 
 NN_type: DNN
 N_MC_chains: 2
 MC_thermal: true
 MC_prop_threshold: 1.0 # large values means local proposals
-N_MC_points: 100 # 107 # 
-mode:  MC # exact #
+N_MC_points: 100 # 107 #  
+mode: MC # exact # 
 batchnorm: false
 minibatch_size: 1000
 grad_update_mode: normal # log_mod #   phase #  alternating # 
