@@ -11,7 +11,7 @@ from scipy.sparse.linalg import cg #,cgs,bicg,bicgstab
 #from cg import cg
 from scipy.linalg import eigh,eig
 
-import pickle
+import pickle, time
 
 
 
@@ -125,11 +125,12 @@ class natural_gradient():
 		elif self.mode=='MC':
 
 			self.comm.Allreduce(jnp.sum(self.dlog_psi,axis=0).block_until_ready()._value, self.O_expt[:], op=MPI.SUM)
+			#self.comm.Allreduce(np.sum(self.dlog_psi,axis=0), self.O_expt[:], op=MPI.SUM)
+			
 			self.O_expt/=self.N_MC_points
 
-			self.comm.Allreduce((  jnp.dot(self.dlog_psi.T, self.dlog_psi).block_until_ready()  )._value, \
-								self.OO_expt[:], op=MPI.SUM
-								)
+			self.comm.Allreduce(( jnp.dot(self.dlog_psi.T, self.dlog_psi).block_until_ready()  )._value, self.OO_expt[:], op=MPI.SUM )
+			#self.comm.Allreduce( np.dot(self.dlog_psi.T, self.dlog_psi), self.OO_expt[:], op=MPI.SUM )
 
 			self.OO_expt/=self.N_MC_points
 
@@ -149,12 +150,12 @@ class natural_gradient():
 			self.E_diff_weighted*=abs_psi_2
 
 			self.F_vector[:]   = jnp.dot(self.E_diff_weighted,self.dlog_psi).block_until_ready()
+			#self.F_vector[:]   = np.dot(self.E_diff_weighted,self.dlog_psi)
 			
 		elif self.mode=='MC':
 		
-			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, \
-								self.F_vector[:], op=MPI.SUM
-								)
+			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
+			#self.comm.Allreduce(np.dot(self.E_diff_weighted, self.dlog_psi), self.F_vector[:], op=MPI.SUM)
 
 			self.F_vector/=self.N_MC_points
 
@@ -232,8 +233,9 @@ class natural_gradient():
 
 	def compute(self,NN_params,batch,Eloc_params_dict,):
 		
-
+		ti=time.time()
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,)
+		print("log_psi evaluation took {0:0.6} secs.".format(time.time()-ti) )
 	
 		self.compute_F_vector(Eloc_params_dict=Eloc_params_dict,)
 		self.compute_S_matrix(Eloc_params_dict=Eloc_params_dict,)
@@ -372,7 +374,7 @@ class Runge_Kutta_solver():
 
 		else:
 			self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)
-			
+
 
 		self.counter+=1
 

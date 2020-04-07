@@ -30,8 +30,9 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
         #perm = rng.permutation(sample_size)
         for i in range(N_minibatches):
             #batch_idx = perm[i * minibatch_size : (i + 1) * minibatch_size]
-            batch_idx = np.arange(i*minibatch_size, min(sample_size, (i+1)*minibatch_size), 1)
-            yield data[batch_idx], batch_idx
+            #batch_idx = np.arange(i*minibatch_size, min(sample_size, (i+1)*minibatch_size), 1)
+            batch_idx = np.arange(i*minibatch_size, (i+1)*minibatch_size, 1)
+            yield data[batch_idx], batch_idx,
 
 
 
@@ -271,7 +272,7 @@ class Energy_estimator():
 
 		phase_kets = self.DNN.evaluate_phase(NN_params_phase, batch)
 
-		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,NN_params_phase,)
+		phase_psi_bras = self.evaluate_s_primes(self.DNN.evaluate_phase,NN_params_phase,)
 
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
@@ -305,7 +306,7 @@ class Energy_estimator():
 
 
 		ti=time.time()
-		log_psi_bras = self.evalute_s_primes(self.DNN.evaluate_log, params_log,)
+		log_psi_bras = self.evaluate_s_primes(self.DNN.evaluate_log, params_log,)
 		log_psi_bras-=log_psi_shift
 
 		
@@ -316,7 +317,7 @@ class Energy_estimator():
 			print(psi_str)
 		
 
-		phase_psi_bras = self.evalute_s_primes(self.DNN.evaluate_phase,params_phase,)
+		phase_psi_bras = self.evaluate_s_primes(self.DNN.evaluate_phase,params_phase,)
 
 
 		str_2="evaluating s_primes took {0:.4f} secs.\n".format(time.time()-ti)
@@ -388,7 +389,7 @@ class Energy_estimator():
 		self.inv_index=inv_index
 
 
-	def evalute_s_primes(self,evaluate_NN,NN_params,):
+	def evaluate_s_primes(self,evaluate_NN,NN_params,):
 
 		### evaluate network using minibatches
 
@@ -397,29 +398,42 @@ class Energy_estimator():
 			num_complete_batches, leftover = divmod(self.nn_uq, self.minibatch_size)
 			N_minibatches = num_complete_batches + bool(leftover)
 
-			data=self._spinstates_bra[:self.nn][self.index]
-			batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
+			data=np.zeros((N_minibatches*self.minibatch_size,)+self._spinstates_bra.shape[1:],dtype=self._spinstates_bra.dtype)
+			data[:self.nn_uq,...]=self._spinstates_bra[:self.nn][self.index]
+			#batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
 
 			# preallocate data
 			prediction_bras=np.zeros(self.nn_uq,dtype=np.float64)
 			
+			ti=time.time()
 			for j in range(N_minibatches):
 
-				batch, batch_idx = next(batches)
-				prediction_bras[batch_idx]   = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),  )
+				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
+				batch=data[batch_idx].reshape(-1,self.N_sites)
+
+				#batch, batch_idx, = next(batches)
+				
+				#prediction_bras[batch_idx]   = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),  )
+				if j==N_minibatches-1:
+					prediction_bras[batch_idx[0]:self.nn_uq]   = evaluate_NN(NN_params, batch,  )[:self.nn_uq-batch_idx[0]]
+				else:
+					prediction_bras[batch_idx]   = evaluate_NN(NN_params, batch,  )
+
 				
 				# with disable_jit():
 				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
 			
 				#print(log_psi_bras[batch_idx]-log)
 				#print(log[:2])
-
+				
+			print("network evaluation on {0:d} configs took {1:0.6} secs.".format(data.shape[0], time.time()-ti) )
+	
 
 		else:
 
 			### evaluate network on entire sample
 			prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(self.nn_uq,self.N_symm,self.N_sites),  )._value
-
+				
 
 
 		return prediction_bras[self.inv_index]

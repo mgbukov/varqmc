@@ -128,11 +128,8 @@ class MC_sampler():
 												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
 
-		#print(self.ints_ket)
-		#exit()
-
 		if compute_phases:
-			self.phase_kets[:]=DNN.evaluate_phase(DNN.params_phase, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), )#._value
+			self.phase_kets[:]=DNN.evaluate_phase(DNN.params_phase, self.spinstates_ket.reshape(-1,self.N_sites), )
 
 		#print(self.phase_kets)
 		#exit()
@@ -186,7 +183,7 @@ class MC_sampler():
 		#print(self.log_mod_kets)
 		#exit()
 
-		self.log_psi_shift=np.max(self.log_mod_kets[:])#._value
+		self.log_psi_shift=np.max(self.log_mod_kets[:])
 		self.log_mod_kets[:] -= self.log_psi_shift 
 		
 		#print(self.phase_kets)

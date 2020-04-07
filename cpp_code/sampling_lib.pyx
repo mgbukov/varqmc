@@ -1,9 +1,9 @@
 # distutils: language=c++
 # cython: language_level=2
-#cython: boundscheck=False
-#cython: wraparound=False
-#cython: cdivision=True
-#cython: profile=False
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: cdivision=True
+# cython: profile=False
 
 from jax.config import config
 config.update("jax_enable_x64", True)
@@ -35,10 +35,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=4
+DEF _L=6
 cdef extern from *:
     """
-    #define _L 4
+    #define _L 6
     """
     pass
 
@@ -786,7 +786,7 @@ cdef class Neural_Net:
     cpdef object _evaluate_log(self, object params, object batch):
 
         # reshaping required inside evaluate func because of per-sample gradients
-        batch=batch.reshape(self.input_shape)
+        #batch=batch.reshape(self.input_shape)
 
         log_psi = self.apply_layer_log(params,batch,kwargs=self.apply_fun_args_log)
         
@@ -798,7 +798,7 @@ cdef class Neural_Net:
     cpdef object _evaluate_phase(self, object params, object batch):
 
         # reshaping required inside evaluate func because of per-sample gradients
-        batch=batch.reshape(self.input_shape)
+        #batch=batch.reshape(self.input_shape)
 
         phase_psi = self.apply_layer_phase(params,batch,kwargs=self.apply_fun_args_phase)
 

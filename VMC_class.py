@@ -913,6 +913,8 @@ class VMC(object):
 			iteration+=1
 			self.comm.Barrier()
 
+			#exit()
+
 		iteration-=1
 
 		
