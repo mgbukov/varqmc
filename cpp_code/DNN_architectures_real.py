@@ -201,11 +201,10 @@ def Phase_arg(output_layer_shape,center=True, scale=True, a_init=ones, b_init=ze
 
         #print(x[-1,...].sum(), x[-2,...].sum(), x[-16,...].sum())
 
-        #phase_psi = jnp.exp(1j*x)
         phase_psi=x 
 
         # symmetrize
-        phase_psi   = jnp.sum(phase_psi.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
+        phase_psi   = jnp.sum(phase_psi.reshape(reduce_shape,order='C'), axis=[1,])
         
         # sum over hidden neurons
         phase_psi   = jnp.sum(  phase_psi.reshape(output_shape), axis=[1,])

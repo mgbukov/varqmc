@@ -413,11 +413,11 @@ class Energy_estimator():
 
 				#batch, batch_idx, = next(batches)
 				
-				#prediction_bras[batch_idx]   = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),  )
+				#prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),  )
 				if j==N_minibatches-1:
-					prediction_bras[batch_idx[0]:self.nn_uq]   = evaluate_NN(NN_params, batch,  )[:self.nn_uq-batch_idx[0]]
+					prediction_bras[batch_idx[0]:self.nn_uq] = evaluate_NN(NN_params, batch,  )[:self.nn_uq-batch_idx[0]]
 				else:
-					prediction_bras[batch_idx]   = evaluate_NN(NN_params, batch,  )
+					prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,  )
 
 				
 				# with disable_jit():
@@ -425,7 +425,7 @@ class Energy_estimator():
 			
 				#print(log_psi_bras[batch_idx]-log)
 				#print(log[:2])
-				
+
 			print("network evaluation on {0:d} configs took {1:0.6} secs.".format(data.shape[0], time.time()-ti) )
 	
 

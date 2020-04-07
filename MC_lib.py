@@ -122,8 +122,7 @@ class MC_sampler():
 	def sample(self,DNN, compute_phases=True):
 
 		self._reset_global_vars()
-		#assert(self.spinstates_ket.max()==0)
-
+	
 		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
 												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
@@ -131,8 +130,9 @@ class MC_sampler():
 		if compute_phases:
 			self.phase_kets[:]=DNN.evaluate_phase(DNN.params_phase, self.spinstates_ket.reshape(-1,self.N_sites), )
 
-		#print(self.phase_kets)
-		#exit()
+		# print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
+		# print(self.phase_kets.mean(), self.phase_kets.std() )
+		# exit()
 
 
 		### normalize all kets
@@ -177,12 +177,9 @@ class MC_sampler():
 
 	def exact(self, DNN,):
 
-		self.log_mod_kets[:] = DNN.evaluate_log(DNN.params_log,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites),  )
-		self.phase_kets[:]   = DNN.evaluate_phase(DNN.params_phase,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites),  )
+		self.log_mod_kets[:] = DNN.evaluate_log(DNN.params_log,self.spinstates_ket.reshape(-1,self.N_sites),  )
+		self.phase_kets[:]   = DNN.evaluate_phase(DNN.params_phase,self.spinstates_ket.reshape(-1,self.N_sites),  )
 		
-		#print(self.log_mod_kets)
-		#exit()
-
 		self.log_psi_shift=np.max(self.log_mod_kets[:])
 		self.log_mod_kets[:] -= self.log_psi_shift 
 		

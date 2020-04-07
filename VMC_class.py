@@ -407,8 +407,8 @@ class VMC(object):
 		self.E_estimator=Energy_estimator(self.comm,self.DNN,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 
-		self.E_estimator_log=Energy_estimator(self.comm,self.DNN,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
-		self.E_estimator_log.init_global_params(self.N_MC_points,self.n_iter)
+		# self.E_estimator=Energy_estimator(self.comm,self.DNN,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
+		# self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 
 		
 	def _create_MC_sampler(self, ):
@@ -417,8 +417,8 @@ class VMC(object):
 		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
 		self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
 
-		self.MC_tool_log=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool_log.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
+		# self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
+		# self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
 		
 		
 		
@@ -490,7 +490,7 @@ class VMC(object):
 		logfile_name= 'LOGFILE--MPIprss_{0:d}'.format(self.comm.Get_rank()) + '.txt'
 		self.logfile = create_open_file(logfile_dir+logfile_name)
 		self.E_estimator.logfile=self.logfile
-		self.E_estimator_log.logfile=self.logfile
+		self.E_estimator.logfile=self.logfile
 		
 		# redircet warnings to log
 		def customwarn(message, category, filename, lineno, file=None, line=None):
@@ -786,12 +786,12 @@ class VMC(object):
 		if iteration>self.start_iter+go_back_iters and self.mode=='MC':
 
 			Eloc_mean_prev=self.prev_it_data[0]
+			
 			_c1=Eloc_mean_prev-Eloc_mean_g.real
-
 			_c2=np.abs(Eloc_mean_g.imag)
 			_c3=6.0*self.prev_it_data[2] - E_MC_std_g 
 
-			_b1=np.abs(_c1) > 2.0
+			_b1=(np.abs(_c1) > 2.0) and (Eloc_mean_g<0.0)
 			_b2=_c2 > 3.0*E_MC_std_g
 			_b3=_c3 < 0.0
 
@@ -800,7 +800,9 @@ class VMC(object):
 
 				data_tuple=(iteration, Eloc_mean_g.real, Eloc_mean_g.imag, E_MC_std_g,)
 
-				if _b2:
+				if _b1:
+					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_mean_check={4:0.10f}  !!!\n".format( *data_tuple, _c1, )
+				elif _b2:
 					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_imag_check={4:0.10f}  !!!\n".format( *data_tuple, _c2, )
 				elif _b3:
 					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_std_check={4:0.10f}  !!!\n".format(*data_tuple, _c3, )
@@ -832,6 +834,9 @@ class VMC(object):
 
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN.N_features, NN_type=self.DNN.NN_type)
+
+			# self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
+			# integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN.N_features, NN_type=self.DNN.NN_type)
 
 
 		# auxiliary variable
@@ -998,27 +1003,27 @@ class VMC(object):
 
 			##### get spin configs #####
 			if self.mode=='exact':
-				self.MC_tool_log.exact(self.DNN, )
+				self.MC_tool.exact(self.DNN, )
 
 			elif self.mode=='MC':
 				# sample
-				acceptance_ratio_g = self.MC_tool_log.sample(self.DNN, )
+				acceptance_ratio_g = self.MC_tool.sample(self.DNN, )
 				
 
 			##### compute local energies #####
-			self.E_estimator_log.compute_local_energy(NN_params_log, self.DNN.params_phase, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+			self.E_estimator.compute_local_energy(NN_params_log, self.DNN.params_phase, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift, verbose=False,)
 
 			if self.mode=='exact':
-				mod_kets=np.exp(self.MC_tool_log.log_mod_kets)
-				self.psi = mod_kets*np.exp(+1j*self.MC_tool_log.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
+				mod_kets=np.exp(self.MC_tool.log_mod_kets)
+				self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
 				abs_psi_2=self.count*np.abs(self.psi)**2
 
 				params_dict['abs_psi_2']=abs_psi_2
-				overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator_log.psi_GS_exact))**2
+				overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
 				params_dict['overlap']=overlap
 
 			
-			Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator_log.process_local_energies(params_dict)
+			Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(params_dict)
 			Eloc_std_g=np.sqrt(Eloc_var_g)
 			E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
 
@@ -1041,7 +1046,7 @@ class VMC(object):
 
 			
 		##### total batch
-		batch=self.MC_tool_log.spinstates_ket.reshape(self.input_shape)
+		batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)
 
 		return params_dict, batch
 	
