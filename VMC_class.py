@@ -791,11 +791,12 @@ class VMC(object):
 			_c2=np.abs(Eloc_mean_g.imag)
 			_c3=6.0*self.prev_it_data[2] - E_MC_std_g 
 
+			_b1=np.abs(_c1) > 2.0
 			_b2=_c2 > 3.0*E_MC_std_g
 			_b3=_c3 < 0.0
 
 			
-			if (_b2 or _b3): # and Eloc_mean_prev < 0.0: 
+			if (_b1 or _b2 or _b3): # and Eloc_mean_prev < 0.0: 
 
 				data_tuple=(iteration, Eloc_mean_g.real, Eloc_mean_g.imag, E_MC_std_g,)
 
