@@ -32,6 +32,54 @@ from jax.nn.initializers import glorot_normal, normal, ones, zeros
 # rng = random.PRNGKey(seed)
 
 
+def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, W_init=None, b_init=normal(1e-6), ignore_b=False, ):
+    """Layer construction function for a general convolution layer."""
+    lhs_spec, rhs_spec, out_spec = dimension_numbers
+    one = (1,) * len(filter_shape)
+    strides = one
+    padding='VALID'
+    W_init = W_init or glorot_normal(rhs_spec.index('I'), rhs_spec.index('O'))
+
+    def init_fun(rng, input_shape,):
+        
+        # add padding dimensions
+        input_shape=tuple(input_shape)
+        input_shape_aug=input_shape+np.array((0,0)+tuple(strides))
+        
+        filter_shape_iter = iter(filter_shape)
+        kernel_shape = [out_chan if c == 'O' else
+                        input_shape_aug[lhs_spec.index('C')] if c == 'I' else
+                        next(filter_shape_iter) for c in rhs_spec]
+        #output_shape = lax.conv_general_shape_tuple(input_shape_aug, kernel_shape, strides, padding, dimension_numbers)
+        k1, k2 = random.split(rng)
+        #W = W_init(k1, kernel_shape)
+        W = random.uniform(rng,shape=(36,12), minval=-1E-1, maxval=+1E-1).T.reshape(12,1,6,6)
+        if ignore_b:
+            return input_shape, (W,)
+        else:  
+            bias_shape = [out_chan if c == 'C' else 1 for c in out_spec]
+            bias_shape = tuple(itertools.dropwhile(lambda x: x == 1, bias_shape))
+            b = b_init(k2, bias_shape)
+            return input_shape, (W, b)
+
+    def periodic_padding(inputs,):
+        n_x=filter_shape[0]-strides[0]
+        n_y=filter_shape[1]-strides[1]
+        return jnp.pad(inputs.astype(np.float64), ((0,0),(0,0),(0,n_x),(0,n_y)), mode='wrap')
+        
+
+    def apply_fun(params, inputs, **kwargs):
+        W = params[0]
+        # move into lax.conv_general_dilated after defining padding='PERIODIC'
+        if ignore_b:
+            a=periodic_padding(inputs,)
+            return lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers)
+        else:
+            return lax.conv_general_dilated(periodic_padding(inputs,), W, strides, padding, one, one, dimension_numbers=dimension_numbers) + params[1]
+
+    return init_fun, apply_fun
+
+
 
 def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
 
@@ -127,7 +175,7 @@ def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float
 
 
 
-def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
+def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64,):
     """Layer construction function for a batch normalization layer."""
     _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
     _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
@@ -159,10 +207,17 @@ def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_in
         # 1/(N/p) = p/N : p different terms in sum left
         # uncorrelated: 1/\sqrt(p) 
         # correlated: 1/p
-        log_psi   = jnp.sum(x.reshape(reduce_shape,order='C'), axis=[1,])#/jnp.sqrt(128.0)
-        
+
+        #print(x.shape, reduce_shape)
+
+        log_psi   = jnp.sum(x.reshape(reduce_shape,order='C'), axis=[1,3])#/jnp.sqrt(128.0)
+
+        #print(log_psi.shape, output_shape)
+
         # sum over hidden neurons
-        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])   
+        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])
+
+        #print(log_psi.shape)
 
         # regularize output
         a=8.0
@@ -204,7 +259,7 @@ def Phase_arg(output_layer_shape,center=True, scale=True, a_init=ones, b_init=ze
         phase_psi=x 
 
         # symmetrize
-        phase_psi   = jnp.sum(phase_psi.reshape(reduce_shape,order='C'), axis=[1,])
+        phase_psi   = jnp.sum(phase_psi.reshape(reduce_shape,order='C'), axis=[1,3])
         
         # sum over hidden neurons
         phase_psi   = jnp.sum(  phase_psi.reshape(output_shape), axis=[1,])

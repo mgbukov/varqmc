@@ -42,7 +42,7 @@ data_dir="$(~/miniconda3/envs/jax-noGPU/bin/python make_data_file.py)"
 ### CPU
 #echo ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
-echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+echo mpirun -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
 
 

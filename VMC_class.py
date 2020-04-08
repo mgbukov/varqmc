@@ -351,12 +351,11 @@ class VMC(object):
 	
 
 		elif self.NN_type == 'CNN':
-			self.shapes=dict( layer_1 = dict(out_chan=1, filter_shape=(2,2), strides=(1,1), ),
+			self.shapes=dict( layer_1 = dict(out_chan=12, filter_shape=(self.L,self.L), ),
 					#	 layer_2 = dict(out_chan=1, filter_shape=(2,2), strides=(1,1), ),
 						)
-			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}-{1:d}-{2:d}'.format(value['out_chan'],value['filter_shape'][0],value['strides'][0]) for value in self.shapes.values() )
-
-
+			self.NN_shape_str='{0:d}'.format(self.L**2) + ''.join( '--{0:d}-{1:d}'.format(value['out_chan'],value['filter_shape'][0],) for value in self.shapes.values() )
+			
 
 		### create Neural network
 		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
@@ -414,8 +413,12 @@ class VMC(object):
 	def _create_MC_sampler(self, ):
 		### initialize MC sampler variables
 		self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
-		self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
+		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.NN_type,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
+		
+		if self.NN_type=='DNN':
+			self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
+		elif self.NN_type=='CNN':
+			self.input_shape=(-1,self.DNN.N_symm,1,self.L,self.L)
 
 		# self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
 		# self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)

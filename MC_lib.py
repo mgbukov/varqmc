@@ -38,8 +38,6 @@ class MC_sampler():
 		self.thermal=False
 
 
-
-
 	def compute_acceptance_ratio(self,N_accepted,N_MC_proposals,mode='MC'):
 
 		if mode=='exact':
@@ -57,7 +55,7 @@ class MC_sampler():
 
 
 
-	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,basis_type,MPI_basis_dtype,n_iter):
+	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,NN_type,basis_type,MPI_basis_dtype,n_iter):
 
 		self.N_batch=N_batch
 		self.N_sites=L**2
@@ -68,6 +66,13 @@ class MC_sampler():
 
 		self.thermalization_time=10*self.N_sites
 		#self.auto_correlation_time=self.N_sites  # min(0.05, 0.4/acc_ratio * N_site_
+
+		self.NN_type=NN_type
+
+		if self.NN_type=='DNN':
+			self.reshape_tuple=(-1,self.N_sites)
+		elif self.NN_type=='CNN':
+			self.reshape_tuple=(-1,1,L,L)
 
 
 	
@@ -128,7 +133,7 @@ class MC_sampler():
 												)
 
 		if compute_phases:
-			self.phase_kets[:]=DNN.evaluate_phase(DNN.params_phase, self.spinstates_ket.reshape(-1,self.N_sites), )
+			self.phase_kets[:]=DNN.evaluate_phase(DNN.params_phase, self.spinstates_ket.reshape(self.reshape_tuple), )
 
 		# print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
 		# print(self.phase_kets.mean(), self.phase_kets.std() )
@@ -177,8 +182,8 @@ class MC_sampler():
 
 	def exact(self, DNN,):
 
-		self.log_mod_kets[:] = DNN.evaluate_log(DNN.params_log,self.spinstates_ket.reshape(-1,self.N_sites),  )
-		self.phase_kets[:]   = DNN.evaluate_phase(DNN.params_phase,self.spinstates_ket.reshape(-1,self.N_sites),  )
+		self.log_mod_kets[:] = DNN.evaluate_log(DNN.params_log,self.spinstates_ket.reshape(self.reshape_tuple),  )
+		self.phase_kets[:]   = DNN.evaluate_phase(DNN.params_phase,self.spinstates_ket.reshape(self.reshape_tuple),  )
 		
 		self.log_psi_shift=np.max(self.log_mod_kets[:])
 		self.log_mod_kets[:] -= self.log_psi_shift 

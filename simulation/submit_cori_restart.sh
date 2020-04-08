@@ -42,7 +42,7 @@ data_dir="data/2020_03_15-19_12_08--NG-L_6-MC_restart"
 ### CPU
 #echo ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
-echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+echo mpirun -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
 
 

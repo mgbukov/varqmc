@@ -4,7 +4,7 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 from jax.experimental import optimizers
 #from optimizers import sgd, adam
-from jax import jit, grad, vmap, random, ops, partial
+from jax import jit, grad, vmap, random, ops, partial, disable_jit
 
 import jax.numpy as jnp
 import numpy as np

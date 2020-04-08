@@ -53,6 +53,11 @@ class Energy_estimator():
 
 		self.minibatch_size=minibatch_size
 
+		if self.NN_type=='DNN':
+			self.reshape_tuple=(-1,L**2)
+		elif self.NN_type=='CNN':
+			self.reshape_tuple=(-1,1,L,L)
+
 
 		###### define model parameters ######
 		Lx=L
@@ -409,7 +414,7 @@ class Energy_estimator():
 			for j in range(N_minibatches):
 
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
-				batch=data[batch_idx].reshape(-1,self.N_sites)
+				batch=data[batch_idx].reshape(self.reshape_tuple)
 
 				#batch, batch_idx, = next(batches)
 				
