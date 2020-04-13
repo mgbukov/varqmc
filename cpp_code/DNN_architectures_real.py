@@ -32,13 +32,14 @@ from jax.nn.initializers import glorot_normal, normal, ones, zeros
 # rng = random.PRNGKey(seed)
 
 
-def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, W_init=None, b_init=normal(1e-6), ignore_b=False, ):
+def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2, ):
     """Layer construction function for a general convolution layer."""
     lhs_spec, rhs_spec, out_spec = dimension_numbers
     one = (1,) * len(filter_shape)
     strides = one
     padding='VALID'
-    W_init = W_init or glorot_normal(rhs_spec.index('I'), rhs_spec.index('O'))
+
+    #W_init = W_init or glorot_normal(rhs_spec.index('I'), rhs_spec.index('O'))
 
     def init_fun(rng, input_shape,):
         
@@ -50,17 +51,20 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, W_init=None, 
         kernel_shape = [out_chan if c == 'O' else
                         input_shape_aug[lhs_spec.index('C')] if c == 'I' else
                         next(filter_shape_iter) for c in rhs_spec]
-        #output_shape = lax.conv_general_shape_tuple(input_shape_aug, kernel_shape, strides, padding, dimension_numbers)
+        output_shape = lax.conv_general_shape_tuple(input_shape_aug, kernel_shape, strides, padding, dimension_numbers)
+        output_shape=output_shape[:2]+input_shape[2:] 
         k1, k2 = random.split(rng)
         #W = W_init(k1, kernel_shape)
-        W = random.uniform(rng,shape=(36,12), minval=-1E-1, maxval=+1E-1).T.reshape(12,1,6,6)
+        W = random.uniform(rng,shape=kernel_shape, minval=-init_value_W, maxval=+init_value_W)
+        #W = random.uniform(rng,shape=(16,12), minval=-1E-1, maxval=+1E-1).T.reshape(12,1,4,4)
         if ignore_b:
-            return input_shape, (W,)
+            return output_shape, (W,)
         else:  
             bias_shape = [out_chan if c == 'C' else 1 for c in out_spec]
             bias_shape = tuple(itertools.dropwhile(lambda x: x == 1, bias_shape))
-            b = b_init(k2, bias_shape)
-            return input_shape, (W, b)
+            #b = b_init(k2, bias_shape)
+            b = random.uniform(k1,shape=bias_shape, minval=-init_value_b, maxval=+init_value_b)
+            return output_shape, (W, b)
 
     def periodic_padding(inputs,):
         n_x=filter_shape[0]-strides[0]

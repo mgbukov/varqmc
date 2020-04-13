@@ -36,10 +36,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -375,97 +375,89 @@ cdef class Neural_Net:
         self.NN_type=NN_type
         self.NN_dtype=NN_dtype
 
+        shapes_log=shapes[0]
+        shapes_phase=shapes[1]
+
+        shape_last_layer_log  =shapes[0]['layer_2']
+        shape_last_layer_phase=shapes[1]['layer_2']
+
+
         if NN_type=='DNN':
            
             self.N_symm=_L*_L*2*2*2 # no Z symmetry
           
             # define DNN
-            
-            if self.NN_dtype=='real-decoupled':
 
 
-                shapes_log=shapes[0]
-                shapes_phase=shapes[1]
+            NN_arch_log = {
+                                    # 'layer_1': GeneralDense_cpx(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-2),  # 5E-2
+                                    # 'nonlin_1': elementwise(poly_real),
+                                    # 'reg': Regularization((shape_last_layer_log[1],)),
 
-                shape_last_layer_log  =shapes[0]['layer_1']
-                shape_last_layer_phase=shapes[1]['layer_1']
+                                    'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=5E-0/shapes_log['layer_1'][0] ),  # 1E-2
+                                    'nonlin_1': elementwise(logcosh),
+                                    'layer_2': GeneralDense(shapes_log['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm ),  # 1E-1
+                                    'nonlin_2': elementwise(xtanh),
+                                    'reg': Regularization((shape_last_layer_log[1],), ),
+
+                                    # 'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-1),  # 1E-2
+                                    # 'nonlin_1': elementwise(logcosh),
+                                    # 'reg': Regularization((shape_last_layer_log[1],)),
+                        
+                        }
 
 
-                NN_arch_log = {
-                                        # 'layer_1': GeneralDense_cpx(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-2),  # 5E-2
-                                        # 'nonlin_1': elementwise(poly_real),
-                                        # 'reg': Regularization((shape_last_layer_log[1],)),
-
-                                        # 'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=5E-0/shapes_log['layer_1'][0] ),  # 1E-2
-                                        # 'nonlin_1': elementwise(logcosh),
-                                        # 'layer_2': GeneralDense(shapes_log['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm ),  # 1E-1
-                                        # 'nonlin_2': elementwise(xtanh),
-                                        # 'reg': Regularization((shape_last_layer_log[1],), ),
-
-                                        'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-1),  # 1E-2
-                                        'nonlin_1': elementwise(logcosh),
-                                        #'layer_2': GeneralDense(shapes_log['layer_2'], ignore_b=False, init_value_W=5E-2, init_value_b=5E-2),  # 5E-2
-                                        #'nonlin_2': elementwise(xtanh),
-                                        'reg': Regularization((shape_last_layer_log[1],)),
+            NN_arch_phase = {
                             
-                            }
+                                    'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=6E-0/shapes_phase['layer_1'][0] ), #3E-1
+                                    'nonlin_1': elementwise(logcosh),
+                                    'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm ), #init_value_W=1E-2, init_value_b=1E-2
+                                    'nonlin_2': elementwise(logcosh),
+                                    'reg': Phase_arg((shape_last_layer_phase[1],)),
+
+                                    # 'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
+                                    # 'nonlin_1': elementwise(logcosh),
+                                    # 'reg': Phase_arg((shape_last_layer_phase[1],)),
+                        
+                        }
+
+            #self.NN_architecture=(NN_arch_log, NN_arch_phase)
 
 
-                NN_arch_phase = {
-                                
-                                        # 'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=6E-0/shapes_phase['layer_1'][0] ), #3E-1
-                                        # 'nonlin_1': elementwise(logcosh),
-                                        # 'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm ), #init_value_W=1E-2, init_value_b=1E-2
-                                        # 'nonlin_2': elementwise(logcosh),
-                                        # 'reg': Phase_arg((shape_last_layer_phase[1],)),
+            # determine shape variables
+            input_shape=(1,self.N_sites)
+            self.input_shape=(-1,self.N_sites)
 
-                                        'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
-                                        'nonlin_1': elementwise(logcosh),
-                                        #'layer_2': GeneralDense(shapes_phase['layer_2'], ignore_b=False, init_value_W=1E-2, init_value_b=1E-2), #init_value_W=5E-1, init_value_b=5E-1
-                                        #'nonlin_2': elementwise(logcosh),
-                                        'reg': Phase_arg((shape_last_layer_phase[1],)),
+            reduce_shape_log = (-1,self.N_symm,shape_last_layer_log[1],1)
+            reduce_shape_phase = (-1,self.N_symm,shape_last_layer_phase[1],1) 
+
+            output_shape_log = (-1,shape_last_layer_log[1],)
+            output_shape_phase = (-1,shape_last_layer_phase[1],)
+
+
+            # create a copy of the NN architecture to update the batch norm mean and variance dynamically
+            self.params_log,   self.apply_layer_log,  self.apply_fun_args_log,   self.apply_layer_log_dyn,   self.apply_fun_args_log_dyn  = self._compute_layers(rng, NN_arch_log  , input_shape, output_shape_log, reduce_shape_log)
+            self.params_phase, self.apply_layer_phase, self.apply_fun_args_phase, self.apply_layer_phase_dyn, self.apply_fun_args_phase_dyn= self._compute_layers(rng, NN_arch_phase, input_shape, output_shape_phase, reduce_shape_phase)
+
+            self.params_log_update=np.zeros_like(self.params_log)
+            self.params_phase_update=np.zeros_like(self.params_phase)
                             
-                            }
-
-                #self.NN_architecture=(NN_arch_log, NN_arch_phase)
-
-
-                # determine shape variables
-                input_shape=(1,self.N_sites)
-                self.input_shape=(-1,self.N_sites)
-
-                reduce_shape_log = (-1,self.N_symm,shape_last_layer_log[1],1)
-                reduce_shape_phase = (-1,self.N_symm,shape_last_layer_phase[1],1) 
-
-                output_shape_log = (-1,shape_last_layer_log[1],)
-                output_shape_phase = (-1,shape_last_layer_phase[1],)
-
-
-                # create a copy of the NN architecture to update the batch norm mean and variance dynamically
-                self.params_log,   self.apply_layer_log,  self.apply_fun_args_log,   self.apply_layer_log_dyn,   self.apply_fun_args_log_dyn  = self._compute_layers(rng, NN_arch_log  , input_shape, output_shape_log, reduce_shape_log)
-                self.params_phase, self.apply_layer_phase, self.apply_fun_args_phase, self.apply_layer_phase_dyn, self.apply_fun_args_phase_dyn= self._compute_layers(rng, NN_arch_phase, input_shape, output_shape_phase, reduce_shape_phase)
-
-                self.params_log_update=np.zeros_like(self.params_log)
-                self.params_phase_update=np.zeros_like(self.params_phase)
-                                
-                # self.params=(params_log, params_phase)
-                # self.apply_fun_args    =(apply_fun_args_log,     apply_fun_args_phase)
-                # self.apply_fun_args_dyn=(apply_fun_args_dyn_log, apply_fun_args_dyn_phase)
+            # self.params=(params_log, params_phase)
+            # self.apply_fun_args    =(apply_fun_args_log,     apply_fun_args_phase)
+            # self.apply_fun_args_dyn=(apply_fun_args_dyn_log, apply_fun_args_dyn_phase)
 
 
 
-                # self.apply_layer = lambda params, inputs, apply_fun_args: ( apply_layer_log  (params[0], inputs, kwargs=apply_fun_args[0]) ,
-                #                                                             apply_layer_phase(params[1], inputs, kwargs=sapply_fun_args[1]) , 
-                #                                                         )
+            # self.apply_layer = lambda params, inputs, apply_fun_args: ( apply_layer_log  (params[0], inputs, kwargs=apply_fun_args[0]) ,
+            #                                                             apply_layer_phase(params[1], inputs, kwargs=sapply_fun_args[1]) , 
+            #                                                         )
 
 
-                # self.apply_layer_dyn = lambda params, inputs, kwargs=self.apply_fun_args_dyn: ( apply_layer_dyn_log  (params[0], inputs, kwargs=kwargs[0]) ,
-                #                                                                                 apply_layer_dyn_phase(params[1], inputs, kwargs=kwargs[1]) , 
-                #                                                                 ) 
+            # self.apply_layer_dyn = lambda params, inputs, kwargs=self.apply_fun_args_dyn: ( apply_layer_dyn_log  (params[0], inputs, kwargs=kwargs[0]) ,
+            #                                                                                 apply_layer_dyn_phase(params[1], inputs, kwargs=kwargs[1]) , 
+            #                                                                 ) 
                 
-            else:
-                raise ValueError('NN_dtype not implemented.')
-        
+           
 
         
         elif NN_type=='CNN':
@@ -473,34 +465,30 @@ cdef class Neural_Net:
             self.N_symm=2*2*2 # no Z, Tx, Ty symmetry
 
             dim_nums=('NCHW', 'OIHW', 'NCHW') # default
-            
+
             # define CNN
             init_value_W = 1E-3
             init_value_b = 1E-1
-            W_init = partial(random.uniform, minval=-init_value_W, maxval=+init_value_W )
-            b_init = partial(random.uniform, minval=-init_value_b, maxval=+init_value_b )
-
-
-
-            #shapes_log=shapes[0]
-            #shapes_phase=shapes[1]
-
-            shape_last_layer_log  =[shapes['layer_1']['out_chan']]
-            shape_last_layer_phase=[shapes['layer_1']['out_chan']]
-
+            
 
             NN_arch_log = {
-                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], ignore_b=True, W_init=W_init, b_init=b_init), 
+                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes_log['layer_1'][0], shapes_log['layer_1'][1], ignore_b=True, init_value_W=1E-2, ), 
                                     'nonlin_1': elementwise(logcosh),
+                                    'layer_2': GeneralConvPeriodic(dim_nums, shapes_log['layer_2'][0], shapes_log['layer_2'][1], ignore_b=True, init_value_W=1E-2, init_value_b=1E-2, ), 
+                                    'nonlin_2': elementwise(logcosh),
                                     'reg': Regularization((shape_last_layer_log[0],), ),
+                            
+
                             }
 
 
 
             NN_arch_phase = {
                                 
-                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], ignore_b=True, W_init=W_init, b_init=b_init), 
+                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes_phase['layer_1'][0], shapes_phase['layer_1'][1], ignore_b=True, init_value_W=1E-2, ), 
                                     'nonlin_1': elementwise(logcosh),
+                                    'layer_2': GeneralConvPeriodic(dim_nums, shapes_phase['layer_2'][0], shapes_phase['layer_2'][1], ignore_b=True, init_value_W=1E-2, init_value_b=1E-2, ), 
+                                    'nonlin_2': elementwise(logcosh),
                                     'reg': Phase_arg((shape_last_layer_phase[0],)),
 
                             }
@@ -511,7 +499,7 @@ cdef class Neural_Net:
             self.input_shape=(-1,1,_L,_L)
 
             reduce_shape_log =   (-1,self.N_symm,shape_last_layer_log[0],self.N_sites)
-            reduce_shape_phase = (-1,self.N_symm,shape_last_layer_log[0],self.N_sites) 
+            reduce_shape_phase = (-1,self.N_symm,shape_last_layer_phase[0],self.N_sites) 
 
             output_shape_log = (-1,shape_last_layer_log[0],)
             output_shape_phase = (-1,shape_last_layer_phase[0],)

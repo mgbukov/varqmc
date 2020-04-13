@@ -11,6 +11,8 @@ import yaml
 # export OMP_NUM_THREADS=4
 # mpiexec -n 4 python main.py --test
 
+# sacct -j "" --format="JobID,MaxRSS,AveRSS,MaxRSSNode"
+
 
 if '--test' in sys.argv:
     params = yaml.load(open('config_params_test.yaml'),Loader=yaml.FullLoader)

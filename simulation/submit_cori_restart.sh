@@ -32,7 +32,7 @@ echo "#SBATCH --job-name=job_VMC" >> submission.sh
 
 
 echo "module purge" >> submission.sh
-echo "module load cray-hdf5" >> submission.sh
+#echo "module load cray-hdf5" >> submission.sh
 echo "source activate jax-noGPU" >> submission.sh
 
 

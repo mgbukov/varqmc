@@ -30,8 +30,8 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
         #perm = rng.permutation(sample_size)
         for i in range(N_minibatches):
             #batch_idx = perm[i * minibatch_size : (i + 1) * minibatch_size]
-            #batch_idx = np.arange(i*minibatch_size, min(sample_size, (i+1)*minibatch_size), 1)
-            batch_idx = np.arange(i*minibatch_size, (i+1)*minibatch_size, 1)
+            batch_idx = np.arange(i*minibatch_size, min(sample_size, (i+1)*minibatch_size), 1)
+            #batch_idx = np.arange(i*minibatch_size, (i+1)*minibatch_size, 1)
             yield data[batch_idx], batch_idx,
 
 
@@ -403,27 +403,32 @@ class Energy_estimator():
 			num_complete_batches, leftover = divmod(self.nn_uq, self.minibatch_size)
 			N_minibatches = num_complete_batches + bool(leftover)
 
+			data=self._spinstates_bra[:self.nn][self.index]
+			batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
+
+			'''
 			data=np.zeros((N_minibatches*self.minibatch_size,)+self._spinstates_bra.shape[1:],dtype=self._spinstates_bra.dtype)
 			data[:self.nn_uq,...]=self._spinstates_bra[:self.nn][self.index]
-			#batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
-
+			'''
 			# preallocate data
 			prediction_bras=np.zeros(self.nn_uq,dtype=np.float64)
 			
 			ti=time.time()
 			for j in range(N_minibatches):
 
+				batch, batch_idx, = next(batches)
+				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(self.reshape_tuple),  )
+				
+
+				'''
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
 				batch=data[batch_idx].reshape(self.reshape_tuple)
 
-				#batch, batch_idx, = next(batches)
-				
-				#prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites),  )
 				if j==N_minibatches-1:
 					prediction_bras[batch_idx[0]:self.nn_uq] = evaluate_NN(NN_params, batch,  )[:self.nn_uq-batch_idx[0]]
 				else:
 					prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,  )
-
+				'''
 				
 				# with disable_jit():
 				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
@@ -437,7 +442,7 @@ class Energy_estimator():
 		else:
 
 			### evaluate network on entire sample
-			prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(self.nn_uq,self.N_symm,self.N_sites),  )._value
+			prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(self.reshape_tuple),  )._value
 				
 
 
