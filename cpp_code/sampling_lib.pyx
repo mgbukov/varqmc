@@ -387,8 +387,6 @@ cdef class Neural_Net:
             self.N_symm=_L*_L*2*2*2 # no Z symmetry
           
             # define DNN
-
-
             NN_arch_log = {
                                     # 'layer_1': GeneralDense_cpx(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-2),  # 5E-2
                                     # 'nonlin_1': elementwise(poly_real),
@@ -421,12 +419,11 @@ cdef class Neural_Net:
                         
                         }
 
-            #self.NN_architecture=(NN_arch_log, NN_arch_phase)
-
 
             # determine shape variables
-            input_shape=(1,self.N_sites)
-            self.input_shape=(-1,self.N_sites)
+            input_shape_log=(1,self.N_sites)
+            input_shape_phase=(1,self.N_sites)
+            #self.input_shape=(-1,self.N_sites)
 
             reduce_shape_log = (-1,self.N_symm,shape_last_layer_log[1],1)
             reduce_shape_phase = (-1,self.N_symm,shape_last_layer_phase[1],1) 
@@ -435,13 +432,6 @@ cdef class Neural_Net:
             output_shape_phase = (-1,shape_last_layer_phase[1],)
 
 
-            # create a copy of the NN architecture to update the batch norm mean and variance dynamically
-            self.params_log,   self.apply_layer_log,  self.apply_fun_args_log,   self.apply_layer_log_dyn,   self.apply_fun_args_log_dyn  = self._compute_layers(rng, NN_arch_log  , input_shape, output_shape_log, reduce_shape_log)
-            self.params_phase, self.apply_layer_phase, self.apply_fun_args_phase, self.apply_layer_phase_dyn, self.apply_fun_args_phase_dyn= self._compute_layers(rng, NN_arch_phase, input_shape, output_shape_phase, reduce_shape_phase)
-
-            self.params_log_update=np.zeros_like(self.params_log)
-            self.params_phase_update=np.zeros_like(self.params_phase)
-                            
             # self.params=(params_log, params_phase)
             # self.apply_fun_args    =(apply_fun_args_log,     apply_fun_args_phase)
             # self.apply_fun_args_dyn=(apply_fun_args_dyn_log, apply_fun_args_dyn_phase)
@@ -466,15 +456,11 @@ cdef class Neural_Net:
 
             dim_nums=('NCHW', 'OIHW', 'NCHW') # default
 
-            # define CNN
-            init_value_W = 1E-3
-            init_value_b = 1E-1
-            
-
+            # define CNN   
             NN_arch_log = {
-                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes_log['layer_1'][0], shapes_log['layer_1'][1], ignore_b=True, init_value_W=1E-2, ), 
+                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes_log['layer_1'][0], shapes_log['layer_1'][1], ignore_b=True, init_value_W=5E-2, ), 
                                     'nonlin_1': elementwise(logcosh),
-                                    'layer_2': GeneralConvPeriodic(dim_nums, shapes_log['layer_2'][0], shapes_log['layer_2'][1], ignore_b=True, init_value_W=1E-2, init_value_b=1E-2, ), 
+                                    'layer_2': GeneralConvPeriodic(dim_nums, shapes_log['layer_2'][0], shapes_log['layer_2'][1], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1, ), 
                                     'nonlin_2': elementwise(logcosh),
                                     'reg': Regularization((shape_last_layer_log[0],), ),
                             
@@ -485,9 +471,9 @@ cdef class Neural_Net:
 
             NN_arch_phase = {
                                 
-                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes_phase['layer_1'][0], shapes_phase['layer_1'][1], ignore_b=True, init_value_W=1E-2, ), 
+                                    'layer_1': GeneralConvPeriodic(dim_nums, shapes_phase['layer_1'][0], shapes_phase['layer_1'][1], ignore_b=True, init_value_W=5E-2, ), 
                                     'nonlin_1': elementwise(logcosh),
-                                    'layer_2': GeneralConvPeriodic(dim_nums, shapes_phase['layer_2'][0], shapes_phase['layer_2'][1], ignore_b=True, init_value_W=1E-2, init_value_b=1E-2, ), 
+                                    'layer_2': GeneralConvPeriodic(dim_nums, shapes_phase['layer_2'][0], shapes_phase['layer_2'][1], ignore_b=False, init_value_W=1E-1, init_value_b=1E-1, ), 
                                     'nonlin_2': elementwise(logcosh),
                                     'reg': Phase_arg((shape_last_layer_phase[0],)),
 
@@ -495,8 +481,9 @@ cdef class Neural_Net:
 
 
             # determine shape variables
-            input_shape     =(+1,1,_L,_L)
-            self.input_shape=(-1,1,_L,_L)
+            input_shape_log   =(+1,1,_L,_L)
+            input_shape_phase =(+1,1,_L,_L)
+            #self.input_shape=(-1,1,_L,_L)
 
             reduce_shape_log =   (-1,self.N_symm,shape_last_layer_log[0],self.N_sites)
             reduce_shape_phase = (-1,self.N_symm,shape_last_layer_phase[0],self.N_sites) 
@@ -505,18 +492,17 @@ cdef class Neural_Net:
             output_shape_phase = (-1,shape_last_layer_phase[0],)
 
 
-            # create a copy of the NN architecture to update the batch norm mean and variance dynamically
-            self.params_log,   self.apply_layer_log,  self.apply_fun_args_log,   self.apply_layer_log_dyn,   self.apply_fun_args_log_dyn  = self._compute_layers(rng, NN_arch_log  , input_shape, output_shape_log, reduce_shape_log)
-            self.params_phase, self.apply_layer_phase, self.apply_fun_args_phase, self.apply_layer_phase_dyn, self.apply_fun_args_phase_dyn= self._compute_layers(rng, NN_arch_phase, input_shape, output_shape_phase, reduce_shape_phase)
-
-            self.params_log_update=np.zeros_like(self.params_log)
-            self.params_phase_update=np.zeros_like(self.params_phase)
-
-
-
         else:
             raise ValueError("unsupported string for variable for NN_type.") 
-        
+
+
+        # create a copy of the NN architecture to update the batch norm mean and variance dynamically
+        self.params_log,   self.apply_layer_log,  self.apply_fun_args_log,   self.apply_layer_log_dyn,   self.apply_fun_args_log_dyn  = self._compute_layers(rng, NN_arch_log  , input_shape_log, output_shape_log, reduce_shape_log)
+        self.params_phase, self.apply_layer_phase, self.apply_fun_args_phase, self.apply_layer_phase_dyn, self.apply_fun_args_phase_dyn= self._compute_layers(rng, NN_arch_phase, input_shape_phase, output_shape_phase, reduce_shape_phase)
+
+        self.params_log_update=np.zeros_like(self.params_log)
+        self.params_phase_update=np.zeros_like(self.params_phase)
+    
 
 
         self.NN_Tree_log = NN_Tree(self.params_log)
@@ -685,10 +671,6 @@ cdef class Neural_Net:
     property NN_dtype:
         def __get__(self):
             return self.NN_dtype
-
-    # property NN_architecture:
-    #     def __get__(self):
-    #         return self.NN_architecture
 
     property apply_fun_args_log:
         def __get__(self):
