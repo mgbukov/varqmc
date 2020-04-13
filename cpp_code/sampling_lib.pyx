@@ -17,13 +17,15 @@ cimport cython
 import numpy as np
 cimport numpy as np
 from libcpp.vector cimport vector
-from libc.stdlib cimport rand, srand, RAND_MAX
 from libcpp cimport bool
+from libc.stdlib cimport rand, srand, RAND_MAX
 from libc.math cimport exp #, sin, cos, acos, sqrt, fabs, M_PI, floor, ceil
 
 from cython.parallel cimport prange, threadid, parallel
 cimport openmp
 
+from rng_wrapper cimport *
+from local_sampling cimport *
 
 from DNN_architectures_cpx import *
 from DNN_architectures_real import *
@@ -80,44 +82,6 @@ cdef extern from *:
     void OMP_BARRIER_PRAGMA() nogil
 
 
-cdef extern from "<stdlib.h>" nogil:
-    int rand_r(unsigned int *seed) nogil;
-
-'''
-## cpp mt19937: different on linux and osx 
-cdef extern from "<random>" namespace "std":
-    cdef cppclass mt19937 nogil:
-        mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
-        mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
-
-    cdef cppclass uniform_real_distribution[T] nogil:
-        uniform_real_distribution() nogil
-        uniform_real_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-
-    cdef cppclass uniform_int_distribution[T] nogil:
-        uniform_int_distribution() nogil
-        uniform_int_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-'''
-
-
-cdef extern from "boost/random/mersenne_twister.hpp" namespace "boost::random" nogil:
-    cdef cppclass mt19937 nogil:
-        mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
-        mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
-
-cdef extern from "boost/random/uniform_int_distribution.hpp" namespace "boost::random" nogil:
-    cdef cppclass uniform_int_distribution[T] nogil:
-        uniform_int_distribution() nogil
-        uniform_int_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-
-cdef extern from "boost/random/uniform_real_distribution.hpp" namespace "boost::random" nogil:
-    cdef cppclass uniform_real_distribution[T] nogil:
-        uniform_real_distribution() nogil
-        uniform_real_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
 
 
 
@@ -257,45 +221,6 @@ def c_offdiag_sum(
 
 
 ###########################
-
-ctypedef np.uint16_t (*nb_func_type)(const int,const int,const int) nogil;
-
-
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_0(int x, int y, int L) nogil:
-    return ((x+1)%L+L)%L+L*y
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_1(int x, int y, int L) nogil:
-    return ((x-1)%L+L)%L+L*y
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_2(int x, int y, int L) nogil:
-    return x+L*(((y+1)%L+L)%L)
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_3(int x, int y, int L) nogil:
-    return x+L*(((y-1)%L+L)%L)
-
-
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_4(int x, int y, int L) nogil:
-    return ((x+1)%L+L)%L+L*(((y+1)%L+L)%L)
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_5(int x, int y, int L) nogil:
-    return ((x-1)%L+L)%L+L*(((y+1)%L+L)%L)
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_6(int x, int y, int L) nogil:
-    return ((x+1)%L+L)%L+L*(((y-1)%L+L)%L)
-
-@cython.boundscheck(False)
-cdef np.uint16_t neighbors_func_7(int x, int y, int L) nogil:
-    return ((x-1)%L+L)%L+L*(((y-1)%L+L)%L)
-
 
 
 
