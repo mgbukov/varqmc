@@ -81,6 +81,11 @@ class natural_gradient():
 		self.OO_expt=np.zeros([self.N_varl_params,self.N_varl_params],dtype=dtype)
 		self.O_expt2=np.zeros_like(self.OO_expt)
 
+
+		self.S_eigvals=np.zeros_like(self.F_vector)
+		self.VF_overlap=np.zeros_like(self.F_vector)
+
+
 		self.E_diff_weighted=np.zeros(self.N_batch,dtype=dtype)
 
 
@@ -224,6 +229,10 @@ class natural_gradient():
 		elif self.TDVP_opt == 'svd':
 			lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
 			lmbda*=self.S_norm
+
+			self.S_eigvals[:]=lmbda
+			self.VF_overlap[:]=jnp.abs( jnp.dot(V.T.conj(), F) )
+
 			self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2)), jnp.dot(V.T.conj(), F) ) )
 
 			#self.S_approx=jnp.dot(V ,  jnp.dot( np.diag((lmbda**2 + (self.tol)**2))/lmbda, V.T.conj() ) )
@@ -324,6 +333,9 @@ class Runge_Kutta_solver():
 		self.r2=0.0
 		self.dE=0.0
 
+		self.S_eigvals=np.zeros(NN_Tree.N_varl_params,dtype=np.float64)
+		self.VF_overlap=np.zeros_like(self.S_eigvals)
+
 		# RK params
 		self.step_size=step_size
 		self.time=0.0
@@ -371,6 +383,9 @@ class Runge_Kutta_solver():
 
 			self.r2=self.compute_r2(Eloc_params_dict)
 			self.dE=self.NG.dE*self.step_size
+
+			self.S_eigvals[:]=self.NG.S_eigvals
+			self.VF_overlap[:]=self.NG.VF_overlap
 
 		else:
 			self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)

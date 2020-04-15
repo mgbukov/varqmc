@@ -272,7 +272,7 @@ class VMC(object):
 		m_l=self.N_MC_chains*self.comm.Get_rank()
 		m_r=self.N_MC_chains*(self.comm.Get_rank()+1)
 
-		self.DNN._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
+		self.DNN_log._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
 
 
 
@@ -280,12 +280,12 @@ class VMC(object):
 		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter)
 
 		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-			self.DNN.params_log, self.DNN.params_phase, \
-			self.DNN.apply_fun_args_log, self.DNN.apply_fun_args_phase, \
+			self.DNN_log.params, self.DNN_phase.params, \
+			self.DNN_log.apply_fun_args, self.DNN_phase.apply_fun_args, \
 			self.MC_tool.log_psi_shift = pickle.load(handle)
 			
-		self.opt_log.init_opt_state(self.DNN.params_log)
-		self.opt_phase.init_opt_state(self.DNN.params_phase)
+		self.opt_log.init_opt_state(self.DNN_log.params)
+		self.opt_phase.init_opt_state(self.DNN_phase.params)
 
 
 		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter-1) 
@@ -294,10 +294,10 @@ class VMC(object):
 
 		
 		if self.opt_log.cost=='SR':
-			self.opt_log.NG.nat_grad_guess[:]  = (self.DNN.NN_Tree_log.ravel(DNN_params_log_old)-self.DNN.NN_Tree_log.ravel(self.DNN.params_log) )/self.opt_log.step_size
+			self.opt_log.NG.nat_grad_guess[:]  = (self.DNN_log.NN_Tree.ravel(DNN_params_log_old)-self.DNN_log.NN_Tree.ravel(self.DNN_log.params) )/self.opt_log.step_size
 
 		if self.opt_phase.cost=='SR':
-			self.opt_phase.NG.nat_grad_guess[:]= (self.DNN.NN_Tree_phase.ravel(DNN_params_phase_old)-self.DNN.NN_Tree_phase.ravel(self.DNN.params_phase) )/self.opt_phase.step_size
+			self.opt_phase.NG.nat_grad_guess[:]= (self.DNN_phase.NN_Tree.ravel(DNN_params_phase_old)-self.DNN_phase.NN_Tree.ravel(self.DNN_phase.params) )/self.opt_phase.step_size
 
 
 
@@ -372,10 +372,7 @@ class VMC(object):
 		### create Neural network
 		self.DNN_log=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 		self.DNN_phase=Phase_Net(self.comm, self.shapes[1], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
-	
-		#print(self.DNN_log.N_varl_params)
-		#print(self.DNN_phase.N_varl_params)
-		#exit()
+
 
 		self.N_symm = np.max([self.DNN_log.N_symm,self.DNN_phase.N_symm])
 
@@ -524,11 +521,16 @@ class VMC(object):
 			common_str = '.txt'
 
 			self.file_energy= create_open_file(self.savefile_dir+'energy'+common_str)
-			#self.file_energy_std= create_open_file(self.savefile_dir+'energy_std--'+common_str)
 			self.file_loss_log= create_open_file(self.savefile_dir+'loss_log'+common_str)
 			self.file_loss_phase= create_open_file(self.savefile_dir+'loss_phase'+common_str)
-			#self.file_r2= create_open_file(self.savefile_dir+'r2--'+common_str)
+			
 			self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram'+common_str)
+
+			self.file_S_eigvals_log=create_open_file(self.savefile_dir+'eigvals_S_matrix_log'+common_str)
+			self.file_S_eigvals_phase=create_open_file(self.savefile_dir+'eigvals_S_matrix_phase'+common_str)
+			
+			self.file_VF_overlap_log=create_open_file(self.savefile_dir+'ovelap_VF_log'+common_str)
+			self.file_VF_overlap_phase=create_open_file(self.savefile_dir+'ovelap_VF_phase'+common_str)
 
 			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+common_str)
 			self.file_opt_data_log= create_open_file(self.savefile_dir+'opt_data_log'+common_str)
@@ -646,6 +648,18 @@ class VMC(object):
 
 		######################################################
 
+
+		self.file_S_eigvals_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.S_eigvals) + '\n' )
+		self.file_S_eigvals_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.S_eigvals) + '\n' )
+		
+
+		self.file_VF_overlap_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' )
+		self.file_VF_overlap_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' )
+		
+
+
+		######################################################
+
 		
 		self.file_phase_hist.write("{0:d} : ".format(iteration) + ''.join("{0:0.6f}, ".format(value) for value in phase_hist) + '\n' )
 
@@ -672,6 +686,10 @@ class VMC(object):
 		self.file_opt_data_log.flush()
 		self.file_opt_data_phase.flush()
 		self.file_phase_hist.flush()
+		self.file_S_eigvals_log.flush()
+		self.file_S_eigvals_phase.flush()
+		self.file_VF_overlap_log.flush()
+		self.file_VF_overlap_phase.flush()
 
 
 
@@ -954,10 +972,14 @@ class VMC(object):
 		# close files
 		self.logfile.close()
 		self.file_energy.close()
-		#self.file_energy_std.close()
 		self.file_loss_log.close()
 		self.file_loss_phase.close()
 		self.file_phase_hist.close()
+
+		self.file_S_eigvals_log.close()
+		self.file_S_eigvals_phase.close()
+		self.file_VF_overlap_log.close()
+		self.file_VF_overlap_phase.close()
 
 
 		# store data from last 6 iterations

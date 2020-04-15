@@ -97,19 +97,30 @@ import yaml
 # sys_time= '2020_03_18-15_52_01' 
 
 
+# n=-1
+# iteration=500+n+1 # last line with saved E-data
+# L=4
+# J2=0.5
+# opt='sgd_RK'
+# cost='SR_SR'
+# mode='exact' #'MC' # 
+# NN_dtype='real-decoupled'
+# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
+# N_MC_points=107 # 10000 # 
+# N_prss=1 # 260 # 
+# NMCchains=1 # 
+# sys_time= '2020_03_29-17_15_46' 
+
+
+
 n=-1
-iteration=500+n+1 # last line with saved E-data
-L=4
+iteration=499+n+1 # last line with saved E-data
 J2=0.5
-opt='sgd_RK'
+L=4
+opt='sgd_sgd' # 'RK_RK' # 
 cost='SR_SR'
 mode='exact' #'MC' # 
-NN_dtype='real-decoupled'
-NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-N_MC_points=107 # 10000 # 
-N_prss=1 # 260 # 
-NMCchains=1 # 
-sys_time= '2020_03_29-17_15_46' 
+sys_time= '2020_04_15-13_28_33'
 
 
 
@@ -121,7 +132,7 @@ sys_time= '2020_03_29-17_15_46'
 
 data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
 load_dir='data/' + data_name  #+ 'data_files/'
-data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
+#data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 #params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
 params_str=''
 
@@ -260,8 +271,8 @@ phase_hist_ED, _ = np.histogram(np.cos(phase_psi_ED_J2_0-phase_psi_ED) ,bins=2,r
 phase_hist, _ = np.histogram(np.cos(phase_psi_ED[inds]-phase_psi[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
 phase_hist_J2_0, _ = np.histogram(np.cos(phase_psi_ED_J2_0[inds]-phase_psi[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
 
-print('ED  vs ED(J2=0):  T:F  :  {0:d}:{1:d}'.format(phase_hist_ED[1]  ,phase_hist_ED[0])  )
-print('DNN vs ED:        T:F  :  {0:d}:{1:d}'.format(phase_hist[1]     ,phase_hist[0])     )
-print('DNN vs ED(J2=0):  T:F  :  {0:d}:{1:d}'.format(phase_hist_J2_0[1],phase_hist_J2_0[0]))
+print('ED(J2=0.5)  vs  ED(J2=0)     T:F  :  {0:d}:{1:d}'.format(phase_hist_ED[1]  ,phase_hist_ED[0])  )
+print('DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}'.format(phase_hist[1]     ,phase_hist[0])     )
+print('DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}'.format(phase_hist_J2_0[1],phase_hist_J2_0[0]))
 
 

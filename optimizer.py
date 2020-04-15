@@ -171,8 +171,11 @@ class optimizer(object):
 					print(S_str)
 				self.logfile.write(S_str)
 
+				# update all data which would've been messed up by the RK iterations
 				r2=self.Runge_Kutta.r2
 				self.NG.dE=self.Runge_Kutta.dE
+				self.NG.S_eigvals[:]=self.Runge_Kutta.S_eigvals
+				self.NG.VF_overlap[:]=self.Runge_Kutta.VF_overlap
 			else:
 				r2=0.0
 
@@ -224,10 +227,6 @@ class optimizer(object):
 		self.iteration+=1
 		return NN_params_new, grads, r2
 		
-
-
-	def load_opt_params(self):
-		pass
 
 
 

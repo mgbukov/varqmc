@@ -271,7 +271,7 @@ class Energy_estimator():
 	def reestimate_local_energy_phase(self, iteration, NN_params_phase, batch, params_dict):
 
 
-		phase_kets = self.DNN_phase.evaluate(NN_params_phase, batch)
+		phase_kets = self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape))
 
 		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
 
@@ -322,7 +322,8 @@ class Energy_estimator():
 
 
 		str_2="evaluating s_primes took {0:.4f} secs.\n".format(time.time()-ti)
-		self.logfile.write(str_2)
+		if self.logfile!=None:
+			self.logfile.write(str_2)
 		if self.comm.Get_rank()==0 and verbose:
 			print(str_2)
 		

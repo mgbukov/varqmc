@@ -275,7 +275,7 @@ def plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	im3 = ax.pcolor(time_phase,binned_phases, hist_vals, cmap='cool', norm=colors.LogNorm(vmin=1E-0, vmax=1E-4),)
 	#ax3[0].set_ylabel('phase distribution')
-	ax.set_xlabel('training step')
+	ax.set_xlabel('time')
 	ax.set_xlim([0,time_phase.max()])
 	ax.set_ylim([-np.pi,np.pi])
 	#ax3.grid()

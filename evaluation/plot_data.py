@@ -38,13 +38,13 @@ save=True #False #
 
 
 
-iteration=450
-J2=0.0
-L=6
-opt='RK_RK' # 'sgd_sgd' # 
+iteration=499
+J2=0.5
+L=4
+opt='sgd_sgd' # 'RK_RK' # 
 cost='SR_SR'
-mode='MC' # 'exact' #
-sys_time= '2020_04_01-20_46_40'
+mode='exact' #'MC' # 
+sys_time= '2020_04_15-13_28_33'
 
 
 
