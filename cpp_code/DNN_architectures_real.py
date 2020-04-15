@@ -32,12 +32,15 @@ from jax.nn.initializers import glorot_normal, normal, ones, zeros
 # rng = random.PRNGKey(seed)
 
 
-def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2, ):
+def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2, dense_output=False ):
     """Layer construction function for a general convolution layer."""
     lhs_spec, rhs_spec, out_spec = dimension_numbers
     one = (1,) * len(filter_shape)
     strides = one
     padding='VALID'
+
+    output_shape_dense=(-1,out_chan)
+    transpose_shape=(0,3,2,1)
 
     #W_init = W_init or glorot_normal(rhs_spec.index('I'), rhs_spec.index('O'))
 
@@ -46,22 +49,32 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
         # add padding dimensions
         input_shape=tuple(input_shape)
         input_shape_aug=input_shape+np.array((0,0)+tuple(strides))
+
         
         filter_shape_iter = iter(filter_shape)
         kernel_shape = [out_chan if c == 'O' else
                         input_shape_aug[lhs_spec.index('C')] if c == 'I' else
                         next(filter_shape_iter) for c in rhs_spec]
-        output_shape = lax.conv_general_shape_tuple(input_shape_aug, kernel_shape, strides, padding, dimension_numbers)
-        output_shape=output_shape[:2]+input_shape[2:] 
+        
         k1, k2 = random.split(rng)
         #W = W_init(k1, kernel_shape)
-        W = random.uniform(rng,shape=kernel_shape, minval=-init_value_W, maxval=+init_value_W)
-        #W = random.uniform(rng,shape=(16,12), minval=-1E-1, maxval=+1E-1).T.reshape(12,1,4,4)
+        #W = random.uniform(rng,shape=kernel_shape, minval=-init_value_W, maxval=+init_value_W)
+        W = random.uniform(rng,shape=(kernel_shape[2]*kernel_shape[3]*kernel_shape[1],kernel_shape[0]), minval=-init_value_W, maxval=+init_value_W).T.reshape(kernel_shape)
+        
+        # output
+        if not dense_output:
+            output_shape = lax.conv_general_shape_tuple(input_shape_aug, kernel_shape, strides, padding, dimension_numbers)
+            output_shape=output_shape[:2]+input_shape[2:]
+        else:
+            output_shape = output_shape_dense 
+            
+
         if ignore_b:
             return output_shape, (W,)
         else:  
             bias_shape = [out_chan if c == 'C' else 1 for c in out_spec]
             bias_shape = tuple(itertools.dropwhile(lambda x: x == 1, bias_shape))
+
             #b = b_init(k2, bias_shape)
             b = random.uniform(k1,shape=bias_shape, minval=-init_value_b, maxval=+init_value_b)
             return output_shape, (W, b)
@@ -75,12 +88,19 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
     def apply_fun(params, inputs, **kwargs):
         W = params[0]
         # move into lax.conv_general_dilated after defining padding='PERIODIC'
+        a=periodic_padding(inputs,)
         if ignore_b:
-            a=periodic_padding(inputs,)
-            return lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers)
+            if not dense_output:
+                return lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers) 
+            else:
+                return jnp.transpose(lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers), transpose_shape).reshape(output_shape_dense)
+                       
         else:
-            return lax.conv_general_dilated(periodic_padding(inputs,), W, strides, padding, one, one, dimension_numbers=dimension_numbers) + params[1]
-
+            if not dense_output:
+                return lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers) + params[1]
+            else:
+                return jnp.transpose(lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers) + params[1], transpose_shape).reshape(output_shape_dense)
+                
     return init_fun, apply_fun
 
 
@@ -176,6 +196,16 @@ def Norm_real(center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float
     return init_fun, apply_fun
 '''
 
+
+def Reshape_layer(input_shape, output_shape):
+
+    def init_fun(rng,input_shape):
+        return output_shape, ()
+
+    def apply_fun(params,x,):
+        return x.reshape(output_shape)
+
+    return init_fun, apply_fun
 
 
 

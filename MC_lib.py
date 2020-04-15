@@ -69,11 +69,6 @@ class MC_sampler():
 
 		self.NN_type=NN_type
 
-		if self.NN_type=='DNN':
-			self.reshape_tuple=(-1,self.N_sites)
-		elif self.NN_type=='CNN':
-			self.reshape_tuple=(-1,1,L,L)
-
 
 	
 		self.ints_ket=np.zeros((N_batch,),dtype=self.basis_type)
@@ -124,16 +119,16 @@ class MC_sampler():
 		
 
 
-	def sample(self,DNN, compute_phases=True):
+	def sample(self, DNN_log, DNN_phase, compute_phases=True):
 
 		self._reset_global_vars()
 	
-		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
+		N_accepted, N_MC_proposals = DNN_log.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
 												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
 
 		if compute_phases:
-			self.phase_kets[:]=DNN.evaluate_phase(DNN.params_phase, self.spinstates_ket.reshape(self.reshape_tuple), )
+			self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), )
 
 		# print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
 		# print(self.phase_kets.mean(), self.phase_kets.std() )
@@ -161,11 +156,11 @@ class MC_sampler():
 		### gather seeds
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgatherv([DNN.s0_vec,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
-			self.comm.Allgatherv([DNN.sf_vec,  self.MPI_basis_dtype], [self.sf_g, self.MPI_basis_dtype])
+			self.comm.Allgatherv([DNN_log.s0_vec,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
+			self.comm.Allgatherv([DNN_log.sf_vec,  self.MPI_basis_dtype], [self.sf_g, self.MPI_basis_dtype])
 		else:
-			self.s0_g=DNN.s0_vec.copy()
-			self.sf_g=DNN.sf_vec.copy()
+			self.s0_g=DNN_log.s0_vec.copy()
+			self.sf_g=DNN_log.sf_vec.copy()
 
 
 		### compute acceptance ratio
@@ -180,10 +175,10 @@ class MC_sampler():
 
 
 
-	def exact(self, DNN,):
+	def exact(self, DNN_log, DNN_phase):
 
-		self.log_mod_kets[:] = DNN.evaluate_log(DNN.params_log,self.spinstates_ket.reshape(self.reshape_tuple),  )
-		self.phase_kets[:]   = DNN.evaluate_phase(DNN.params_phase,self.spinstates_ket.reshape(self.reshape_tuple),  )
+		self.log_mod_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+		self.phase_kets[:]   = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
 		
 		self.log_psi_shift=np.max(self.log_mod_kets[:])
 		self.log_mod_kets[:] -= self.log_psi_shift 

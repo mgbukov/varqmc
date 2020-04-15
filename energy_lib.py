@@ -38,25 +38,21 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
 
 class Energy_estimator():
 
-	def __init__(self,comm,DNN,mode,J2,N_MC_points,N_batch,L,N_symm,NN_type,sign,minibatch_size):
+	def __init__(self,comm,DNN_log,DNN_phase,mode,J2,N_MC_points,N_batch,L,N_symm,sign,minibatch_size):
 
 		# MPI commuicator
 		self.comm=comm
-		self.DNN=DNN
+		self.DNN_log=DNN_log
+		self.DNN_phase=DNN_phase
 
 
 		self.N_MC_points=N_MC_points
 		self.N_batch=N_batch
-		self.NN_type=NN_type
 		self.logfile=None
 		self.mode=mode
 
 		self.minibatch_size=minibatch_size
 
-		if self.NN_type=='DNN':
-			self.reshape_tuple=(-1,L**2)
-		elif self.NN_type=='CNN':
-			self.reshape_tuple=(-1,1,L,L)
 
 
 		###### define model parameters ######
@@ -275,9 +271,9 @@ class Energy_estimator():
 	def reestimate_local_energy_phase(self, iteration, NN_params_phase, batch, params_dict):
 
 
-		phase_kets = self.DNN.evaluate_phase(NN_params_phase, batch)
+		phase_kets = self.DNN_phase.evaluate(NN_params_phase, batch)
 
-		phase_psi_bras = self.evaluate_s_primes(self.DNN.evaluate_phase,NN_params_phase,)
+		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
 
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
@@ -295,7 +291,7 @@ class Energy_estimator():
 	def compute_local_energy(self,params_log,params_phase,ints_ket,log_kets,phase_kets,log_psi_shift, verbose=True, ):
 		
 		ti=time.time()
-		self.compute_s_primes(ints_ket,)
+		self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
 
 		str_1="computing s_primes took {0:.4f} secs.\n".format(time.time()-ti)
 		if self.logfile!=None:
@@ -311,7 +307,7 @@ class Energy_estimator():
 
 
 		ti=time.time()
-		log_psi_bras = self.evaluate_s_primes(self.DNN.evaluate_log, params_log,)
+		log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
 		log_psi_bras-=log_psi_shift
 
 		
@@ -322,7 +318,7 @@ class Energy_estimator():
 			print(psi_str)
 		
 
-		phase_psi_bras = self.evaluate_s_primes(self.DNN.evaluate_phase,params_phase,)
+		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
 
 
 		str_2="evaluating s_primes took {0:.4f} secs.\n".format(time.time()-ti)
@@ -339,7 +335,7 @@ class Energy_estimator():
 
 
 
-	def compute_s_primes(self,ints_ket,):
+	def compute_s_primes(self,ints_ket,NN_type):
 
 		# preallocate variables
 		self._reset_locenergy_params()
@@ -360,7 +356,7 @@ class Energy_estimator():
 			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
 
 			indx=np.asarray(indx,dtype=np.int32)
-			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J,self.N_symm,self.NN_type)
+			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J,self.N_symm,NN_type)
 			
 			self._MEs[nn:nn+n]=self._MEs_holder[self._ints_ket_ind_holder[:n]]
 			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[self._ints_ket_ind_holder[:n]]
@@ -394,7 +390,7 @@ class Energy_estimator():
 		self.inv_index=inv_index
 
 
-	def evaluate_s_primes(self,evaluate_NN,NN_params,):
+	def evaluate_s_primes(self,evaluate_NN,NN_params,input_shape,):
 
 		### evaluate network using minibatches
 
@@ -417,12 +413,12 @@ class Energy_estimator():
 			for j in range(N_minibatches):
 
 				batch, batch_idx, = next(batches)
-				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(self.reshape_tuple),  )
+				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),  )
 				
 
 				'''
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
-				batch=data[batch_idx].reshape(self.reshape_tuple)
+				batch=data[batch_idx].reshape(input_shape)
 
 				if j==N_minibatches-1:
 					prediction_bras[batch_idx[0]:self.nn_uq] = evaluate_NN(NN_params, batch,  )[:self.nn_uq-batch_idx[0]]
@@ -442,7 +438,7 @@ class Energy_estimator():
 		else:
 
 			### evaluate network on entire sample
-			prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(self.reshape_tuple),  )._value
+			prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  )._value
 				
 
 

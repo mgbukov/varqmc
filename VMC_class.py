@@ -39,7 +39,7 @@ import numpy as np
 import yaml
 import pickle
 
-from cpp_code import Neural_Net
+from cpp_code import Log_Net, Phase_Net
 from cpp_code import integer_to_spinstate
 from cpp_code import scale_cpx
 
@@ -366,44 +366,40 @@ class VMC(object):
 			for j in range(M):
 				for i in range(len(filters[j])):
 
-					self.shapes[j]['layer_{0:d}'.format(i+1)]=[out_chans[j][i],filters[j][i]]
+					self.shapes[j]['layer_{0:d}'.format(i+1)]=[filters[j][i], out_chans[j][i],]
 
 
 		### create Neural network
-		self.DNN=Neural_Net(self.comm, self.shapes, self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
-		
+		self.DNN_log=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
+		self.DNN_phase=Phase_Net(self.comm, self.shapes[1], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
+	
+		#print(self.DNN_log.N_varl_params)
+		#print(self.DNN_phase.N_varl_params)
+		#exit()
 
-		# jit functions
-		#self.evaluate_NN_dyn=self.DNN.evaluate_dyn
-		
-		#self.evaluate_NN=jit(self.DNN.evaluate)
-		#self.evaluate_NN=self.DNN.evaluate
-		#print("\n\nNN evaluation NOT JITTED !!!\n\n")
-		
-		#self.evaluate_NN=partial(jit(self.DNN.evaluate,static_argnums=2),)
-		
+		self.N_symm = np.max([self.DNN_log.N_symm,self.DNN_phase.N_symm])
 
 
 	def _create_optimizer(self):
 
 		# log net
-		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN.NN_Tree_log, label='log',  step_size=self.step_sizes[0], )
-		self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params_log, self.n_iter)
-		self.opt_log.define_grad_func(self.DNN.evaluate_log, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
-		self.opt_log.init_opt_state(self.DNN.params_log)
+		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN_log.NN_Tree, label='log',  step_size=self.step_sizes[0], )
+		self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_log.N_varl_params, self.n_iter)
+		self.opt_log.define_grad_func(self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
+		self.opt_log.init_opt_state(self.DNN_log.params)
 		
 		# phase net
-		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN.NN_Tree_phase, label='phase', step_size=self.step_sizes[1], )
-		self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params_phase, self.n_iter)
-		self.opt_phase.define_grad_func(self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy_phase )
-		self.opt_phase.init_opt_state(self.DNN.params_phase)
+		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN_phase.NN_Tree, label='phase', step_size=self.step_sizes[1], )
+		self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_phase.N_varl_params, self.n_iter)
+		self.opt_phase.define_grad_func(self.DNN_phase.evaluate, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy_phase )
+		self.opt_phase.init_opt_state(self.DNN_phase.params)
 		
 
 
 		# define variable to keep track of the DNN params update
 		if self.comm.Get_rank()==0:
-			self.params_log_update_lastiters=np.zeros((self.n_iter,self.DNN.N_varl_params_log),dtype=np.float64)
-			self.params_phase_update_lastiters=np.zeros((self.n_iter,self.DNN.N_varl_params_phase),dtype=np.float64)
+			self.params_log_update_lastiters=np.zeros((self.n_iter,self.DNN_log.N_varl_params),dtype=np.float64)
+			self.params_phase_update_lastiters=np.zeros((self.n_iter,self.DNN_phase.N_varl_params),dtype=np.float64)
 		else:
 			self.params_log_update_lastiters=np.array([[None],[None]])
 			self.params_phase_update_lastiters=np.array([[None],[None]])
@@ -415,25 +411,25 @@ class VMC(object):
 
 	def _create_energy_estimator(self):
 		### Energy estimator
-		self.E_estimator=Energy_estimator(self.comm,self.DNN,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
+		self.E_estimator=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 
-		self.E_estimator_log=Energy_estimator(self.comm,self.DNN,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.DNN.N_symm,self.DNN.NN_type,self.sign, self.minibatch_size) # contains all of the physics
+		self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
 		self.E_estimator_log.init_global_params(self.N_MC_points,self.n_iter)
 
 		
 	def _create_MC_sampler(self, ):
 		### initialize MC sampler variables
 		self.MC_tool=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.NN_type,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
+		self.MC_tool.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.N_symm,self.NN_type,self.E_estimator.basis_type,self.E_estimator.MPI_basis_dtype,self.n_iter)
 		
 		if self.NN_type=='DNN':
-			self.input_shape=(-1,self.DNN.N_symm,self.DNN.N_sites)
+			self.input_shape=(-1,self.N_symm,self.L**2)
 		elif self.NN_type=='CNN':
-			self.input_shape=(-1,self.DNN.N_symm,1,self.L,self.L)
+			self.input_shape=(-1,self.N_symm,1,self.L,self.L)
 
 		self.MC_tool_log=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool_log.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.DNN.N_symm,self.NN_type,self.E_estimator_log.basis_type,self.E_estimator_log.MPI_basis_dtype,self.n_iter)
+		self.MC_tool_log.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.N_symm,self.NN_type,self.E_estimator_log.basis_type,self.E_estimator_log.MPI_basis_dtype,self.n_iter)
 		
 		
 		
@@ -576,8 +572,8 @@ class VMC(object):
 		#file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
 		file_name='NNparams'+'--iter_{0:05d}'.format(iteration) 
 		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
-			pickle.dump([self.DNN.params_log, self.DNN.params_phase, 
-						 self.DNN.apply_fun_args_log, self.DNN.apply_fun_args_phase,
+			pickle.dump([self.DNN_log.params, self.DNN_phase.params, 
+						 self.DNN_log.apply_fun_args, self.DNN_phase.apply_fun_args,
 						 self.MC_tool.log_psi_shift,
 						 ], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -848,10 +844,10 @@ class VMC(object):
 			assert(self.N_MC_points==107) # 107 states in the symmetry reduced sector for L=4
 
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
-			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN.N_features, NN_type=self.DNN.NN_type)
+			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN_log.N_features, NN_type=self.DNN_log.NN_type)
 
 			self.MC_tool_log.ints_ket, self.index, self.inv_index, self.count=self.E_estimator_log.get_exact_kets()
-			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.DNN.N_features, NN_type=self.DNN.NN_type)
+			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.DNN_log.N_features, NN_type=self.DNN_log.NN_type)
 
 
 		# auxiliary variable
@@ -875,8 +871,8 @@ class VMC(object):
 
 
 			##### determine batchnorm mean and variance
-			if self.batchnorm==1:
-				self.compute_batchnorm_params(self.DNN.params,len(self.shapes)+1) #
+			#if self.batchnorm==1:
+			#	self.compute_batchnorm_params(self.DNN.params,len(self.shapes)+1) #
 
 
 
@@ -1018,15 +1014,15 @@ class VMC(object):
 
 			##### get spin configs #####
 			if self.mode=='exact':
-				self.MC_tool_log.exact(self.DNN, )
+				self.MC_tool_log.exact(self.DNN_log, self.DNN_phase, )
 
 			elif self.mode=='MC':
 				# sample
-				acceptance_ratio_g = self.MC_tool_log.sample(self.DNN, )
+				acceptance_ratio_g = self.MC_tool_log.sample(self.DNN_log, self.DNN_phase, )
 				
 
 			##### compute local energies #####
-			self.E_estimator_log.compute_local_energy(NN_params_log, self.DNN.params_phase, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+			self.E_estimator_log.compute_local_energy(NN_params_log, self.DNN_phase.params, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
 
 			if self.mode=='exact':
 				mod_kets=np.exp(self.MC_tool_log.log_mod_kets)
@@ -1071,13 +1067,13 @@ class VMC(object):
 
 		##### get spin configs #####
 		if self.mode=='exact':
-			self.MC_tool.exact(self.DNN, )
+			self.MC_tool.exact(self.DNN_log, self.DNN_phase, )
 			
 		elif self.mode=='MC':
 			ti=time.time()
 			
 			# sample
-			acceptance_ratio_g = self.MC_tool.sample(self.DNN, )
+			acceptance_ratio_g = self.MC_tool.sample(self.DNN_log, self.DNN_phase, )
 			
 			MC_str="MC with acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
 			self.logfile.write(MC_str)
@@ -1099,7 +1095,7 @@ class VMC(object):
 
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.DNN.params_log, self.DNN.params_phase, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
+		self.E_estimator.compute_local_energy(self.DNN_log.params, self.DNN_phase.params, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
 		
 		Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		self.logfile.write(Eloc_str)
@@ -1147,34 +1143,34 @@ class VMC(object):
 
 		if self.grad_update_mode=='normal':
 			# order is important !!! (energy_lib stores log-values)
-			self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
-			self.DNN.params_log,   self.DNN.params_log_update[:]  , self.r2[0]   = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
+			self.DNN_phase.params, self.DNN_phase.params_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
+			self.DNN_log.params,   self.DNN_log.params_update[:]  , self.r2[0]   = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
 			
 
 		elif self.grad_update_mode=='alternating':
 			if (iteration//self.alt_iters)%2==1: # phase grads
-				self.DNN.params_log_update*=0.0
-				self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
+				self.DNN_log.params_update*=0.0
+				self.DNN_phase.params_phase, self.DNN_phase.params_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
 
 			else: # log grads
-				self.DNN.params_log, self.DNN.params_log_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
-				self.DNN.params_phase_update*=0.0
+				self.DNN_log.params, self.DNN_log.params_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
+				self.DNN_phase.params_update*=0.0
 
 		elif self.grad_update_mode=='phase':
-			self.DNN.params_log_update*=0.0
+			self.DNN_log.params_update*=0.0
 			r2_log=0.0
-			self.DNN.params_phase, self.DNN.params_phase_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN.params_phase, self.batch, self.Eloc_params_dict_phase, )
+			self.DNN_phase.params, self.DNN_phase.params_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
 
 
 		elif self.grad_update_mode=='log_mod':
-			self.DNN.params_log, self.DNN.params_log_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN.params_log, self.batch, self.Eloc_params_dict_log, )
-			self.DNN.params_phase_update*=0.0
+			self.DNN_log.params, self.DNN_log.params_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
+			self.DNN_phase.params_update*=0.0
 			r2_phase=0.0
 
 		#print(self.opt_phase.Runge_Kutta.step_size, self.opt_phase.step_size)
 
 		##### compute max gradients
-		grads_max=[np.max(np.abs(self.DNN.params_log_update)),np.max(np.abs(self.DNN.params_phase_update)),]
+		grads_max=[np.max(np.abs(self.DNN_log.params_update)),np.max(np.abs(self.DNN_phase.params_update)),]
 		
 		
 		mssg="total r2 test: {0:0.14f} .\n".format(self.r2[0]+self.r2[1]-1.0)
@@ -1185,8 +1181,8 @@ class VMC(object):
 		# record gradients
 
 		if self.comm.Get_rank()==0:
-			self.params_log_update_lastiters[-1,...]=self.DNN.params_log_update
-			self.params_phase_update_lastiters[-1,...]=self.DNN.params_phase_update
+			self.params_log_update_lastiters[-1,...]=self.DNN_log.params_update
+			self.params_phase_update_lastiters[-1,...]=self.DNN_phase.params_update
 
 
 		grad_str="total gradients/NG calculation took {0:.4f} secs.\n".format(time.time()-ti)

@@ -28,11 +28,11 @@ N_points=2
 
 
 dim_nums=('NCHW', 'OIHW', 'NCHW') # default
-out_chan=12
+out_chan=2
 filter_shape=(L,L)
 
-out_chan_2=8 
-filter_shape_2=(2,2) 
+out_chan_2=2 
+filter_shape_2=(1,1) 
 
 input_shape=np.array((N_points*N_symm,1,L,L),dtype=np.int) # NCHW input format
 
@@ -55,7 +55,7 @@ output_shape,params = init_params(rng,input_shape)
 
 print(output_shape)
 
-#exit()
+exit()
 
 #print(params[0])
 
