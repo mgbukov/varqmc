@@ -17,7 +17,7 @@ import time
 
 class optimizer(object):
 
-	def __init__(self, comm, opt, cost, mode, NN_Tree, label='', step_size=1.0, ):
+	def __init__(self, comm, opt, cost, mode, NN_Tree, label='', step_size=1.0, adaptive_step=True ):
 
 		self.label=label
 
@@ -26,6 +26,7 @@ class optimizer(object):
 		self.opt=opt
 		self.cost=cost
 		self.mode=mode
+		self.adaptive_step=adaptive_step
 
 		self.NN_Tree=NN_Tree
 
@@ -83,7 +84,7 @@ class optimizer(object):
 				compute_r2=lambda x: 0.0
 				NG=None
 
-			self.Runge_Kutta=Runge_Kutta_solver(self.step_size, self.NN_Tree, self.compute_grad, reestimate_local_energy, compute_r2, NG)
+			self.Runge_Kutta=Runge_Kutta_solver(self.step_size, self.NN_Tree, self.compute_grad, reestimate_local_energy, compute_r2, NG, self.adaptive_step)
 			self.opt_state=None
 			self.opt_init=None
 			self.get_params=None

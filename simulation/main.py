@@ -11,7 +11,12 @@ import yaml
 # export OMP_NUM_THREADS=4
 # mpiexec -n 4 python main.py --test
 
+# check memory of finished job
 # sacct -j "" --format="JobID,MaxRSS,AveRSS,MaxRSSNode"
+
+# request interactive node
+# salloc -N 1 -t 30 -C knl -q interactive
+# salloc -N 1 -t 30 -C haswell -q interactive
 
 
 if '--test' in sys.argv:

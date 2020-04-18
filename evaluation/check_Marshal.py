@@ -119,10 +119,19 @@ J2=0.5
 L=4
 opt='sgd_sgd' # 'RK_RK' # 
 cost='SR_SR'
-mode='exact' #'MC' # 
+mode='exact' # 'MC' # 
 sys_time= '2020_04_15-13_28_33'
 
 
+
+# n=-1
+# iteration=1083+n+1 # last line with saved E-data
+# J2=0.5
+# L=6
+# opt='sgd_sgd' # 'RK_RK' # 
+# cost='SR_SR'
+# mode='MC' # 'exact' #
+# sys_time= '2020_04_11-16_44_55'
 
 
 
@@ -173,7 +182,7 @@ if L==4:
 ############
 
 
-N_MC_points=100 # MC points
+N_MC_points=1000 # MC points
 
 #with jax.disable_jit():
 MC_tool = MC_sample(load_dir, params_log, N_MC_points=N_MC_points, reps=True)
@@ -271,8 +280,16 @@ phase_hist_ED, _ = np.histogram(np.cos(phase_psi_ED_J2_0-phase_psi_ED) ,bins=2,r
 phase_hist, _ = np.histogram(np.cos(phase_psi_ED[inds]-phase_psi[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
 phase_hist_J2_0, _ = np.histogram(np.cos(phase_psi_ED_J2_0[inds]-phase_psi[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
 
+
+phase_hist_all, _ = np.histogram(np.cos(phase_psi_ED-phase_psi) ,bins=2,range=(-1.0,1.0), density=False, )
+phase_hist_J2_0_all, _ = np.histogram(np.cos(phase_psi_ED_J2_0-phase_psi) ,bins=2,range=(-1.0,1.0), density=False, )
+
+
 print('ED(J2=0.5)  vs  ED(J2=0)     T:F  :  {0:d}:{1:d}'.format(phase_hist_ED[1]  ,phase_hist_ED[0])  )
+print('mismatch sample')
 print('DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}'.format(phase_hist[1]     ,phase_hist[0])     )
 print('DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}'.format(phase_hist_J2_0[1],phase_hist_J2_0[0]))
-
+print('full sample')
+print('DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}'.format(phase_hist_all[1]     ,phase_hist_all[0])     )
+print('DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}'.format(phase_hist_J2_0_all[1],phase_hist_J2_0_all[0]))
 

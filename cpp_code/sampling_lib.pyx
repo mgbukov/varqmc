@@ -1353,7 +1353,7 @@ cdef class Log_Net:
         
         #print(N_MC_points, n_MC_points,n_MC_points_leftover)
         #
-        cdef int auto_correlation_time = 0.35/np.max([0.05, acceptance_ratio])*self.N_sites
+        cdef int auto_correlation_time = 0.5/np.max([0.05, acceptance_ratio])*self.N_sites
 
         with nogil:
 
@@ -1678,8 +1678,7 @@ cdef class Phase_Net:
             dim_nums=('NCHW', 'OIHW', 'NCHW') # default
 
             # define CNN   
-            NN_arch = {
-                                
+            NN_arch = {          
                                     'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=6E-0/self.N_sites, ), 
                                     'nonlin_1': elementwise(logcosh),
                                     'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), ignore_b=False, init_value_W=2E-0/(self.N_symm*self.N_sites), init_value_b=2E-0/(self.N_symm*self.N_sites) ),  # 1E-1

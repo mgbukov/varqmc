@@ -141,6 +141,7 @@ class VMC(object):
 
 		self.cost=read_str(params_dict['cost'])[0]
 		self.TDVP_opt=read_str(params_dict['TDVP_opt'])[0]
+		self.adaptive_step=params_dict['adaptive_step']
 
 		self.grad_update_mode=params_dict['grad_update_mode']
 		self.alt_iters=params_dict['alt_iter'] # only effective in real-decoupled mode
@@ -233,7 +234,6 @@ class VMC(object):
 
 			config_params_yaml.close()
 
-			
 		# train net
 		if train:
 			self.train(self.start_iter)
@@ -307,6 +307,17 @@ class VMC(object):
 		load_opt_data(self.opt_phase, self.file_opt_data_phase.name, start_iter)
 		
 
+		### load energy
+
+		with open(self.file_MC_data.name) as file:
+			for i in range(start_iter):
+					energy_data_str = file.readline().rstrip().split(' : ')				
+
+		it_E, Eloc_mean_g_real , Eloc_mean_g_imag, Eloc_std_g, E_MC_std_g = energy_data_str
+
+		self.prev_it_data[0], self.prev_it_data[1], self.prev_it_data[2]=np.float64(Eloc_mean_g_real), np.float(Eloc_mean_g_imag), np.float64(E_MC_std_g)
+			
+
 
 		# truncate remaining files
 		self.comm.Barrier()
@@ -323,6 +334,7 @@ class VMC(object):
 		#####
 		assert(int(it_MC)+1==self.opt_log.iteration)
 		assert(int(it_MC)+1==self.opt_phase.iteration)
+		assert(int(it_MC)==int(it_E))
 
 
 
@@ -380,13 +392,13 @@ class VMC(object):
 	def _create_optimizer(self):
 
 		# log net
-		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN_log.NN_Tree, label='log',  step_size=self.step_sizes[0], )
+		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN_log.NN_Tree, label='log',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step )
 		self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_log.N_varl_params, self.n_iter)
 		self.opt_log.define_grad_func(self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
 		self.opt_log.init_opt_state(self.DNN_log.params)
 		
 		# phase net
-		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN_phase.NN_Tree, label='phase', step_size=self.step_sizes[1], )
+		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN_phase.NN_Tree, label='phase', step_size=self.step_sizes[1], adaptive_step=self.adaptive_step )
 		self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_phase.N_varl_params, self.n_iter)
 		self.opt_phase.define_grad_func(self.DNN_phase.evaluate, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy_phase )
 		self.opt_phase.init_opt_state(self.DNN_phase.params)
@@ -821,7 +833,7 @@ class VMC(object):
 			_c3=6.0*self.prev_it_data[2] - E_MC_std_g 
 
 			_b1=(np.abs(_c1) > 2.0) and (Eloc_mean_g<0.0)
-			_b2=_c2 > 3.0*E_MC_std_g
+			_b2=_c2 > 5.0*E_MC_std_g
 			_b3=_c3 < 0.0
 
 			
@@ -844,10 +856,12 @@ class VMC(object):
 				# load data
 				if load_data:
 					self.comm.Barrier()
-					self._load_data(iteration-1-go_back_iters, truncate_files=False)
+					self._load_data(iteration-1-go_back_iters, truncate_files=True)
 					iteration=iteration-go_back_iters
 
 				repeat=True
+
+		
 		
 		return repeat, iteration
 
@@ -917,7 +931,7 @@ class VMC(object):
 
 
 			#### check energy variance, undo update and restart sampling back 10 iterations
-			repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1)
+			repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1,load_data=True)
 			if repeat:
 				continue
 

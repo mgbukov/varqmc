@@ -321,7 +321,7 @@ class natural_gradient():
 
 class Runge_Kutta_solver():
 
-	def __init__(self,step_size, NN_Tree, return_grads, reestimate_local_energy, compute_r2, NG):
+	def __init__(self,step_size, NN_Tree, return_grads, reestimate_local_energy, compute_r2, NG, adaptive_step):
 
 		self.NN_Tree=NN_Tree
 		self.return_grads=return_grads
@@ -337,6 +337,7 @@ class Runge_Kutta_solver():
 		self.VF_overlap=np.zeros_like(self.S_eigvals)
 
 		# RK params
+		self.adaptive_step=adaptive_step
 		self.step_size=step_size
 		self.time=0.0
 		self.RK_tol=1E-4 # 5E-5 
@@ -391,10 +392,75 @@ class Runge_Kutta_solver():
 			self.init_grad[:]=self.return_grads(NN_params,batch,Eloc_params_dict,)
 
 
-		self.counter+=1
 
-		error_ratio=0.0
-		while error_ratio<1.0:
+		if self.adaptive_step==True:
+
+			self.counter+=1
+
+			error_ratio=0.0
+			while error_ratio<1.0:
+
+				### RK step 1
+				self.k1[:]=-self.step_size*self.init_grad
+			
+				### RK step 2
+				NN_params_shifted=self.NN_Tree.unravel(self.params+self.k1)
+				Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
+				self.k2[:]=-self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
+
+				# full-step solution difference
+				self.dy[:]=0.5*self.k1 + 0.5*self.k2
+
+
+				#######
+				### RK step 1
+				self.k3[:]=-0.5*self.step_size*self.init_grad # 0.5*k1
+				
+				### RK step 2
+				NN_params_shifted=self.NN_Tree.unravel(self.params+self.k3)
+				Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
+				self.k4[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
+
+				# first half-step solution difference
+				self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
+			
+
+				### RK step 1
+				NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star)
+				Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
+				self.k5[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
+
+				### RK step 2
+				NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star+self.k5)
+				Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
+				self.k6[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
+
+				# second half-step solution difference
+				self.dy_star[:]+=0.5*self.k5 + 0.5*self.k6
+
+
+
+				#######
+				if self.NG is not None:
+					norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) )/params_norm
+					#norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix/S_norm, self.dy-self.dy_star) ) )/params_norm
+					#norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
+				else:
+					norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
+					#norm=np.max(np.dot(self.NG.S_matrix, self.dy-self.dy_star) )/params_norm
+					#norm=np.max(np.abs(self.dy-self.dy_star))/params_norm
+
+			
+				error_ratio=6.0*self.RK_tol/norm
+
+				self.step_size*=min(2.0,max(0.2,0.9*error_ratio**self.RK_inv_p))
+				
+				self.counter+=4 # five gradient calculations
+
+
+		else:
+
+			self.counter+=2
 
 			### RK step 1
 			self.k1[:]=-self.step_size*self.init_grad
@@ -405,53 +471,10 @@ class Runge_Kutta_solver():
 			self.k2[:]=-self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
 
 			# full-step solution difference
-			self.dy[:]=0.5*self.k1 + 0.5*self.k2
+			self.dy_star[:]=0.5*self.k1 + 0.5*self.k2
 
+			norm=0.0
 
-			#######
-			### RK step 1
-			self.k3[:]=-0.5*self.step_size*self.init_grad # 0.5*k1
-			
-			### RK step 2
-			NN_params_shifted=self.NN_Tree.unravel(self.params+self.k3)
-			Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
-			self.k4[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
-
-			# first half-step solution difference
-			self.dy_star[:]=0.5*self.k3 + 0.5*self.k4
-		
-
-			### RK step 1
-			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star)
-			Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
-			self.k5[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
-
-			### RK step 2
-			NN_params_shifted=self.NN_Tree.unravel(self.params+self.dy_star+self.k5)
-			Eloc_params_dict, batch = self.reestimate_local_energy(self.iteration, NN_params_shifted, batch, Eloc_params_dict)
-			self.k6[:]=-0.5*self.step_size*self.return_grads(NN_params_shifted,batch,Eloc_params_dict,)
-
-			# second half-step solution difference
-			self.dy_star[:]+=0.5*self.k5 + 0.5*self.k6
-
-
-
-			#######
-			if self.NG is not None:
-				norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) )/params_norm
-				#norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix/S_norm, self.dy-self.dy_star) ) )/params_norm
-				#norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
-			else:
-				norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
-				#norm=np.max(np.dot(self.NG.S_matrix, self.dy-self.dy_star) )/params_norm
-				#norm=np.max(np.abs(self.dy-self.dy_star))/params_norm
-
-		
-			error_ratio=6.0*self.RK_tol/norm
-
-			self.step_size*=min(2.0,max(0.2,0.9*error_ratio**self.RK_inv_p))
-			
-			self.counter+=4 # five gradient calculations
 
 
 		# update params
