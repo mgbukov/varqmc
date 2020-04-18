@@ -34,12 +34,10 @@ echo "#SBATCH --job-name=job_VMC" >> submission.sh
 #echo "source activate jax-noGPU" >> submission.sh
 
 
-data_dir="$(/global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python make_data_file.py)"
-
 
 ### CPU
 #echo srun --ntasks-per-core 15 -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
-echo srun -c 2 --cpu_bind=cores -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.python ${data_dir} >> submission.sh
+echo srun -c 2 --cpu_bind=cores -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.python >> submission.sh
 
 
 

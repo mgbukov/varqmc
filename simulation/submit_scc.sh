@@ -27,10 +27,9 @@ echo "module load miniconda/4.7.5" >> submission.sh
 echo "module load hdf5/1.8.21" >> submission.sh
 echo "conda activate jax-noGPU" >> submission.sh
 
-data_dir="$(~/.conda/envs/jax-noGPU/bin/python make_data_file.py)"
 
 ### CPU
 #echo mpirun -np ${N_mpi} ~/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
-echo mpiexec -np ${N_mpi} ~/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+echo mpiexec -np ${N_mpi} ~/.conda/envs/jax-noGPU/bin/python ./main.py >> submission.sh
 
 qsub submission.sh

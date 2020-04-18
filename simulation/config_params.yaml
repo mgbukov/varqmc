@@ -1,9 +1,9 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 6
+L: 4
 N_iterations: 20 # 2000
 NN_dtype: real-decoupled # 
-NN_shape_str: (36--12--8,36--24--12) # (4x4-12--1x1-8,4x4-24--1x1-12)
+NN_shape_str: (16--12--8,16--24--12) # (4x4-12--1x1-8,4x4-24--1x1-12)
 NN_type: DNN # CNN
 N_MC_chains: 1
 MC_thermal: true

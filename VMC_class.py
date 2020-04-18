@@ -211,6 +211,10 @@ class VMC(object):
 
 
 		# create log file and directory
+
+		# auxiliary variable
+		self.prev_it_data=np.zeros(5) # Eloc_real, Eloc_imag, Eloc_std, S_norm, F_norm
+
 		if self.save_data:
 			if data_dir is None:
 				raise ValueError("data_dir cannot be None-type for save_data=True.")
@@ -309,11 +313,12 @@ class VMC(object):
 
 		### load energy
 
-		with open(self.file_MC_data.name) as file:
+		with open(self.file_energy.name) as file:
 			for i in range(start_iter):
 					energy_data_str = file.readline().rstrip().split(' : ')				
 
 		it_E, Eloc_mean_g_real , Eloc_mean_g_imag, Eloc_std_g, E_MC_std_g = energy_data_str
+
 
 		self.prev_it_data[0], self.prev_it_data[1], self.prev_it_data[2]=np.float64(Eloc_mean_g_real), np.float(Eloc_mean_g_imag), np.float64(E_MC_std_g)
 			
@@ -882,9 +887,7 @@ class VMC(object):
 			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.DNN_log.N_features, NN_type=self.DNN_log.NN_type)
 
 
-		# auxiliary variable
-		self.prev_it_data=np.zeros(5) # Eloc_real, Eloc_imag, Eloc_std, S_norm, F_norm
-
+		
 		iteration=start_iter
 		while iteration < start_iter+self.N_iterations:
 		#for iteration in range(start_iter,start_iter+self.N_iterations, 1): 

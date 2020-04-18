@@ -19,12 +19,20 @@ import yaml
 # salloc -N 1 -t 30 -C haswell -q interactive
 
 
-if '--test' in sys.argv:
-    params = yaml.load(open('config_params_test.yaml'),Loader=yaml.FullLoader)
-    data_dir=create_params_file(params)
+if len(sys.argv)>1:
+
+	if '--test' in sys.argv:
+		# initialize new simulation
+	    params = yaml.load(open('config_params_test.yaml'),Loader=yaml.FullLoader)
+	    data_dir = create_params_file(params)
+	else:
+		# load simulation
+		data_dir = sys.argv[1]
+
 else:
-	#params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)
-	data_dir=sys.argv[1]
+	# initialize new simulation
+	params = yaml.load(open('config_params.yaml'),Loader=yaml.FullLoader)
+	data_dir = create_params_file(params)
 
 
 DNN_psi=VMC(data_dir)
