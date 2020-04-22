@@ -225,6 +225,7 @@ class optimizer(object):
 			raise ValueError("unrecognized optimizer {}!".format(self.opt))
 		
 
+
 		self.iteration+=1
 		return NN_params_new, grads, r2
 		

@@ -16,6 +16,7 @@ from jax.nn import (relu, log_softmax, softmax, softplus, sigmoid, elu,
                     leaky_relu, selu, gelu, normalize)
 from jax.nn.initializers import glorot_normal, normal, ones, zeros
 
+from functools import partial
 
 
 
@@ -51,10 +52,11 @@ def serial(*layers):
 
 def elementwise(fun, **fun_kwargs):
     """Layer that applies a scalar function elementwise on its inputs."""
+    fun=partial(fun, **fun_kwargs)
     init_fun = lambda rng, input_shape: (input_shape, ())
     def apply_fun(params, inputs, **kwargs):
         kwargs.pop('rng', None)
-        return fun(inputs, **kwargs, **fun_kwargs) #
+        return fun(inputs, **kwargs) #
     return init_fun, apply_fun
 
 

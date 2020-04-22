@@ -56,18 +56,24 @@ np.set_printoptions(threshold=np.inf)
 #from misc.MC_weights import *
 
 
-def truncate_file(file_name, start_iter):
+def truncate_file(file, start_iter):
 
-	with open(file_name) as file:	
-		lines=file.readlines()
+	file.close()
+
+	with open(file.name) as f:	
+		lines=f.readlines()
 		keep_lines=[]
 		for i,line in enumerate(lines):
 			if i < start_iter:
 				keep_lines.append(line)
 
-	with open(file_name, 'w') as file:
+	with open(file.name, 'w') as f:
 		for line in keep_lines:
-			file.write(line)
+			f.write(line)
+
+	return open(file.name, 'a+')
+
+
 
 
 def read_str(tuple_str):
@@ -95,14 +101,17 @@ def load_opt_data(opt,file_name,start_iter):
 	opt.NG.delta=np.float64(opt_data_str[1])
 	opt.NG.tol=np.float64(opt_data_str[2])
 
-	opt.time=np.float64(opt_data_str[5])
+	opt.NG.SNR_weight_sum_exact=np.float64(opt_data_str[3])
+	opt.NG.SNR_weight_sum_gauss=np.float64(opt_data_str[4])
+
+	opt.time=np.float64(opt_data_str[7])
 
 	if opt.opt=='RK':
-		opt.Runge_Kutta.counter=int(opt_data_str[3])
-		opt.Runge_Kutta.step_size=np.float64(opt_data_str[4])
-		opt.Runge_Kutta.time=np.float64(opt_data_str[5])
+		opt.Runge_Kutta.counter=int(opt_data_str[5])
+		opt.Runge_Kutta.step_size=np.float64(opt_data_str[6])
+		opt.Runge_Kutta.time=np.float64(opt_data_str[7])
 	else:
-		opt.step_size=np.float64(opt_data_str[4])
+		opt.step_size=np.float64(opt_data_str[6])
 
 
 class VMC(object):
@@ -259,7 +268,7 @@ class VMC(object):
 
 
 
-	def _load_data(self, start_iter, truncate_files=True):
+	def _load_data(self, start_iter, truncate_files=True, repeat=False):
 
 		### load MC data
 		
@@ -327,15 +336,31 @@ class VMC(object):
 		# truncate remaining files
 		self.comm.Barrier()
 		if truncate_files and self.comm.Get_rank()==0:
-			truncate_file(self.file_MC_data.name, start_iter)
-			truncate_file(self.file_opt_data_log.name, start_iter)
-			truncate_file(self.file_opt_data_phase.name, start_iter)
+
+			if repeat:
+				start_iter+=1
+
+			self.file_MC_data=truncate_file(self.file_MC_data, start_iter)
+			self.file_opt_data_log=truncate_file(self.file_opt_data_log, start_iter)
+			self.file_opt_data_phase=truncate_file(self.file_opt_data_phase, start_iter)
 			# clean rest of files
-			truncate_file(self.file_energy.name, start_iter)
-			truncate_file(self.file_loss_log.name, start_iter)
-			truncate_file(self.file_loss_phase.name, start_iter)
-			truncate_file(self.file_phase_hist.name, start_iter)
+			self.file_energy = truncate_file(self.file_energy, start_iter)
+			self.file_loss_log=truncate_file(self.file_loss_log, start_iter)
+			self.file_loss_phase=truncate_file(self.file_loss_phase, start_iter)
+			self.file_phase_hist=truncate_file(self.file_phase_hist, start_iter)
+			#
+			self.file_S_eigvals_log=truncate_file(self.file_S_eigvals_log, start_iter)
+			self.file_S_eigvals_phase=truncate_file(self.file_S_eigvals_phase, start_iter)
+			self.file_VF_overlap_log=truncate_file(self.file_VF_overlap_log, start_iter)
+			self.file_VF_overlap_phase=truncate_file(self.file_VF_overlap_phase, start_iter)
+
+			self.file_SNR_exact_log=truncate_file(self.file_SNR_exact_log, start_iter)
+			self.file_SNR_gauss_log=truncate_file(self.file_SNR_gauss_log, start_iter)
+			self.file_SNR_exact_phase=truncate_file(self.file_SNR_exact_phase, start_iter)
+			self.file_SNR_gauss_phase=truncate_file(self.file_SNR_gauss_phase, start_iter)
+
 		self.comm.Barrier()
+
 		#####
 		assert(int(it_MC)+1==self.opt_log.iteration)
 		assert(int(it_MC)+1==self.opt_phase.iteration)
@@ -546,8 +571,15 @@ class VMC(object):
 			self.file_S_eigvals_log=create_open_file(self.savefile_dir+'eigvals_S_matrix_log'+common_str)
 			self.file_S_eigvals_phase=create_open_file(self.savefile_dir+'eigvals_S_matrix_phase'+common_str)
 			
-			self.file_VF_overlap_log=create_open_file(self.savefile_dir+'ovelap_VF_log'+common_str)
-			self.file_VF_overlap_phase=create_open_file(self.savefile_dir+'ovelap_VF_phase'+common_str)
+			self.file_VF_overlap_log=create_open_file(self.savefile_dir+'overlap_VF_log'+common_str)
+			self.file_VF_overlap_phase=create_open_file(self.savefile_dir+'overlap_VF_phase'+common_str)
+
+			self.file_SNR_exact_log=create_open_file(self.savefile_dir+'SNR_exact_log'+common_str)
+			self.file_SNR_exact_phase=create_open_file(self.savefile_dir+'SNR_exact_phase'+common_str)
+
+			self.file_SNR_gauss_log=create_open_file(self.savefile_dir+'SNR_gauss_log'+common_str)
+			self.file_SNR_gauss_phase=create_open_file(self.savefile_dir+'SNR_gauss_phase'+common_str)
+			
 
 			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+common_str)
 			self.file_opt_data_log= create_open_file(self.savefile_dir+'opt_data_log'+common_str)
@@ -636,9 +668,9 @@ class VMC(object):
 
 
 		if self.opt_log.cost=='SR':
-			data_cost=(self.opt_log.NG.delta, self.opt_log.NG.tol,) 
+			data_cost=(self.opt_log.NG.delta, self.opt_log.NG.tol,self.opt_log.NG.SNR_weight_sum_exact,self.opt_log.NG.SNR_weight_sum_gauss,) 
 		else:
-			data_cost=(0.0,0.0,)
+			data_cost=(0.0,0.0,0.0,0.0)
 
 		if self.opt_log.opt=='RK':
 			data_opt=(self.opt_log.Runge_Kutta.counter, self.opt_log.Runge_Kutta.step_size, self.opt_log.Runge_Kutta.time, )
@@ -646,13 +678,13 @@ class VMC(object):
 			data_opt=(self.opt_log.iteration,self.opt_log.step_size,self.opt_log.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
+		self.file_opt_data_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple))
 
 
 		if self.opt_phase.cost=='SR':
-			data_cost=(self.opt_phase.NG.delta, self.opt_phase.NG.tol,) 
+			data_cost=(self.opt_phase.NG.delta, self.opt_phase.NG.tol,self.opt_phase.NG.SNR_weight_sum_exact,self.opt_phase.NG.SNR_weight_sum_gauss) 
 		else:
-			data_cost=(0.0,0.0,)
+			data_cost=(0.0,0.0,0.0,0.0)
 
 		if self.opt_phase.opt=='RK':
 			data_opt=(self.opt_phase.Runge_Kutta.counter, self.opt_phase.Runge_Kutta.step_size, self.opt_phase.Runge_Kutta.time, )
@@ -660,7 +692,7 @@ class VMC(object):
 			data_opt=(self.opt_phase.iteration,self.opt_phase.step_size,self.opt_phase.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:d} : {4:0.14f} : {5:0.14f}\n".format(*data_tuple))
+		self.file_opt_data_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple))
 
 
 		######################################################
@@ -673,6 +705,13 @@ class VMC(object):
 		self.file_VF_overlap_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' )
 		self.file_VF_overlap_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' )
 		
+
+		self.file_SNR_exact_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_exact) + '\n' )
+		self.file_SNR_gauss_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_gauss) + '\n' )
+
+		self.file_SNR_exact_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_exact) + '\n' )
+		self.file_SNR_gauss_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_gauss) + '\n' )
+
 
 
 		######################################################
@@ -861,7 +900,7 @@ class VMC(object):
 				# load data
 				if load_data:
 					self.comm.Barrier()
-					self._load_data(iteration-1-go_back_iters, truncate_files=True)
+					self._load_data(iteration-1-go_back_iters, truncate_files=True, repeat=True)
 					iteration=iteration-go_back_iters
 
 				repeat=True
@@ -998,6 +1037,11 @@ class VMC(object):
 		self.file_VF_overlap_log.close()
 		self.file_VF_overlap_phase.close()
 
+		self.file_SNR_exact_log.close()
+		self.file_SNR_gauss_log.close()
+		self.file_SNR_exact_phase.close()
+		self.file_SNR_gauss_phase.close()
+
 
 		# store data from last 6 iterations
 		self.run_debug_helper(run=True,)
@@ -1061,7 +1105,7 @@ class VMC(object):
 				
 
 			##### compute local energies #####
-			self.E_estimator_log.compute_local_energy(NN_params_log, self.DNN_phase.params, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+			Eloc = self.E_estimator_log.compute_local_energy(NN_params_log, self.DNN_phase.params, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
 
 			if self.mode=='exact':
 				mod_kets=np.exp(self.MC_tool_log.log_mod_kets)
@@ -1093,7 +1137,8 @@ class VMC(object):
 		params_dict['E_diff']=E_diff_real
 		params_dict['Eloc_mean']=Eloc_mean_g
 		params_dict['Eloc_var']=Eloc_var_g
-
+		params_dict['Eloc_mean_part']=Eloc_mean_g.real 
+		
 			
 		##### total batch
 		batch=self.MC_tool_log.spinstates_ket.reshape(self.input_shape)
@@ -1169,6 +1214,9 @@ class VMC(object):
 
 		self.Eloc_params_dict_log['E_diff']  =E_diff_real
 		self.Eloc_params_dict_phase['E_diff']=E_diff_imag
+
+		self.Eloc_params_dict_log['Eloc_mean_part']  =self.Eloc_mean_g.real 
+		self.Eloc_params_dict_phase['Eloc_mean_part']=self.Eloc_mean_g.imag
 		
 		##### total batch
 		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)

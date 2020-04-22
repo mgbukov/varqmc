@@ -42,6 +42,8 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
     output_shape_dense=(-1,out_chan)
     transpose_shape=(0,3,2,1)
 
+    norm=jnp.sqrt(filter_shape[0]*filter_shape[1])+jnp.sqrt(out_chan)
+
     #W_init = W_init or glorot_normal(rhs_spec.index('I'), rhs_spec.index('O'))
 
     def init_fun(rng, input_shape,):
@@ -88,7 +90,7 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
     def apply_fun(params, inputs, **kwargs):
         W = params[0]
         # move into lax.conv_general_dilated after defining padding='PERIODIC'
-        a=periodic_padding(inputs,)
+        a=periodic_padding(inputs,)/norm
         if ignore_b:
             if not dense_output:
                 return lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers) 
@@ -106,13 +108,12 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
 
 
 def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
+    
+    norm=jnp.sqrt(W_shape[0])+jnp.sqrt(W_shape[1])
 
-    def init_fun(rng,input_shape):
-
-         
+    def init_fun(rng,input_shape):        
         output_shape=(input_shape[0],W_shape[1])
         W = random.uniform(rng,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
-        
         if not ignore_b:
             rng, k1 = random.split(rng)
             b = random.uniform(k1,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
@@ -124,7 +125,7 @@ def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
         return output_shape, params
 
     def apply_fun(params,inputs, **kwargs):
-        z = jnp.dot(inputs,params[0])
+        z = jnp.dot(inputs,params[0])/norm
         if not ignore_b:
             # add bias
             z += params[1]       
@@ -148,6 +149,13 @@ def logcosh(x):
 def xtanh(x):
     return jnp.abs(x)*jnp.tanh(x)
 
+#@jit
+def symmetric_pool(x,reduce_shape, output_shape,):
+    # symmetrize
+    x   = jnp.sum(x.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])   
+    # sum over hidden neurons
+    x   = jnp.sum(x.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
+    return x
 
 ##############################
 
@@ -209,32 +217,21 @@ def Reshape_layer(input_shape, output_shape):
 
 
 
-def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64,):
+def Regularization(reduce_shape, output_shape,center=True, b_init=zeros, dtype=np.float64,):
     """Layer construction function for a batch normalization layer."""
-    _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
     _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
+
+    norm_1=jnp.sqrt(reduce_shape[1]+reduce_shape[3]) 
+    norm_2=jnp.sqrt(output_shape[1])
 
 
     def init_fun(rng, input_shape):
-        
-        k1, k2 = random.split(rng)
-        k2, k3 = random.split(k2)
-        k3, k4 = random.split(k3)
-
-        #a = _a_init(k1, shape)
         b_shape = (1,)
-        b = _b_init(k2, b_shape) - 0.0
-        
-        # init_value_W=1E-2
-        # W_shape=output_layer_shape+(1,) 
-        # W1 = 1.0 + random.uniform(k3,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
-        # W2 = 1.0 + random.uniform(k4,shape=output_layer_shape, minval=-init_value_W, maxval=+init_value_W)    
-
-        output_shape=(input_shape[0],1)
-        
+        b = _b_init(rng, b_shape)
+        output_shape=(-1,)
         return output_shape, (b,)
 
-    def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
+    def apply_fun(params, x, **kwargs):
         b,   = params
         
         # symmetrize
@@ -244,12 +241,12 @@ def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_in
 
         #print(x.shape, reduce_shape)
 
-        log_psi   = jnp.sum(x.reshape(reduce_shape,order='C'), axis=[1,3])#/jnp.sqrt(128.0)
+        log_psi = jnp.sum(x.reshape(reduce_shape,order='C')/norm_1, axis=[1,3])
 
         #print(log_psi.shape, output_shape)
 
         # sum over hidden neurons
-        log_psi   = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])
+        log_psi = jnp.sum(  log_psi.reshape(output_shape)/norm_2, axis=[1,])
 
         #print(log_psi.shape)
 
@@ -257,61 +254,12 @@ def Regularization(output_layer_shape,center=True, scale=True, a_init=ones, b_in
         a=8.0
         log_psi=a*jnp.tanh((log_psi-b)/a) + b
         
-        
         return log_psi
         
     return init_fun, apply_fun
 
 
 
-
-def Phase_arg(output_layer_shape,center=True, scale=True, a_init=ones, b_init=zeros, dtype=np.float64):
-    """Layer construction function for a batch normalization layer."""
-    _a_init = lambda rng, shape: a_init(rng, shape, dtype) if scale else ()
-    _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
-
-
-    def init_fun(rng, input_shape):
-        
-        k1, k2 = random.split(rng)
-       
-        b_shape = (1,)
-        b = _b_init(k2, b_shape) 
-        
-        # b_shape = output_layer_shape #
-        # b = _a_init(k2, b_shape)
-        
-        output_shape=(input_shape[0],1)
-        
-        return output_shape, ()
-
-    def apply_fun(params, x, reduce_shape, output_shape, **kwargs):
-        #b,   = params
-
-        #print(x[-1,...].sum(), x[-2,...].sum(), x[-16,...].sum())
-
-        phase_psi=x 
-
-        # symmetrize
-        phase_psi   = jnp.sum(phase_psi.reshape(reduce_shape,order='C'), axis=[1,3])
-        
-        # sum over hidden neurons
-        phase_psi   = jnp.sum(  phase_psi.reshape(output_shape), axis=[1,])
-        #phase_psi = jnp.dot(phase_psi,b)
-        
-        #print('THERE', phase_psi[-16], phase_psi[-1])
-        
-
-        # regularize output
-        #phase_psi=jnp.angle(phase_psi)
-        #phase_psi=jnp.pi*jnp.tanh(phase_psi-b)
-
-        #print(phase_psi)
-        #exit()
-        
-        return phase_psi
-        
-    return init_fun, apply_fun
 
 
 ###############

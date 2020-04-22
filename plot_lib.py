@@ -52,11 +52,13 @@ def _load_data(file_name,N_variables):
 	with open(file_name, 'r') as f:
 		for j,row in enumerate(f):
 			for k, var in enumerate(row.strip().split(":"), ):
-				data[k].append(np.float64(var))
+
+				#data[k].append(np.float64(var))
+				data[k].append(np.array([np.float64(v) for v in var.split(",") if v !='']))
 
 	data_array=()
 	for var in data:
-		data_array+=(np.array(var), )
+		data_array+=(np.array(var).squeeze(), )
 
 	return data_array
 
@@ -266,12 +268,12 @@ def plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	# plot against eigentime
 
-	N_variables=6
+	N_variables=8
 	file_name= load_dir + 'opt_data_phase' + params_str + '.txt'
-	iter_step_phase, delta_phase, tol_phase, counter_phase, step_size_phase, time_phase = _load_data(file_name,N_variables)
+	iter_step_phase, delta_phase, tol_phase, SNR_weight_sum_exact_phase	, SNR_weight_sum_gauss_phase, counter_phase, step_size_phase, time_phase = _load_data(file_name,N_variables)
 
 
-	ig, ax = plt.subplots(nrows=1, ncols=1)
+	fig, ax = plt.subplots(nrows=1, ncols=1)
 
 	im3 = ax.pcolor(time_phase,binned_phases, hist_vals, cmap='cool', norm=colors.LogNorm(vmin=1E-0, vmax=1E-4),)
 	#ax3[0].set_ylabel('phase distribution')
@@ -404,14 +406,14 @@ def phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True):
 def plot_delta(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	
-	N_variables=6
+	N_variables=8
 
 	file_name= load_dir + 'opt_data_log' + params_str + '.txt'
-	iter_step_log, delta_log, tol_log, counter_log, step_size_log, time_log = _load_data(file_name,N_variables)
+	iter_step_log, delta_log, tol_log, SNR_weight_sum_exact_log, SNR_weight_sum_gauss_log, counter_log, step_size_log, time_log = _load_data(file_name,N_variables)
 
 
 	file_name= load_dir + 'opt_data_phase' + params_str + '.txt'
-	iter_step_phase, delta_phase, tol_phase, counter_phase, step_size_phase, time_phase = _load_data(file_name,N_variables)
+	iter_step_phase, delta_phase, tol_phase, SNR_weight_sum_exact_phase	, SNR_weight_sum_gauss_phase, counter_phase, step_size_phase, time_phase = _load_data(file_name,N_variables)
 
 
 	plt.plot(iter_step_log, delta_log, 'r', label='log net' )
@@ -651,6 +653,138 @@ def plot_energy(load_dir, plotfile_dir, params_str,L,J2, save=True):
 		plt.close()
 	else:
 		plt.show()
+
+
+def _plot_S_eigvals(iter_step, S_eigvals, tol, plotfile_dir, net_type, save):
+
+	S_max=np.tile(np.max(np.abs(S_eigvals), axis=1) , [S_eigvals.shape[1],1]).T
+
+	plt.plot(iter_step, np.abs(S_eigvals)/S_max, linewidth=0.5 )
+	plt.plot(iter_step, tol, '-k', linewidth=1.5 )
+
+
+	plt.gca().yaxis.set_ticks_position('both')
+
+	plt.xlabel('iteration')
+	plt.ylabel('$\\sigma^2_k$')
+
+	plt.ylim(1E-18, 1E1)
+
+	plt.yscale('log')
+
+	if net_type=='log':
+		plt.title("$\\mathrm{log\\ net}$")
+	else:
+		plt.title("$\\mathrm{phase\\ net}$")
+	
+	plt.tight_layout()
+
+	if net_type=='log':
+		name_str='S_eigvals_log'
+	else:
+		name_str='S_eigvals_phase'
+
+
+	if save:
+		plt.savefig(plotfile_dir + name_str + '.png')
+		plt.close()
+	else:
+		plt.show()
+
+
+def plot_S_eigvals(load_dir, plotfile_dir, params_str, save=True):
+
+	
+	N_variables=2
+
+	file_name= load_dir + 'eigvals_S_matrix_log' + params_str + '.txt'
+	iter_step, S_eigvals_log = _load_data(file_name,N_variables)
+
+	file_name= load_dir + 'eigvals_S_matrix_phase' + params_str + '.txt'
+	iter_step, S_eigvals_phase = _load_data(file_name,N_variables)
+
+
+
+	N_variables=8
+
+	file_name= load_dir + 'opt_data_log' + params_str + '.txt'
+	iter_step_log, delta_log, tol_log, SNR_weight_sum_exact_log, SNR_weight_sum_gauss_log, counter_log, step_size_log, time_log = _load_data(file_name,N_variables)
+
+	file_name= load_dir + 'opt_data_phase' + params_str + '.txt'
+	iter_step_phase, delta_phase, tol_phase, SNR_weight_sum_exact_phase	, SNR_weight_sum_gauss_phase, counter_phase, step_size_phase, time_phase = _load_data(file_name,N_variables)
+
+
+	_plot_S_eigvals(iter_step, S_eigvals_log, tol_log, plotfile_dir, net_type='log', save=save)
+	_plot_S_eigvals(iter_step ,S_eigvals_phase, tol_phase, plotfile_dir ,net_type='phase', save=save)
+	
+
+
+
+def _plot_overlap_VF(data, plotfile_dir, net_type, save):
+
+
+	fig, ax = plt.subplots(nrows=1, ncols=1)
+
+	im3 = ax.pcolor(np.abs(data)+1E-15, cmap='hot', norm=colors.LogNorm(vmin=1E-0, vmax=1E-10),)
+	
+	
+	cbar_ax = inset_axes(ax,
+	                width="2.5%",  # width = 50% of parent_bbox width
+	                height="100%",  # height : 5%
+	                loc='lower left',
+	                bbox_to_anchor=(1.025, 0., 1, 1),
+	                bbox_transform=ax.transAxes,
+	                borderpad=0,           
+	                )
+
+	cbar_ax.set_yscale('log')
+
+	fig.colorbar(im3,cax=cbar_ax,ticks=[1E-9,1E-7,1E-5,1E-3,1E-1])#
+
+	
+	plt.gca().yaxis.set_ticks_position('both')
+
+	if net_type=='log':
+		ax.set_title("$\\mathrm{log\\ net}$")
+	else:
+		ax.set_title("$\\mathrm{phase\\ net}$")
+	
+	ax.set_xlabel('$k$')
+	ax.set_ylabel('iteration')
+	cbar_ax.set_xlabel('$|V^\\dagger F|$',fontsize=16)
+	cbar_ax.xaxis.set_label_position('top') 
+
+	
+	plt.tight_layout(rect=(0,0,0.9,1))
+
+	if net_type=='log':
+		name_str='overlap_VF_log'
+	else:
+		name_str='overlap_VF_phase'
+
+	if save:
+		plt.savefig(plotfile_dir + name_str + '.png')
+		plt.close()
+	else:
+		plt.show()
+
+
+def plot_overlap_VF(load_dir, plotfile_dir, params_str, save=True):
+
+	
+	N_variables=2
+
+	file_name= load_dir + 'overlap_VF_log' + params_str + '.txt'
+	iter_step, overlap_VF_log = _load_data(file_name,N_variables)
+
+
+	file_name= load_dir + 'overlap_VF_phase' + params_str + '.txt'
+	iter_step, overlap_VF_phase = _load_data(file_name,N_variables)
+
+	_plot_overlap_VF(overlap_VF_log, plotfile_dir, net_type='log', save=save)
+	_plot_overlap_VF(overlap_VF_phase, plotfile_dir ,net_type='phase', save=save)
+	
+
 
 
 

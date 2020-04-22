@@ -282,6 +282,7 @@ class Energy_estimator():
 		params_dict['E_diff']=E_diff_imag
 		params_dict['Eloc_mean']=Eloc_mean_g
 		params_dict['Eloc_var']=Eloc_var_g
+		params_dict['Eloc_mean_part']=Eloc_mean_g.imag
 		
 
 		return params_dict, batch
@@ -476,11 +477,14 @@ class Energy_estimator():
 			self.debug_helper()
 
 
+		return self.Eloc_real+1j*self.Eloc_imag
+
+
 
 	def process_local_energies(self,Eloc_params_dict,):
 
 		
-		loc=self.Eloc_real+1j*self.Eloc_imag
+		Eloc=self.Eloc_real+1j*self.Eloc_imag
 
 	
 		if self.mode=='MC':
@@ -488,14 +492,14 @@ class Energy_estimator():
 			Eloc_mean_g=np.zeros(1, dtype=np.complex128)
 			Eloc_var_g=np.zeros(1, dtype=np.float64)
 
-			# Eloc_mean=np.mean(loc).real
-			# Eloc_var=np.sum( np.abs(loc)**2)/self.Eloc_real_tot.shape[0] - Eloc_mean**2
+			# Eloc_mean=np.mean(Eloc).real
+			# Eloc_var=np.sum( np.abs(Eloc)**2)/self.Eloc_real_tot.shape[0] - Eloc_mean**2
 
-			self.comm.Allreduce(np.sum(       loc    ), Eloc_mean_g, op=MPI.SUM)
+			self.comm.Allreduce(np.sum(       Eloc    ), Eloc_mean_g, op=MPI.SUM)
 			Eloc_mean_g/=self.N_MC_points
 
 			
-			self.comm.Allreduce(np.sum(np.abs(loc)**2), Eloc_var_g,  op=MPI.SUM)
+			self.comm.Allreduce(np.sum(np.abs(Eloc)**2), Eloc_var_g,  op=MPI.SUM)
 			Eloc_var_g/=self.N_MC_points
 			Eloc_var_g-=np.abs(Eloc_mean_g)**2
 
@@ -505,8 +509,8 @@ class Energy_estimator():
 
 		elif self.mode=='exact':
 			abs_psi_2=Eloc_params_dict['abs_psi_2']
-			Eloc_mean_g=np.sum(loc*abs_psi_2).real
-			Eloc_var_g=np.sum(abs_psi_2*np.abs(loc)**2) - Eloc_mean_g**2
+			Eloc_mean_g=np.sum(Eloc*abs_psi_2).real
+			Eloc_var_g=np.sum(abs_psi_2*np.abs(Eloc)**2) - Eloc_mean_g**2
 			
 
 
