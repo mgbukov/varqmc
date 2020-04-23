@@ -1163,9 +1163,8 @@ cdef class Log_Net:
 
     def _init_evaluate(self):
 
-        #self.evaluate_log  =self._evaluate_log
-        #self.evaluate_phase=self._evaluate_phase
-
+        #self.evaluate  =self._evaluate
+        
         # define network evaluation on GPU
         self.evaluate  =jit(self._evaluate)
         
@@ -1660,7 +1659,6 @@ cdef class Phase_Net:
                                 'nonlin_1': elementwise(logcosh),
                                 'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=2E-1, init_value_b=2E-1 ), #init_value_W=1E-2, init_value_b=1E-2
                                 'nonlin_2': elementwise(logcosh),
-                                #'reg': Pool_symm((shape_last_layer[1],)),
                                 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
 
                                 # 'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1

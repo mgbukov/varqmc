@@ -1,35 +1,19 @@
 from jax.config import config
 config.update("jax_enable_x64", True)
-import jax.numpy as jnp
-from jax import jit, grad, random, device_put 
-from jax.experimental.stax import BatchNorm
-
-from mpi4py import MPI
+from jax import jit, lax, random, device_put #, disable_jit
 
 import functools
 import itertools
-from jax import lax, random
-from jax import ops, disable_jit
+
 import jax.numpy as jnp
 import numpy as np
 
-from jax.nn import (relu, log_softmax, softmax, softplus, sigmoid, elu,
-                    leaky_relu, selu, gelu, normalize)
+#from mpi4py import MPI
+
 from jax.nn.initializers import glorot_normal, normal, ones, zeros
 
-#from DNN_architectures_cpx import elementwise
 
 
-# aliases for backwards compatibility
-#glorot = glorot_normal
-#randn = normal
-#logsoftmax = log_softmax
-
-# import numpy as np
-# seed=1
-# np.random.seed(seed)
-# np.random.RandomState(seed)
-# rng = random.PRNGKey(seed)
 
 
 def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2, dense_output=False ):
@@ -41,10 +25,6 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
 
     output_shape_dense=(-1,out_chan)
     transpose_shape=(0,3,2,1)
-
-    norm=jnp.sqrt(filter_shape[0]*filter_shape[1])+jnp.sqrt(out_chan)
-
-    #W_init = W_init or glorot_normal(rhs_spec.index('I'), rhs_spec.index('O'))
 
     def init_fun(rng, input_shape,):
         
@@ -62,6 +42,11 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
         #W = W_init(k1, kernel_shape)
         #W = random.uniform(rng,shape=kernel_shape, minval=-init_value_W, maxval=+init_value_W)
         W = random.uniform(rng,shape=(kernel_shape[2]*kernel_shape[3]*kernel_shape[1],kernel_shape[0]), minval=-init_value_W, maxval=+init_value_W).T.reshape(kernel_shape)
+        
+        # normalize W
+        #norm=jnp.sqrt(filter_shape[0]*filter_shape[1]*(input_shape[1]+out_chan))
+        norm=jnp.sqrt(filter_shape[0]*filter_shape[1]+out_chan)
+        W/=norm
         
         # output
         if not dense_output:
@@ -90,7 +75,7 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
     def apply_fun(params, inputs, **kwargs):
         W = params[0]
         # move into lax.conv_general_dilated after defining padding='PERIODIC'
-        a=periodic_padding(inputs,)/norm
+        a=periodic_padding(inputs,)
         if ignore_b:
             if not dense_output:
                 return lax.conv_general_dilated(a, W, strides, padding, one, one, dimension_numbers=dimension_numbers) 
@@ -109,11 +94,12 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
 
 def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
     
-    norm=jnp.sqrt(W_shape[0])+jnp.sqrt(W_shape[1])
-
+    norm=jnp.sqrt(W_shape[0]+W_shape[1])
+  
     def init_fun(rng,input_shape):        
         output_shape=(input_shape[0],W_shape[1])
         W = random.uniform(rng,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
+        #W/=norm # see apply func
         if not ignore_b:
             rng, k1 = random.split(rng)
             b = random.uniform(k1,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
@@ -148,7 +134,7 @@ def logcosh(x):
 @jit
 def xtanh(x):
     return jnp.abs(x)*jnp.tanh(x)
-
+    
 #@jit
 def symmetric_pool(x,reduce_shape, output_shape,):
     # symmetrize
@@ -233,14 +219,14 @@ def Regularization(reduce_shape, output_shape,center=True, b_init=zeros, dtype=n
 
     def apply_fun(params, x, **kwargs):
         b,   = params
-        
-        # symmetrize
+         
         # 1/(N/p) = p/N : p different terms in sum left
         # uncorrelated: 1/\sqrt(p) 
         # correlated: 1/p
 
         #print(x.shape, reduce_shape)
-
+        
+        # symmetrize
         log_psi = jnp.sum(x.reshape(reduce_shape,order='C')/norm_1, axis=[1,3])
 
         #print(log_psi.shape, output_shape)

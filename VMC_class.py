@@ -1163,6 +1163,7 @@ class VMC(object):
 			self.logfile.write(MC_str)
 			if self.comm.Get_rank()==0:
 				print(MC_str)
+			exit()
 
 			if iteration==0:
 				self.MC_tool.thermal=self.thermal # set MC sampler to re-use initial state
