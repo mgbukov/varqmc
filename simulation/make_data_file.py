@@ -52,7 +52,6 @@ def create_params_file(params):
 	yaml.dump(params, config_params_init)
 	config_params_init.close()
 
-
 	return data_dir
 
 

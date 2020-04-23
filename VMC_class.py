@@ -746,6 +746,10 @@ class VMC(object):
 		self.file_S_eigvals_phase.flush()
 		self.file_VF_overlap_log.flush()
 		self.file_VF_overlap_phase.flush()
+		self.file_SNR_exact_log.flush()
+		self.file_SNR_gauss_log.flush()
+		self.file_SNR_exact_phase.flush()
+		self.file_SNR_gauss_phase.flush()
 
 
 
@@ -1026,6 +1030,8 @@ class VMC(object):
 			
 		
 		# close files
+		self.comm.Barrier()
+
 		self.logfile.close()
 		self.file_energy.close()
 		self.file_loss_log.close()
@@ -1041,6 +1047,8 @@ class VMC(object):
 		self.file_SNR_gauss_log.close()
 		self.file_SNR_exact_phase.close()
 		self.file_SNR_gauss_phase.close()
+
+		self.comm.Barrier()
 
 
 		# store data from last 6 iterations
@@ -1163,7 +1171,7 @@ class VMC(object):
 			self.logfile.write(MC_str)
 			if self.comm.Get_rank()==0:
 				print(MC_str)
-			exit()
+			#exit()
 
 			if iteration==0:
 				self.MC_tool.thermal=self.thermal # set MC sampler to re-use initial state

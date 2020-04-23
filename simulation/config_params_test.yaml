@@ -1,12 +1,12 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 4
+L: 6
 
-N_iterations: 500
+N_iterations: 5 # 500
 
 NN_dtype: real-decoupled # cpx #
 
-NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12)  #   (16--12--8,16--24--12) # 
+NN_shape_str: (6x6-12--1x1-8,6x6-24--1x1-12)  #   (16--12--8,16--24--12) # 
 NN_type: CNN 
 
 # NN_shape_str: (16--12--8,16--24--12) #    (16--12--8,16--24--12) # 

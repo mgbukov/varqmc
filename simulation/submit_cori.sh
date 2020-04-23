@@ -22,7 +22,7 @@ echo "#SBATCH --nodes=${N_nodes}" >> submission.sh
 #echo "#SBATCH --tasks=4" >> submission.sh # total number of tasks
 #echo "#SBATCH --cpus-per-task=272" >> submissio.sh # #OMP processes
 
-echo "#SBATCH --tasks-per-node=32" >> submission.sh # 26/32
+#echo "#SBATCH --tasks-per-node=32" >> submission.sh # 26/32
 #echo "#SBATCH --tasks-per-node=68" >> submission.sh # 68
 
 
