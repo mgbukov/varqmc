@@ -9,7 +9,7 @@ from mpi4py import MPI
 import numpy as np
 from scipy.sparse.linalg import cg #,cgs,bicg,bicgstab
 #from cg import cg
-from scipy.linalg import eigh,eig
+from scipy.linalg import eigh,eig,inv,pinv,pinvh
 
 import pickle, time
 
@@ -193,40 +193,37 @@ class natural_gradient():
 			# add connected piece
 			self.Q_expt-=self.VF_overlap**2
 	
-			#finite_k,=np.where(lmbda>1E-14)
-			finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(lmbda)>1E-8) )
-			
-			
-			self.SNR_exact[finite_k]=np.sqrt(self.N_MC_points)*np.abs(self.VF_overlap[finite_k])/np.sqrt(np.abs(self.Q_expt[finite_k]))
-			self.SNR_gauss[finite_k]=np.sqrt(self.N_MC_points)/np.sqrt(1.0 + (lmbda[finite_k]/self.VF_overlap[finite_k]**2)*Eloc_var)
+			# take only values above machine precision
+			#finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(lmbda)>1E-14) )
+			finite_k,=np.where( (np.abs(self.VF_overlap)>1E-14) & (np.abs(lmbda)>1E-14) )
+						
+			self.SNR_exact[finite_k]=np.sqrt(self.N_MC_points)*np.abs(self.VF_overlap[finite_k])/(np.sqrt(np.abs(self.Q_expt[finite_k])) + 1E-14)
+			self.SNR_gauss[finite_k]=np.sqrt(self.N_MC_points)/np.sqrt(1.0 + (lmbda[finite_k]/(self.VF_overlap[finite_k]**2 ) )*Eloc_var)
 
 			
-			# adjust tolerance accorring to SNR
+			# adjust tolerance according to SNR
 			weight=np.abs(self.VF_overlap)/(np.abs(self.VF_overlap).sum())
-			
 			inds,= np.where((self.SNR_exact>1E0) )
 			if len(inds)>0:
-				self.tol = lmbda[inds[0]-1]
-
-				adaptive_k=inds[0]-1
-				self.SNR_weight_sum_exact=weight[adaptive_k:].sum()
+				self.tol=lmbda[inds[0]]
+				self.SNR_weight_sum_exact=weight[inds].sum()
 			else:
 				self.SNR_weight_sum_exact=0.0
 			
 
 			inds_gauss, = np.where((self.SNR_gauss>1E0) )
 			if len(inds_gauss)>0:
-				adaptive_k_gauss=inds_gauss[0]-1
-				self.SNR_weight_sum_gauss=weight[adaptive_k_gauss:].sum()
+				self.SNR_weight_sum_gauss=weight[inds_gauss].sum()
 			else:
 				self.SNR_weight_sum_gauss=0.0
 
-
+			
 			# if self.comm.Get_rank()==0:
 
 			# 	import matplotlib.pyplot as plt
-			# 	plt.plot(self.SNR_exact,'b', label='SNR emp')
 			# 	plt.plot(self.SNR_gauss,'r', label='SNR gauss')
+			# 	plt.plot(self.SNR_exact,'b', label='SNR exact')
+				
 			# 	plt.plot(np.ones_like(self.SNR_exact),'-k', label='1.0' )
 			# 	plt.plot(np.abs(self.VF_overlap), 'm', label='V^t F')
 			# 	plt.plot(lmbda, 'c', label='spec', linewidth=4)
@@ -236,7 +233,10 @@ class natural_gradient():
 			# 	plt.legend()
 			# 	plt.show()
 
-			# exit()
+			# 	#exit()
+
+
+			return inds
 
 
 	def compute_r2_cost(self,Eloc_params_dict):
@@ -303,20 +303,29 @@ class natural_gradient():
 		
 		elif self.TDVP_opt == 'svd':
 			lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
+			#lmbda, V = np.linalg.eigh(S/self.S_norm,)
+			#lmbda, V = eigh(S/self.S_norm,)
 			lmbda*=self.S_norm
 
-			# print(jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda)), jnp.dot(V.T, F) ) )[-4:] )
-			# print( (np.linalg.inv(S/self.S_norm).dot(F)/self.S_norm) [-4:] )
-			# print(np.linalg.norm( jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda)), jnp.dot(V.T, F) ) ) - np.linalg.inv(S/self.S_norm).dot(F)/self.S_norm ))
+
+			a1= jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda+1E-14)), jnp.dot(V.T, F) ) ) #[-4:]
+			a2 = inv(S/self.S_norm).dot(F)/self.S_norm #[-4:]
+
+			# print(np.linalg.norm(a1-a2))
+			# print(np.sqrt(np.dot( (a1-a2).conj() , np.dot(S,a1-a2) )) )
 			# exit()
 
 			self.S_eigvals[:]=lmbda
 			self.VF_overlap[:]= jnp.dot(V.T, F)
-			self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
+			SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
 
 
-
-			self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2)), self.VF_overlap ) )
+			# Lorentz cutoff
+			#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )
+			# exp cutoff
+			#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 1.0/(1.0 + np.exp( -(lmbda-self.tol)/(1E-1*self.tol) ) ) * 1.0/lmbda ), self.VF_overlap ) )
+			# hard cutoff
+			self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
 
 		return info
 

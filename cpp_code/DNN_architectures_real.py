@@ -44,8 +44,8 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
         W = random.uniform(rng,shape=(kernel_shape[2]*kernel_shape[3]*kernel_shape[1],kernel_shape[0]), minval=-init_value_W, maxval=+init_value_W).T.reshape(kernel_shape)
         
         # normalize W
-        #norm=jnp.sqrt(filter_shape[0]*filter_shape[1]*(input_shape[1]+out_chan))
-        norm=jnp.sqrt(filter_shape[0]*filter_shape[1]+out_chan)
+        norm=jnp.sqrt(filter_shape[0]*filter_shape[1]*(input_shape[1]+out_chan))
+        #norm=jnp.sqrt(filter_shape[0]*filter_shape[1]+out_chan)
         W/=norm
         
         # output

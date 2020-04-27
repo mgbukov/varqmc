@@ -66,82 +66,162 @@ def _load_data(file_name,N_variables):
 ####################################
 
 
-def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=1000, save=True):
+def _plot_SNR(plotfile_dir,it,SNR_exact,SNR_gauss,VF_overlap,S_eigvals,save,net_type='log',):
 
-	file_name= 'NNparams--iter_{0:05d}'.format(iteration) 
-
-
-	with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
-		params_log, params_phase, apply_fun_args_log, apply_fun_args_phase, log_psi_shift = pickle.load(handle)
-
-	# sample points
-	MC_tool = MC_sample(load_dir, params_log, N_MC_points=N_MC_points, reps=True)
-
-
-	rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
-
-	log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )
-	sign_psi = np.exp(-1j*phase_psi)
+	plt.plot(SNR_exact[it,:],'b', label='SNR exact')
+	plt.plot(SNR_gauss[it,:],'r', label='SNR gauss')
+	plt.plot(np.ones_like(SNR_exact[it,:]),'-k', label='1.0' )
+	plt.plot(np.abs(VF_overlap[it,:]), 'm', label='$V^\\dagger F$')
+	plt.plot(S_eigvals[it,:], 'c', label='$\\sigma^2$', )
+	
+	plt.yscale('log')
+	plt.xlabel('$k$')
+	plt.title('iteration={0:d}'.format(it))
 
 
-	log_psi, phase_psi,  phase_psi_bras, log_psi_bras = evaluate_sample(load_dir,params_log, params_phase, rep_spin_configs_ints, log_psi,phase_psi,log_psi_shift=0.0)
+	plt.grid()
 
-	# wrap phases
-	phase_psi = (phase_psi+np.pi)%(2*np.pi) - np.pi
-	phase_psi_bras = (phase_psi_bras+np.pi)%(2*np.pi) - np.pi
-
-	# shift phases
-	ind=np.argmax(log_psi)
-	a=phase_psi[ind]
-	b=log_psi[ind]
-
-	phase_psi=phase_psi-a
-	phase_psi_bras=phase_psi_bras-a
-
-	log_psi=log_psi-b
-	log_psi_bras=log_psi_bras-b
-
-
-	#print(phase_psi)
-
-	############
-
-	fig, ax = plt.subplots(nrows=1, ncols=2, sharey=True)
-
-	xlim=[-2*np.pi,2*np.pi]
-	ylim=[-20.0,1.0]
-
-	ax[0].plot(phase_psi,2.0*log_psi,'.b',markersize=0.5)
-	ax[0].set_xlim(xlim)
-	ax[0].set_ylim(ylim)
-	ax[0].set_xlabel('$\\varphi_s$')
-	ax[0].set_ylabel('$2\\log|\\psi_s|$')
-	ax[0].set_title('$s$-configs')
-	ax[0].xaxis.set_major_locator(plt.MultipleLocator(np.pi))
-	ax[0].xaxis.set_major_formatter(plt.FuncFormatter(format_func))
-	ax[0].grid(color='k', linestyle='-', linewidth=0.1)
-	ax[0].xaxis.set_ticks_position('both')
-	ax[0].yaxis.set_ticks_position('both')
-
-	ax[1].plot(phase_psi_bras,2.0*log_psi_bras,'.r',markersize=0.5)
-	ax[1].set_xlim(xlim)
-	ax[1].set_ylim(ylim)
-	ax[1].set_xlabel('$\\varphi_s$')
-	ax[1].set_title("$s'$-configs")
-	ax[1].xaxis.set_major_locator(plt.MultipleLocator(np.pi))
-	ax[1].xaxis.set_major_formatter(plt.FuncFormatter(format_func))
-	ax[1].grid(color='k', linestyle='-', linewidth=0.1)
-	ax[1].xaxis.set_ticks_position('both')
-	ax[1].yaxis.set_ticks_position('both')
+	plt.legend()
+	
 
 	plt.tight_layout()
 
+	if net_type=='log':
+		save_name=plotfile_dir + 'SNRs_log--iter_{0:05d}.pdf'.format(it)
+	elif net_type=='phase':
+		save_name=plotfile_dir + 'SNRs_phase--iter_{0:05d}.pdf'.format(it)
+
 
 	if save:
-		plt.savefig(plotfile_dir + 'configs--iter_{0:05d}.png'.format(iteration))
+		plt.savefig(save_name)
 		plt.close()
 	else:
 		plt.show()
+
+
+def plot_SNR(load_dir, plotfile_dir, params_str, iterations, save=True):
+
+	N_variables=2
+
+	file_name= load_dir + 'overlap_VF_log' + params_str + '.txt'
+	iter_step, overlap_VF_log = _load_data(file_name,N_variables)
+
+	file_name= load_dir + 'overlap_VF_phase' + params_str + '.txt'
+	iter_step, overlap_VF_phase = _load_data(file_name,N_variables)
+
+
+
+	N_variables=2
+
+	file_name= load_dir + 'eigvals_S_matrix_log' + params_str + '.txt'
+	iter_step, S_eigvals_log = _load_data(file_name,N_variables)
+
+	file_name= load_dir + 'eigvals_S_matrix_phase' + params_str + '.txt'
+	iter_step, S_eigvals_phase = _load_data(file_name,N_variables)
+
+
+
+	N_variables=2
+
+	file_name= load_dir + 'SNR_exact_log' + params_str + '.txt'
+	iter_step, SNR_exact_log = _load_data(file_name,N_variables)
+
+	file_name= load_dir + 'SNR_exact_phase' + params_str + '.txt'
+	iter_step, SNR_exact_phase = _load_data(file_name,N_variables)
+
+	file_name= load_dir + 'SNR_gauss_log' + params_str + '.txt'
+	iter_step, SNR_gauss_log = _load_data(file_name,N_variables)
+
+	file_name= load_dir + 'SNR_gauss_phase' + params_str + '.txt'
+	iter_step, SNR_gauss_phase = _load_data(file_name,N_variables)
+
+
+	for it in iterations:
+		_plot_SNR(plotfile_dir,it,SNR_exact_log,SNR_gauss_log,overlap_VF_log,S_eigvals_log,save,net_type='log')
+		_plot_SNR(plotfile_dir,it,SNR_exact_phase,SNR_gauss_phase,overlap_VF_phase,S_eigvals_phase,save,net_type='phase')
+
+
+
+
+
+def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iterations, N_MC_points=1000, save=True):
+
+	for iteration in iterations:
+
+		file_name= 'NNparams--iter_{0:05d}'.format(iteration) 
+
+
+		with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
+			params_log, params_phase, apply_fun_args_log, apply_fun_args_phase, log_psi_shift = pickle.load(handle)
+
+		# sample points
+		MC_tool = MC_sample(load_dir, params_log, N_MC_points=N_MC_points, reps=True)
+
+
+		rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
+
+		log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )
+		sign_psi = np.exp(-1j*phase_psi)
+
+
+		log_psi, phase_psi,  phase_psi_bras, log_psi_bras = evaluate_sample(load_dir,params_log, params_phase, rep_spin_configs_ints, log_psi,phase_psi,log_psi_shift=0.0)
+
+		# wrap phases
+		phase_psi = (phase_psi+np.pi)%(2*np.pi) - np.pi
+		phase_psi_bras = (phase_psi_bras+np.pi)%(2*np.pi) - np.pi
+
+		# shift phases
+		ind=np.argmax(log_psi)
+		a=phase_psi[ind]
+		b=log_psi[ind]
+
+		phase_psi=phase_psi-a
+		phase_psi_bras=phase_psi_bras-a
+
+		log_psi=log_psi-b
+		log_psi_bras=log_psi_bras-b
+
+
+		#print(phase_psi)
+
+		############
+
+		fig, ax = plt.subplots(nrows=1, ncols=2, sharey=True)
+
+		xlim=[-2*np.pi,2*np.pi]
+		ylim=[-20.0,1.0]
+
+		ax[0].plot(phase_psi,2.0*log_psi,'.b',markersize=0.5)
+		ax[0].set_xlim(xlim)
+		ax[0].set_ylim(ylim)
+		ax[0].set_xlabel('$\\varphi_s$')
+		ax[0].set_ylabel('$2\\log|\\psi_s|$')
+		ax[0].set_title('$s$-configs')
+		ax[0].xaxis.set_major_locator(plt.MultipleLocator(np.pi))
+		ax[0].xaxis.set_major_formatter(plt.FuncFormatter(format_func))
+		ax[0].grid(color='k', linestyle='-', linewidth=0.1)
+		ax[0].xaxis.set_ticks_position('both')
+		ax[0].yaxis.set_ticks_position('both')
+
+		ax[1].plot(phase_psi_bras,2.0*log_psi_bras,'.r',markersize=0.5)
+		ax[1].set_xlim(xlim)
+		ax[1].set_ylim(ylim)
+		ax[1].set_xlabel('$\\varphi_s$')
+		ax[1].set_title("$s'$-configs")
+		ax[1].xaxis.set_major_locator(plt.MultipleLocator(np.pi))
+		ax[1].xaxis.set_major_formatter(plt.FuncFormatter(format_func))
+		ax[1].grid(color='k', linestyle='-', linewidth=0.1)
+		ax[1].xaxis.set_ticks_position('both')
+		ax[1].yaxis.set_ticks_position('both')
+
+		plt.tight_layout()
+
+
+		if save:
+			plt.savefig(plotfile_dir + 'configs--iter_{0:05d}.png'.format(iteration))
+			plt.close()
+		else:
+			plt.show()
 
 
 
@@ -176,6 +256,8 @@ def plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	plt.xlabel('iteration')
 	plt.ylabel('MC acceptance ratio')
+
+	plt.ylim([0.0,1.0])
 
 	#plt.yscale('log')
 

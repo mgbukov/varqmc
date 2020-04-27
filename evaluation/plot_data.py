@@ -38,13 +38,13 @@ save=True #False #
 
 
 
-iteration=499
-J2=0.5
-L=4
+iterations=[0,100,200,300,400,500,600]
+J2=0.0
+L=6
 opt='sgd_sgd' # 'RK_RK' # 
 cost='SR_SR'
 mode='MC' # 'exact' #
-sys_time= '2020_04_22-16_17_50'
+sys_time= '2020_04_24-20_41_24'
 
 
 
@@ -74,26 +74,27 @@ if os.path.exists(load_dir) and (not os.path.exists(plotfile_dir)):
 
 
 
-
-plot_sample(load_dir, plotfile_dir, params_str,L,J2, iteration, N_MC_points=1000, save=save)
+plot_sample(load_dir, plotfile_dir, params_str,L,J2, iterations, N_MC_points=1000, save=save)
 
 
 
 load_dir+= 'data_files/'
 
-# plot_delta(load_dir, plotfile_dir, params_str, L, J2, save=save)
+plot_delta(load_dir, plotfile_dir, params_str, L, J2, save=save)
 
-# plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=save)
+plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=save)
 
-# plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=save)
+plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=save)
 
-# plot_energy( load_dir, plotfile_dir, params_str, L, J2, save=save)
+plot_energy( load_dir, plotfile_dir, params_str, L, J2, save=save)
 
-# plot_loss( load_dir, plotfile_dir, params_str, L, J2, save=save)
+plot_loss( load_dir, plotfile_dir, params_str, L, J2, save=save)
 
 plot_S_eigvals(load_dir, plotfile_dir, params_str, save=True)
 
 plot_overlap_VF(load_dir, plotfile_dir, params_str, save=True)
+
+plot_SNR(load_dir, plotfile_dir, params_str, iterations, save=True)
 
 
 #phase_movie(load_dir, plotfile_dir, params_str,L,J2, clear_data=True)
