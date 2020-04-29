@@ -195,15 +195,16 @@ class natural_gradient():
 	
 			# take only values above machine precision
 			#finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(lmbda)>1E-14) )
-			finite_k,=np.where( (np.abs(self.VF_overlap)>1E-14) & (np.abs(lmbda)>1E-14) )
+			finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(np.abs(lmbda))>1E-14) )
 						
 			self.SNR_exact[finite_k]=np.sqrt(self.N_MC_points)*np.abs(self.VF_overlap[finite_k])/(np.sqrt(np.abs(self.Q_expt[finite_k])) + 1E-14)
 			self.SNR_gauss[finite_k]=np.sqrt(self.N_MC_points)/np.sqrt(1.0 + (lmbda[finite_k]/(self.VF_overlap[finite_k]**2 ) )*Eloc_var)
 
 			
 			# adjust tolerance according to SNR
+			threshold=4E0
 			weight=np.abs(self.VF_overlap)/(np.abs(self.VF_overlap).sum())
-			inds,= np.where((self.SNR_exact>1E0) )
+			inds,= np.where((self.SNR_exact>threshold) )
 			if len(inds)>0:
 				self.tol=lmbda[inds[0]]
 				self.SNR_weight_sum_exact=weight[inds].sum()
@@ -211,7 +212,7 @@ class natural_gradient():
 				self.SNR_weight_sum_exact=0.0
 			
 
-			inds_gauss, = np.where((self.SNR_gauss>1E0) )
+			inds_gauss, = np.where((self.SNR_gauss>threshold) )
 			if len(inds_gauss)>0:
 				self.SNR_weight_sum_gauss=weight[inds_gauss].sum()
 			else:
@@ -308,9 +309,8 @@ class natural_gradient():
 			lmbda*=self.S_norm
 
 
-			a1= jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda+1E-14)), jnp.dot(V.T, F) ) ) #[-4:]
-			a2 = inv(S/self.S_norm).dot(F)/self.S_norm #[-4:]
-
+			# a1= jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda+1E-14)), jnp.dot(V.T, F) ) ) #[-4:]
+			# a2 = inv(S/self.S_norm).dot(F)/self.S_norm #[-4:]
 			# print(np.linalg.norm(a1-a2))
 			# print(np.sqrt(np.dot( (a1-a2).conj() , np.dot(S,a1-a2) )) )
 			# exit()

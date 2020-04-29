@@ -15,8 +15,8 @@ import yaml
 # sacct -j "" --format="JobID,MaxRSS,AveRSS,MaxRSSNode"
 
 # request interactive node
-# salloc -N 1 -t 30 -C knl -q interactive
-# salloc -N 10 -t 30 -C haswell -q interactive
+# salloc -N 1 -t 60 -C knl -q interactive
+# salloc -N 10 -t 60 -C haswell -q interactive
 
 
 if len(sys.argv)>1:
