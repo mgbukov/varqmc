@@ -16,7 +16,7 @@ import yaml
 
 # request interactive node
 # salloc -N 1 -t 60 -C knl -q interactive
-# salloc -N 10 -t 60 -C haswell -q interactive
+# salloc -N 10 -t 120 -C haswell -q interactive
 
 
 if len(sys.argv)>1:

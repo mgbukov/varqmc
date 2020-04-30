@@ -1,8 +1,8 @@
-J2: 0.5
+J2: 0.0
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 6
 
-N_iterations: 10 # 500
+N_iterations: 2 # 100 # 500
 
 NN_dtype: real-decoupled # cpx #
 

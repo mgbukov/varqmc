@@ -202,7 +202,7 @@ class natural_gradient():
 
 			
 			# adjust tolerance according to SNR
-			threshold=4E0
+			threshold=4.0
 			weight=np.abs(self.VF_overlap)/(np.abs(self.VF_overlap).sum())
 			inds,= np.where((self.SNR_exact>threshold) )
 			if len(inds)>0:
@@ -225,7 +225,7 @@ class natural_gradient():
 			# 	plt.plot(self.SNR_gauss,'r', label='SNR gauss')
 			# 	plt.plot(self.SNR_exact,'b', label='SNR exact')
 				
-			# 	plt.plot(np.ones_like(self.SNR_exact),'-k', label='1.0' )
+			# 	plt.plot(threshold*np.ones_like(self.SNR_exact),'-k', label='{0:0.2f}'.format(threshold) )
 			# 	plt.plot(np.abs(self.VF_overlap), 'm', label='V^t F')
 			# 	plt.plot(lmbda, 'c', label='spec', linewidth=4)
 			# 	plt.yscale('log')
@@ -234,7 +234,7 @@ class natural_gradient():
 			# 	plt.legend()
 			# 	plt.show()
 
-			# 	#exit()
+			# 	exit()
 
 
 			return inds

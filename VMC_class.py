@@ -959,7 +959,7 @@ class VMC(object):
 
 
 			#####
-			E_str=self.mode + ": E={0:0.14f}, E_std={1:0.14f}, E_imag={2:0.14f}.\n".format(self.Eloc_mean_g.real, self.E_MC_std_g, self.Eloc_mean_g.imag, )
+			E_str=self.mode + ": E={0:0.14f}, E_var={1:0.14f}, E_std={2:0.14f}, E_imag={3:0.14f}.\n".format(self.Eloc_mean_g.real,self.Eloc_var_g, self.E_MC_std_g, self.Eloc_mean_g.imag, )
 			if self.comm.Get_rank()==0:
 				#E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g[-1,...]).shape[0] )
 				print(E_str)

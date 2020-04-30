@@ -130,8 +130,9 @@ class MC_sampler():
 		if compute_phases:
 			self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), )
 
-		#print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
-		#print(self.phase_kets.mean(), self.phase_kets.std() )
+
+		# print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
+		# print(self.phase_kets.mean(), self.phase_kets.std() )
 		#exit()
 
 
