@@ -95,7 +95,9 @@ def load_opt_data(opt,file_name,start_iter):
 
 	with open(file_name) as file:
 		for i in range(start_iter):
-			opt_data_str = file.readline().rstrip().split(' : ')	
+			opt_data_str = file.readline().rstrip().split(' : ')
+
+	print(start_iter, opt_data_str)	
 
 	opt.iteration=int(opt_data_str[0])+1
 	opt.NG.delta=np.float64(opt_data_str[1])
@@ -163,6 +165,10 @@ class VMC(object):
 		self.save_data=params_dict['save_data']
 		self.load_data=params_dict['load_data']
 		self.batchnorm=params_dict['batchnorm']
+		self.adaptive_SR_cutoff=params_dict['adaptive_SR_cutoff']
+
+
+		self.print=params_dict['print']
 
 
 		# training params
@@ -270,7 +276,8 @@ class VMC(object):
 
 	def _load_data(self, start_iter, truncate_files=True, repeat=False):
 
-		### load MC data
+		### load MC 
+		print(self.comm.Get_rank(),"loading iteration {0:d}".format(start_iter), truncate_files, repeat)
 		
 		with open(self.file_MC_data.name) as file:
 			for i in range(start_iter):
@@ -422,13 +429,13 @@ class VMC(object):
 	def _create_optimizer(self):
 
 		# log net
-		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN_log.NN_Tree, label='log',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step )
+		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN_log.NN_Tree, label='LOG',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 		self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_log.N_varl_params, self.n_iter)
 		self.opt_log.define_grad_func(self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
 		self.opt_log.init_opt_state(self.DNN_log.params)
 		
 		# phase net
-		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN_phase.NN_Tree, label='phase', step_size=self.step_sizes[1], adaptive_step=self.adaptive_step )
+		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN_phase.NN_Tree, label='PHASE', step_size=self.step_sizes[1], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 		self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_phase.N_varl_params, self.n_iter)
 		self.opt_phase.define_grad_func(self.DNN_phase.evaluate, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy_phase )
 		self.opt_phase.init_opt_state(self.DNN_phase.params)
@@ -546,6 +553,11 @@ class VMC(object):
 		def customwarn(message, category, filename, lineno, file=None, line=None):
 			self.logfile.write('\n'+warnings.formatwarning(message, category, filename, lineno)+'\n')
 		warnings.showwarning = customwarn
+
+		# redirect std out
+		if not self.print:
+			sys.stdout = self.logfile
+			sys.stderr = self.logfile
 
 		
 		self.debug_file_SF_log       =self.savefile_dir_debug + 'debug-SF_data_log'            #+'--' + self.file_name
@@ -835,9 +847,9 @@ class VMC(object):
 
 
 		if exit_flag:
-			exit_str="\n\nEncountered nans or infs!\nExiting simulation...\n\n"
+			exit_str="\nEncountered nans or infs!\nExiting simulation...\n"
 			print(exit_str)
-			self.logfile.write(exit_str)
+			#self.logfile.write(exit_str)
 			exit()
 
 
@@ -890,16 +902,16 @@ class VMC(object):
 				data_tuple=(iteration, Eloc_mean_g.real, Eloc_mean_g.imag, E_MC_std_g,)
 
 				if _b1:
-					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_mean_check={4:0.10f}  !!!\n".format( *data_tuple, _c1, )
+					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_mean_check={4:0.10f}  !!!".format( *data_tuple, _c1, )
 				elif _b2:
-					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_imag_check={4:0.10f}  !!!\n".format( *data_tuple, _c2, )
+					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_imag_check={4:0.10f}  !!!".format( *data_tuple, _c2, )
 				elif _b3:
-					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_std_check={4:0.10f}  !!!\n".format(*data_tuple, _c3, )
+					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_std_check={4:0.10f}  !!!".format(*data_tuple, _c3, )
 
 
 				if self.comm.Get_rank()==0:
 					print(mssg)
-				self.logfile.write(mssg)
+				#self.logfile.write(mssg)
 				
 				# load data
 				if load_data:
@@ -942,10 +954,10 @@ class VMC(object):
 			# shift params_update
 			self.debug_helper()
 
-			init_iter_str="\n\nITERATION {0:d}, PROCESS_RANK {1:d}:\n\n".format(iteration, self.comm.Get_rank())
+			init_iter_str="\n\n\nITERATION {0:d}, PROCESS_RANK {1:d}:\n\n".format(iteration, self.comm.Get_rank())
 			if self.comm.Get_rank()==0:
 				print(init_iter_str)
-			self.logfile.write(init_iter_str)
+			#self.logfile.write(init_iter_str)
 
 
 			##### determine batchnorm mean and variance
@@ -958,19 +970,11 @@ class VMC(object):
 			self.get_training_data(iteration,)
 
 
-			#####
-			E_str=self.mode + ": E={0:0.14f}, E_var={1:0.14f}, E_std={2:0.14f}, E_imag={3:0.14f}.\n".format(self.Eloc_mean_g.real,self.Eloc_var_g, self.E_MC_std_g, self.Eloc_mean_g.imag, )
-			if self.comm.Get_rank()==0:
-				#E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g[-1,...]).shape[0] )
-				print(E_str)
-			self.logfile.write(E_str)
-
-
 			if self.mode=='exact':
-				olap_str='overlap = {0:0.10f}.\n\n'.format(self.Eloc_params_dict_log['overlap'])
+				olap_str='overlap = {0:0.10f}.\n'.format(self.Eloc_params_dict_log['overlap'])
 				if self.comm.Get_rank()==0:
 					print(olap_str)
-				self.logfile.write(olap_str)
+				#self.logfile.write(olap_str)
 
 
 			#exit()
@@ -986,8 +990,8 @@ class VMC(object):
 
 
 			prss_time=time.time()-ti
-			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.\n".format(self.comm.Get_rank(), iteration, prss_time)
-			self.logfile.write(fin_iter_str)
+			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.".format(self.comm.Get_rank(), iteration, prss_time)
+			#self.logfile.write(fin_iter_str)
 			print(fin_iter_str)
 			
 
@@ -1014,9 +1018,9 @@ class VMC(object):
 
 		
 		prss_tot_time=time.time()-t_start
-		final_str='\n\nPROCESS_RANK {0:d}, total calculation time: {1:0.4f} secs.\n\n\n'.format(self.comm.Get_rank(),prss_tot_time)
+		final_str='\n\n\n\nPROCESS_RANK {0:d}, TOTAL calculation time: {1:0.4f} secs.\n\n'.format(self.comm.Get_rank(),prss_tot_time)
 		print(final_str)
-		self.logfile.write(final_str)
+		#self.logfile.write(final_str)
 		self.timing_vec[iteration+1-start_iter]=prss_tot_time
 
 
@@ -1134,10 +1138,10 @@ class VMC(object):
 			repeat, iteration = self.repeat_iteration(iteration,Eloc_mean_g,E_MC_std_g,go_back_iters=0, load_data=False)
 			
 			if repeat and counter>=10:
-				mssg="Failed to draw a good MC sample in 10 attempts. Exiting!\n"
+				mssg="Failed to draw a good MC sample in 10 attempts. Exiting!"
 				if self.comm.Get_rank()==0:
 					print(mssg)
-				self.logfile.write(mssg)
+				#self.logfile.write(mssg)
 
 			counter+=1
 
@@ -1167,8 +1171,8 @@ class VMC(object):
 			# sample
 			acceptance_ratio_g = self.MC_tool.sample(self.DNN_log, self.DNN_phase, )
 			
-			MC_str="MC with acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
-			self.logfile.write(MC_str)
+			MC_str="MC with acceptance ratio={0:.4f} took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
+			#self.logfile.write(MC_str)
 			if self.comm.Get_rank()==0:
 				print(MC_str)
 			#exit()
@@ -1176,22 +1180,22 @@ class VMC(object):
 			if iteration==0:
 				self.MC_tool.thermal=self.thermal # set MC sampler to re-use initial state
 		
+
+		print("LOCAL ENERGY:")
+
 		# get log_psi statistics
 		data_tuple=np.min(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.mean(self.MC_tool.log_mod_kets), np.std(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets)-np.min(self.MC_tool.log_mod_kets)
-		psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(*data_tuple )
-		self.logfile.write(psi_str)
+		psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.".format(*data_tuple )
+		#self.logfile.write(psi_str)
 		print(psi_str)
-
-
-
 
 
 		##### compute local energies #####
 		ti=time.time()
 		self.E_estimator.compute_local_energy(self.DNN_log.params, self.DNN_phase.params, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
 		
-		Eloc_str="total local energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
-		self.logfile.write(Eloc_str)
+		Eloc_str="total local energy calculation took {0:.4f} secs.".format(time.time()-ti)
+		#self.logfile.write(Eloc_str)
 		if self.comm.Get_rank()==0:
 			print(Eloc_str)
 
@@ -1204,6 +1208,7 @@ class VMC(object):
 			Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
 			overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
 			Eloc_params_dict['overlap']=overlap
+			#print(abs_psi_2)
 
 		
 		elif self.mode=='MC':
@@ -1229,6 +1234,15 @@ class VMC(object):
 		
 		##### total batch
 		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)
+
+
+		#####
+		E_str=self.mode + ": E={0:0.14f}, E_var={1:0.14f}, E_std={2:0.14f}, E_imag={3:0.14f}.".format(self.Eloc_mean_g.real,self.Eloc_var_g, self.E_MC_std_g, self.Eloc_mean_g.imag, )
+		if self.comm.Get_rank()==0:
+			#E_str+="	with {0:d} unique spin configs.\n".format(np.unique(self.MC_tool.ints_ket_g[-1,...]).shape[0] )
+			print(E_str)
+		#self.logfile.write(E_str)
+
 
 		#return self.batch, self.Eloc_params_dict
 		
@@ -1269,10 +1283,10 @@ class VMC(object):
 		grads_max=[np.max(np.abs(self.DNN_log.params_update)),np.max(np.abs(self.DNN_phase.params_update)),]
 		
 		
-		mssg="total r2 test: {0:0.14f} .\n".format(self.r2[0]+self.r2[1]-1.0)
+		mssg="r2 test: {0:0.14f}.".format(self.r2[0]+self.r2[1]-1.0)
 		if self.comm.Get_rank()==0:
 			print(mssg)
-		self.logfile.write(mssg)
+		#self.logfile.write(mssg)
 
 		# record gradients
 
@@ -1281,8 +1295,8 @@ class VMC(object):
 			self.params_phase_update_lastiters[-1,...]=self.DNN_phase.params_update
 
 
-		grad_str="total gradients/NG calculation took {0:.4f} secs.\n".format(time.time()-ti)
-		self.logfile.write(grad_str)
+		grad_str="\ntotal gradients/NG calculation took {0:.4f} secs.".format(time.time()-ti)
+		#self.logfile.write(grad_str)
 		if self.comm.Get_rank()==0:
 			print(grad_str)	
 		

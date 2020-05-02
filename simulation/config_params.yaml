@@ -1,7 +1,7 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 6
-N_iterations: 2000
+N_iterations: 1000
 NN_dtype: real-decoupled # 
 NN_shape_str: (6x6-12--1x1-8,6x6-24--1x1-12) # (36--12--8,36--24--12) # 
 NN_type: CNN # DNN # 
@@ -12,6 +12,7 @@ minibatch_size: 200
 N_MC_points: 100000
 mode: MC # exact #   
 batchnorm: false
+adaptive_SR_cutoff: false
 grad_update_mode: normal # log_mod # phase #  alternating # 
 alt_iter: 20 # of iterations to keep each alternating update for  
 TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
@@ -19,6 +20,7 @@ opt: (sgd,sgd) # adam, sgd, RK
 adaptive_step: true # adaptive step size for 2nd order RK
 step_size: (1E-2,1E-2) # initial step sizes
 cost: (SR,SR) # SR, energy
+print: false
 save_data: true
 load_data: false
 start_iter: 0

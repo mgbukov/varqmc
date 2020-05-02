@@ -17,7 +17,7 @@ import pickle, time
 
 class natural_gradient():
 
-	def __init__(self,comm,compute_grad_log_psi, NN_Tree, TDVP_opt, mode='MC', RK=False):
+	def __init__(self,comm,compute_grad_log_psi, NN_Tree, TDVP_opt, mode='MC', RK=False, adaptive_SR_cutoff=False):
 				 
 		self.comm=comm
 		self.logfile=None
@@ -25,6 +25,7 @@ class natural_gradient():
 		self.NN_Tree=NN_Tree
 		self.mode=mode
 		self.RK=RK
+		self.adaptive_SR_cutoff=adaptive_SR_cutoff
 
 	
 		self.compute_grad_log_psi=compute_grad_log_psi
@@ -49,12 +50,15 @@ class natural_gradient():
 			self.delta=0.0 # NG S matrix regularization strength
 			self.grad_clip=1E4
 		else:
-			self.delta=0.0 # 100.0 # S-matrix regularizer
+			self.delta= 100.0 # S-matrix regularizer
 			self.grad_clip=1E4 #50.0
 
 
 		self.SNR_weight_sum_exact=1.0
 		self.SNR_weight_sum_gauss=1.0
+
+
+		self.iteration=0
 		
 
 	def init_global_variables(self,N_MC_points,N_batch,N_varl_params_vec,n_iter):
@@ -179,65 +183,77 @@ class natural_gradient():
 		self.SNR_exact*=0.0
 		self.SNR_gauss*=0.0
 					
+		
+		Eloc_var=Eloc_params_dict['Eloc_var']
+		E_diff=Eloc_params_dict['E_diff']
+		if self.mode=='exact':
+			E_diff*=np.sqrt( Eloc_params_dict['abs_psi_2'] )
+
+
+		self.QQ_expt[:]=(jnp.dot(self.dlog_psi-np.tile(self.O_expt,[self.N_batch,1],), V).block_until_ready() )._value 
+		self.comm.Allreduce( ((  jnp.dot(E_diff**2, self.QQ_expt**2).block_until_ready() )._value ), self.Q_expt[:], op=MPI.SUM)
+					
+		self.Q_expt/=self.N_MC_points
+
+		# add connected piece
+		self.Q_expt-=self.VF_overlap**2
+
+		# take only values above machine precision
+		#finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(lmbda)>1E-14) )
+		finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(np.abs(lmbda))>1E-14) )
+					
+		self.SNR_exact[finite_k]=np.abs(self.VF_overlap[finite_k])/(np.sqrt(np.abs(self.Q_expt[finite_k])) + 1E-14)
+		self.SNR_gauss[finite_k]=1.0/np.sqrt(1.0 + (lmbda[finite_k]/(self.VF_overlap[finite_k]**2 ) )*Eloc_var)
+
+
 		if self.mode=='MC':
+			self.SNR_exact*=np.sqrt(self.N_MC_points)
+			self.SNR_gauss*=np.sqrt(self.N_MC_points)
 
-			Eloc_var=Eloc_params_dict['Eloc_var']
-			E_diff=Eloc_params_dict['E_diff'] 
+
+		# adjust tolerance according to SNR
+		threshold=1.0
+		weight=np.abs(self.VF_overlap)/(np.abs(self.VF_overlap).sum())
+		inds,= np.where((self.SNR_exact>threshold) )
+
+		if len(inds)>0:
+			#self.tol=lmbda[inds[0]]
+			self.SNR_weight_sum_exact=weight[inds].sum()
+		else:
+			self.SNR_weight_sum_exact=0.0
+		
+
+		inds_gauss, = np.where((self.SNR_gauss>threshold) )
+		if len(inds_gauss)>0:
+			self.SNR_weight_sum_gauss=weight[inds_gauss].sum()
+		else:
+			self.SNR_weight_sum_gauss=0.0
 
 
-			self.QQ_expt[:]=(jnp.dot(self.dlog_psi-np.tile(self.O_expt,[self.N_batch,1],), V).block_until_ready() )._value 
-			self.comm.Allreduce( ((  jnp.dot(E_diff**2, self.QQ_expt**2).block_until_ready() )._value ), self.Q_expt[:], op=MPI.SUM)
-						
-			self.Q_expt/=self.N_MC_points
+		print('k-components kept:', inds.shape, self.SNR_weight_sum_exact, self.SNR_weight_sum_gauss)
 
-			# add connected piece
-			self.Q_expt-=self.VF_overlap**2
-	
-			# take only values above machine precision
-			#finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(lmbda)>1E-14) )
-			finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(np.abs(lmbda))>1E-14) )
-						
-			self.SNR_exact[finite_k]=np.sqrt(self.N_MC_points)*np.abs(self.VF_overlap[finite_k])/(np.sqrt(np.abs(self.Q_expt[finite_k])) + 1E-14)
-			self.SNR_gauss[finite_k]=np.sqrt(self.N_MC_points)/np.sqrt(1.0 + (lmbda[finite_k]/(self.VF_overlap[finite_k]**2 ) )*Eloc_var)
+		#print(1.0/lmbda[inds])
 
+		
+		# if self.comm.Get_rank()==0 and self.iteration>1:
+
+		# 	import matplotlib.pyplot as plt
+		# 	plt.plot(self.SNR_gauss,'r', label='SNR gauss')
+		# 	plt.plot(self.SNR_exact,'b', label='SNR exact')
 			
-			# adjust tolerance according to SNR
-			threshold=4.0
-			weight=np.abs(self.VF_overlap)/(np.abs(self.VF_overlap).sum())
-			inds,= np.where((self.SNR_exact>threshold) )
-			if len(inds)>0:
-				self.tol=lmbda[inds[0]]
-				self.SNR_weight_sum_exact=weight[inds].sum()
-			else:
-				self.SNR_weight_sum_exact=0.0
-			
+		# 	plt.plot(threshold*np.ones_like(self.SNR_exact),'-k', label='{0:0.2f}'.format(threshold) )
+		# 	plt.plot(np.abs(self.VF_overlap), 'm', label='V^t F')
+		# 	plt.plot(lmbda, 'c', label='spec', linewidth=4)
+		# 	plt.yscale('log')
+		# 	plt.title('iter= {0:d}, N_MC={0:d}'.format(self.iteration, self.N_MC_points))
+		# 	plt.grid()
+		# 	plt.legend()
+		# 	plt.show()
 
-			inds_gauss, = np.where((self.SNR_gauss>threshold) )
-			if len(inds_gauss)>0:
-				self.SNR_weight_sum_gauss=weight[inds_gauss].sum()
-			else:
-				self.SNR_weight_sum_gauss=0.0
-
-			
-			# if self.comm.Get_rank()==0:
-
-			# 	import matplotlib.pyplot as plt
-			# 	plt.plot(self.SNR_gauss,'r', label='SNR gauss')
-			# 	plt.plot(self.SNR_exact,'b', label='SNR exact')
-				
-			# 	plt.plot(threshold*np.ones_like(self.SNR_exact),'-k', label='{0:0.2f}'.format(threshold) )
-			# 	plt.plot(np.abs(self.VF_overlap), 'm', label='V^t F')
-			# 	plt.plot(lmbda, 'c', label='spec', linewidth=4)
-			# 	plt.yscale('log')
-			# 	plt.title('N_MC={0:d}'.format(self.N_MC_points))
-			# 	plt.grid()
-			# 	plt.legend()
-			# 	plt.show()
-
-			# 	exit()
+		# 	exit()
 
 
-			return inds
+		return inds
 
 
 	def compute_r2_cost(self,Eloc_params_dict):
@@ -320,13 +336,14 @@ class natural_gradient():
 			SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
 
 
-			# Lorentz cutoff
-			#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )
+			if self.adaptive_SR_cutoff:
+				self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
+			else:
+				self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )
+			
 			# exp cutoff
 			#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 1.0/(1.0 + np.exp( -(lmbda-self.tol)/(1E-1*self.tol) ) ) * 1.0/lmbda ), self.VF_overlap ) )
-			# hard cutoff
-			self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
-
+			
 		return info
 
 
@@ -334,15 +351,18 @@ class natural_gradient():
 		
 		ti=time.time()
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,)
-		print("log_psi evaluation took {0:0.6} secs.".format(time.time()-ti) )
+		print("gradients evaluation took {0:0.6} secs.".format(time.time()-ti) )
 	
 		self.compute_F_vector(Eloc_params_dict=Eloc_params_dict,)
 		self.compute_S_matrix(Eloc_params_dict=Eloc_params_dict,)
 
 		### compute natural_gradients using cg
 		# regularize Fisher metric
-		self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
-		#self.S_matrix += self.delta*np.linalg.norm(self.S_matrix)*np.eye(self.S_matrix.shape[0]) 
+		print("max[diag(S)]", np.abs(np.diag(self.S_matrix)).max())
+
+		if not self.adaptive_SR_cutoff:
+			self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
+			#self.S_matrix += self.delta*np.linalg.norm(self.S_matrix)*np.eye(self.S_matrix.shape[0]) 
 
 		if self.debug_mode:
 			self.debug_helper()
@@ -390,6 +410,8 @@ class natural_gradient():
 		self.curvature=np.sqrt( np.dot(self.nat_grad, np.dot(self.S_matrix, self.nat_grad) ) )
 
 
+		self.iteration+=1
+
 		if not self.RK:	
 			return self.nat_grad#/self.curvature
 		else:
@@ -401,8 +423,8 @@ class natural_gradient():
 
 	def update_NG_params(self,grad_guess,self_time=1.0):
 
-		if self.delta>self.tol:
-			self.delta *= np.exp(-0.075*self_time)
+		#if self.delta>self.tol:
+		self.delta *= np.exp(-0.075*self_time)
 		
 
 		self.nat_grad_guess[:]=grad_guess
@@ -451,6 +473,11 @@ class Runge_Kutta_solver():
 		self.k5=np.zeros_like(self.dy)
 		self.k6=np.zeros_like(self.dy)
 		
+		self.SNR_exact=np.zeros_like(self.dy)
+		self.SNR_gauss=np.zeros_like(self.dy)
+		self.SNR_weight_sum_exact=0.0
+		self.SNR_weight_sum_gauss=0.0
+
 
 
 	def run(self,NN_params,batch,Eloc_params_dict,):
@@ -474,6 +501,11 @@ class Runge_Kutta_solver():
 
 			self.r2=self.compute_r2(Eloc_params_dict)
 			self.dE=self.NG.dE*self.step_size
+
+			self.SNR_exact[:]=self.NG.SNR_exact
+			self.SNR_gauss[:]=self.NG.SNR_gauss
+			self.SNR_weight_sum_exact=self.NG.SNR_weight_sum_exact
+			self.SNR_weight_sum_gauss=self.NG.SNR_weight_sum_gauss
 
 			self.S_eigvals[:]=self.NG.S_eigvals
 			self.VF_overlap[:]=self.NG.VF_overlap

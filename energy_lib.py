@@ -294,17 +294,18 @@ class Energy_estimator():
 		ti=time.time()
 		self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
 
-		str_1="computing s_primes took {0:.4f} secs.\n".format(time.time()-ti)
-		if self.logfile!=None:
-			self.logfile.write(str_1)
+		str_1="computing s_primes took {0:.4f} secs.".format(time.time()-ti)
+		#if self.logfile!=None:
+		#	self.logfile.write(str_1)
 		if self.comm.Get_rank()==0 and verbose:
 			print(str_1)
 
 
 
-		unique_str="{0:d}/{1:d} unique configs; using minibatch size {2:d}.\n".format(self.nn_uq, self.nn, self.minibatch_size)
-		if self.logfile!=None:
-			self.logfile.write(unique_str)
+		unique_str="{0:d}/{1:d} unique configs; using minibatch size {2:d}.".format(self.nn_uq, self.nn, self.minibatch_size)
+		print(unique_str)
+		#if self.logfile!=None:
+		#	self.logfile.write(unique_str)
 
 
 		ti=time.time()
@@ -312,9 +313,9 @@ class Energy_estimator():
 		log_psi_bras-=log_psi_shift
 
 		
-		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
-		if self.logfile!=None:
-			self.logfile.write(psi_str)
+		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
+		#if self.logfile!=None:
+		#	self.logfile.write(psi_str)
 		if self.comm.Get_rank()==0 and verbose:
 			print(psi_str)
 		
@@ -322,9 +323,9 @@ class Energy_estimator():
 		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
 
 
-		str_2="evaluating s_primes took {0:.4f} secs.\n".format(time.time()-ti)
-		if self.logfile!=None:
-			self.logfile.write(str_2)
+		str_2="evaluating s_primes took {0:.4f} secs.".format(time.time()-ti)
+		#if self.logfile!=None:
+		#	self.logfile.write(str_2)
 		if self.comm.Get_rank()==0 and verbose:
 			print(str_2)
 		

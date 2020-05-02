@@ -17,7 +17,7 @@ import time
 
 class optimizer(object):
 
-	def __init__(self, comm, opt, cost, mode, NN_Tree, label='', step_size=1.0, adaptive_step=True ):
+	def __init__(self, comm, opt, cost, mode, NN_Tree, label='', step_size=1.0, adaptive_step=True, adaptive_SR_cutoff=False ):
 
 		self.label=label
 
@@ -27,6 +27,7 @@ class optimizer(object):
 		self.cost=cost
 		self.mode=mode
 		self.adaptive_step=adaptive_step
+		self.adaptive_SR_cutoff=adaptive_SR_cutoff
 
 		self.NN_Tree=NN_Tree
 
@@ -147,8 +148,8 @@ class optimizer(object):
 				return jnp.concatenate(dlog, axis=1)
 
 
-			self.NG=natural_gradient(self.comm, grad_log, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK )
-			self.NG.init_global_variables(self.N_MC_points,self.N_batch,self.N_varl_params,self.n_iter)
+			self.NG=natural_gradient(self.comm, grad_log, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
+			self.NG.init_global_variables(self.N_MC_points,self.N_batch,self.N_varl_params,self.n_iter,)
 			
 
 			self.compute_grad=self.NG.compute
@@ -157,6 +158,8 @@ class optimizer(object):
 
 
 	def return_grad(self, iteration, NN_params, batch, params_dict, ):
+
+		print("\n"+self.label+":")
 
 		# compute gradients
 		if self.opt=='RK':
@@ -167,16 +170,22 @@ class optimizer(object):
 				self.NG.update_NG_params(grads,self_time=self.Runge_Kutta.time)
 				self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
 				
-				S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
+				S_str="norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
 				if self.comm.Get_rank()==0:
 					print(S_str)
-				self.logfile.write(S_str)
+				#self.logfile.write(S_str)
 
 				# update all data which would've been messed up by the RK iterations
 				r2=self.Runge_Kutta.r2
 				self.NG.dE=self.Runge_Kutta.dE
 				self.NG.S_eigvals[:]=self.Runge_Kutta.S_eigvals
 				self.NG.VF_overlap[:]=self.Runge_Kutta.VF_overlap
+
+				self.NG.SNR_exact[:]=self.Runge_Kutta.SNR_exact
+				self.NG.SNR_gauss[:]=self.Runge_Kutta.SNR_gauss
+				self.NG.SNR_weight_sum_exact=self.Runge_Kutta.SNR_weight_sum_exact
+				self.NG.SNR_weight_sum_gauss=self.Runge_Kutta.SNR_weight_sum_gauss
+
 			else:
 				r2=0.0
 
@@ -188,10 +197,10 @@ class optimizer(object):
 			self.NG.update_NG_params(grads,) # update NG params
 			self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
 
-			S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}\n".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
+			S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
 			if self.comm.Get_rank()==0:
 				print(S_str)
-			self.logfile.write(S_str)
+			#self.logfile.write(S_str)
 
 			r2=self.NG.compute_r2_cost(params_dict.copy())
 			self.NG.dE*=self.step_size
@@ -224,7 +233,7 @@ class optimizer(object):
 		else:
 			raise ValueError("unrecognized optimizer {}!".format(self.opt))
 		
-
+		#print(np.abs(grads))
 
 		self.iteration+=1
 		return NN_params_new, grads, r2
