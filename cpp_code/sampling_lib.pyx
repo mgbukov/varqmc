@@ -1090,18 +1090,18 @@ cdef class Log_Net:
 
 
 
-                            'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=5E-0/shapes['layer_1'][0] ),  # 1E-2
-                            'nonlin_1': elementwise(logcosh),
-                            'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm),  # 1E-1
-                            'nonlin_2': elementwise(xtanh),
-                            'reg': Regularization(reduce_shape, output_shape, ),
-
-
-                            # 'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=6E-0 ),  # 1E-2
+                            # 'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=5E-0/shapes['layer_1'][0] ),  # 1E-2
                             # 'nonlin_1': elementwise(logcosh),
-                            # 'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=8E-2, init_value_b=8E-2 ),  # 1E-1
+                            # 'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm),  # 1E-1
                             # 'nonlin_2': elementwise(xtanh),
                             # 'reg': Regularization(reduce_shape, output_shape, ),
+
+
+                            'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=1E+1 ),  # 1E-2
+                            'nonlin_1': elementwise(logcosh),
+                            'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=1E-3, init_value_b=1E-3 ),  # 1E-1
+                            'nonlin_2': elementwise(xtanh),
+                            'reg': Regularization(reduce_shape, output_shape, ),
 
                             # 'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-1),  # 1E-2
                             # 'nonlin_1': elementwise(logcosh),
@@ -1663,17 +1663,17 @@ cdef class Phase_Net:
           
             # define DNN
             NN_arch = {
-                                'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=6E-0/shapes['layer_1'][0] ), #3E-1
-                                'nonlin_1': elementwise(logcosh),
-                                'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm ), #init_value_W=1E-2, init_value_b=1E-2
-                                'nonlin_2': elementwise(logcosh),
-                                'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
-                            
-                                # 'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=5E-0 ), #3E-1
+                                # 'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=6E-0/shapes['layer_1'][0] ), #3E-1
                                 # 'nonlin_1': elementwise(logcosh),
-                                # 'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=2E-1, init_value_b=2E-1 ), #init_value_W=1E-2, init_value_b=1E-2
+                                # 'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=2E-0/self.N_symm, init_value_b=2E-0/self.N_symm ), #init_value_W=1E-2, init_value_b=1E-2
                                 # 'nonlin_2': elementwise(logcosh),
                                 # 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
+                            
+                                'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=1E+1 ),  # 1E-2
+                                'nonlin_1': elementwise(logcosh),
+                                'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=1E-3, init_value_b=1E-3 ),
+                                'nonlin_2': elementwise(xtanh),
+                                'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
 
                                 # 'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
                                 # 'nonlin_1': elementwise(logcosh),

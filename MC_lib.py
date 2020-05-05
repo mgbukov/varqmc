@@ -13,7 +13,6 @@ from jax import jit
 
 from mpi4py import MPI
 import numpy as np
-config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import time
 
@@ -133,7 +132,7 @@ class MC_sampler():
 
 		# print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
 		# print(self.phase_kets.mean(), self.phase_kets.std() )
-		#exit()
+		# exit()
 
 
 		### normalize all kets
