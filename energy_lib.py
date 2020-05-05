@@ -1,5 +1,3 @@
-from quspin.operators._make_hamiltonian import _consolidate_static
-
 from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum
 
 from mpi4py import MPI
@@ -10,6 +8,32 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 from jax import jit, disable_jit
 import jax.numpy as jnp
+
+
+def _consolidate_static(static_list):
+	eps = 10 * np.finfo(np.float64).eps
+
+	static_dict={}
+	for opstr,bonds in static_list:
+		if opstr not in static_dict:
+			static_dict[opstr] = {}
+
+		for bond in bonds:
+			J = bond[0]
+			indx = tuple(bond[1:])
+			if indx in static_dict[opstr]:
+				static_dict[opstr][indx] += J
+			else:
+				static_dict[opstr][indx] = J
+
+	static_list = []
+	for opstr,opstr_dict in static_dict.items():
+		for indx,J in opstr_dict.items():
+			if np.abs(J) > eps:
+				static_list.append((opstr,indx,J))
+
+
+	return static_list
 
 
 def compute_outliers(data):
