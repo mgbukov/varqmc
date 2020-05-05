@@ -111,7 +111,7 @@ def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
         return output_shape, params
 
     def apply_fun(params,inputs, **kwargs):
-        z = jnp.dot(inputs,params[0])/norm
+        z = jnp.dot(inputs,params[0])#/norm
         if not ignore_b:
             # add bias
             z += params[1]       
@@ -138,9 +138,11 @@ def xtanh(x):
 #@jit
 def symmetric_pool(x,reduce_shape, output_shape,):
     # symmetrize
-    x   = jnp.sum(x.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])   
+    #x = jnp.sum(x.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])
+    x = jnp.sum(x.reshape(reduce_shape,order='C'),  axis=[1,3])    
     # sum over hidden neurons
-    x   = jnp.sum(x.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
+    #x = jnp.sum(x.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
+    x = jnp.sum(x.reshape(output_shape),axis=[1,])
     return x
 
 ##############################
@@ -227,12 +229,14 @@ def Regularization(reduce_shape, output_shape,center=True, b_init=zeros, dtype=n
         #print(x.shape, reduce_shape)
         
         # symmetrize
-        log_psi = jnp.sum(x.reshape(reduce_shape,order='C')/norm_1, axis=[1,3])
+        #log_psi = jnp.sum(x.reshape(reduce_shape,order='C')/norm_1, axis=[1,3])
+        log_psi = jnp.sum(x.reshape(reduce_shape,order='C'), axis=[1,3])
 
         #print(log_psi.shape, output_shape)
 
         # sum over hidden neurons
-        log_psi = jnp.sum(  log_psi.reshape(output_shape)/norm_2, axis=[1,])
+        #log_psi = jnp.sum(  log_psi.reshape(output_shape)/norm_2, axis=[1,])
+        log_psi = jnp.sum(  log_psi.reshape(output_shape), axis=[1,])
 
         #print(log_psi.shape)
 

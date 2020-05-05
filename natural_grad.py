@@ -217,7 +217,6 @@ class natural_gradient():
 		inds,= np.where((self.SNR_exact>threshold) )
 
 		if len(inds)>0:
-			#self.tol=lmbda[inds[0]]
 			self.SNR_weight_sum_exact=weight[inds].sum()
 		else:
 			self.SNR_weight_sum_exact=0.0
@@ -423,13 +422,12 @@ class natural_gradient():
 
 	def update_NG_params(self,grad_guess,self_time=1.0):
 
-		#if self.delta>self.tol:
-		self.delta *= np.exp(-0.075*self_time)
+		if self.delta>self.tol:
+			self.delta *= np.exp(-0.075*self_time)
 		
 
 		self.nat_grad_guess[:]=grad_guess
-		#self.iteration+=1
-
+		
 
 class Runge_Kutta_solver():
 
