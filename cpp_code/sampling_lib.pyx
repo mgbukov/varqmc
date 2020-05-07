@@ -1097,9 +1097,9 @@ cdef class Log_Net:
                             # 'reg': Regularization(reduce_shape, output_shape, ),
 
 
-                            'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=1E+1 ),  # 1E-2
+                            'layer_1': GeneralDense(shapes['layer_1'], 1, shapes['layer_1'][1], self.N_sites, ignore_b=True, init_value_W=1.0),  # 1E-2
                             'nonlin_1': elementwise(logcosh),
-                            'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=1E-3, init_value_b=1E-3 ),  # 1E-1
+                            'layer_2': GeneralDense(shapes['layer_2'], shapes['layer_2'][0], shapes['layer_2'][1], 1 , ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),  # 1E-1
                             'nonlin_2': elementwise(xtanh),
                             'reg': Regularization(reduce_shape, output_shape, ),
 
@@ -1132,9 +1132,9 @@ cdef class Log_Net:
 
             # define CNN   
             NN_arch = {
-                            'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=4.0, ), 
+                            'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=1.0, ), 
                             'nonlin_1': elementwise(logcosh),
-                            'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), ignore_b=False, init_value_W=4.0, init_value_b=1E-1 ),  # 1E-1
+                            'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),  # 1E-1
                             'nonlin_2': elementwise(xtanh),
                             'reg': Regularization(reduce_shape, output_shape, ),
 
@@ -1669,9 +1669,9 @@ cdef class Phase_Net:
                                 # 'nonlin_2': elementwise(logcosh),
                                 # 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
                             
-                                'layer_1': GeneralDense(shapes['layer_1'], ignore_b=True, init_value_W=1E+1 ),  # 1E-2
+                                'layer_1': GeneralDense(shapes['layer_1'], 1, shapes['layer_1'][1], self.N_sites, ignore_b=True, init_value_W=1.0 ),  # 1E-2
                                 'nonlin_1': elementwise(logcosh),
-                                'layer_2': GeneralDense(shapes['layer_2'], ignore_b=False, init_value_W=1E-3, init_value_b=1E-3 ),
+                                'layer_2': GeneralDense(shapes['layer_2'], shapes['layer_2'][0], shapes['layer_2'][1], 1,ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),
                                 'nonlin_2': elementwise(xtanh),
                                 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
 
@@ -1706,10 +1706,10 @@ cdef class Phase_Net:
 
             # define CNN   
             NN_arch = {          
-                            'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=3.0, ), 
+                            'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=1.0, ), 
                             'nonlin_1': elementwise(logcosh),
-                            'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), ignore_b=False, init_value_W=3.0, init_value_b=1E-1 ),  # 1E-1
-                            'nonlin_2': elementwise(logcosh),
+                            'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),  # 1E-1
+                            'nonlin_2': elementwise(xtanh),
                             'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape ),
 
                             # # pure CNN

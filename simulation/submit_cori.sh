@@ -1,6 +1,6 @@
 #!bin/bash -l
-let "N_mpi=320" #32*N_nodes
 let "N_nodes=10" # 5
+let "N_mpi=$(( 32*${N_nodes} ))"
 
 if [ -e  submission.sh ]
 then

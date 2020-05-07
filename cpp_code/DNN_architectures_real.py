@@ -92,9 +92,9 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
 
 
 
-def GeneralDense(W_shape, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
+def GeneralDense(W_shape, in_chan, out_chan, filter_size, ignore_b=False, init_value_W=1E-2, init_value_b=1E-2):
     
-    norm=jnp.sqrt(W_shape[0]+W_shape[1])
+    norm=jnp.sqrt(filter_size*(in_chan+out_chan))
   
     def init_fun(rng,input_shape):        
         output_shape=(input_shape[0],W_shape[1])

@@ -6,18 +6,18 @@ N_iterations: 1 # 500
 
 NN_dtype: real-decoupled # cpx #
 
-# NN_shape_str: (6x6-12--1x1-8,6x6-24--1x1-12)  #   (16--12--8,16--24--12) # 
-# NN_type: CNN 
+NN_shape_str: (6x6-12--1x1-8,6x6-24--1x1-12)  #   (16--12--8,16--24--12) # 
+NN_type: CNN 
 
-NN_shape_str: (36--12--8,36--24--12) #    (16--12--8,16--24--12) # 
-NN_type: DNN  
+# NN_shape_str: (36--12--8,36--24--12) #    (16--12--8,16--24--12) # 
+# NN_type: DNN  
 
 N_MC_chains: 2
 MC_thermal: true
 MC_prop_threshold: 1.0 # large values means local proposals
 minibatch_size: 200
 
-N_MC_points: 100 #
+N_MC_points: 1000 #
 mode: MC 
 
 # N_MC_points: 107 # 
