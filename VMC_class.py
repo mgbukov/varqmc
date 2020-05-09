@@ -100,6 +100,7 @@ def load_opt_data(opt,file_name,start_iter):
 	print(start_iter, opt_data_str)	
 
 	opt.iteration=int(opt_data_str[0])+1
+	opt.NG.iteration=int(opt_data_str[0])+1
 	opt.NG.delta=np.float64(opt_data_str[1])
 	opt.NG.tol=np.float64(opt_data_str[2])
 
@@ -112,6 +113,7 @@ def load_opt_data(opt,file_name,start_iter):
 		opt.Runge_Kutta.counter=int(opt_data_str[5])
 		opt.Runge_Kutta.step_size=np.float64(opt_data_str[6])
 		opt.Runge_Kutta.time=np.float64(opt_data_str[7])
+		opt.Runge_Kutta.iteration=int(opt_data_str[0])+1
 	else:
 		opt.step_size=np.float64(opt_data_str[6])
 
@@ -884,7 +886,7 @@ class VMC(object):
 	def repeat_iteration(self,iteration,Eloc_mean_g,E_MC_std_g, go_back_iters=0, load_data=True):
 
 		repeat=False
-		if iteration>self.start_iter+go_back_iters and self.mode=='MC':
+		if iteration>go_back_iters and self.mode=='MC':
 
 			Eloc_mean_prev=self.prev_it_data[0]
 			
@@ -892,17 +894,17 @@ class VMC(object):
 			_c2=np.abs(Eloc_mean_g.imag)
 			_c3=6.0*self.prev_it_data[2] - E_MC_std_g 
 
-			_b1=(np.abs(_c1) > 2.0) and (Eloc_mean_g<0.0)
-			_b2=_c2 > 5.0*E_MC_std_g
+			_b1=np.abs(_c1) > 2.0 
+			_b2=_c2 > 5.0*E_MC_std_g 
 			_b3=_c3 < 0.0
 
 			
-			if (_b1 or _b2 or _b3): # and Eloc_mean_prev < 0.0: 
+			if (_b1 or _b2 or _b3) and (Eloc_mean_g<0.0): # and Eloc_mean_prev < 0.0: 
 
 				data_tuple=(iteration, Eloc_mean_g.real, Eloc_mean_g.imag, E_MC_std_g,)
 
 				if _b1:
-					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_mean_check={4:0.10f}  !!!".format( *data_tuple, _c1, )
+					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_mean_drop={4:0.10f}  !!!".format( *data_tuple, _c1, )
 				elif _b2:
 					mssg="!!!  restarting iteration {0:d}: E={1:0.6f}, E_imag={2:0.10f}, E_std={3:0.10f}, E_imag_check={4:0.10f}  !!!".format( *data_tuple, _c2, )
 				elif _b3:
@@ -920,6 +922,8 @@ class VMC(object):
 					iteration=iteration-go_back_iters
 
 				repeat=True
+		else:
+			print('iteration {0:d} sample checks passed.'.format(iteration))
 
 		
 		
@@ -1102,10 +1106,13 @@ class VMC(object):
 	
 	def reestimate_local_energy_log(self, iteration, NN_params_log, batch, params_dict,):
 
+		max_attemps=10
+
+		self.DNN_log.params=NN_params_log
 
 		repeat=True
 		counter=0
-		while repeat and counter<10:
+		while repeat and counter<max_attemps:
 
 			##### get spin configs #####
 			if self.mode=='exact':
@@ -1137,13 +1144,20 @@ class VMC(object):
 			# check quality of sample
 			repeat, iteration = self.repeat_iteration(iteration,Eloc_mean_g,E_MC_std_g,go_back_iters=0, load_data=False)
 			
-			if repeat and counter>=10:
-				mssg="Failed to draw a good MC sample in 10 attempts. Exiting!"
-				if self.comm.Get_rank()==0:
-					print(mssg)
+			print("log-net sampling: attempt {0:d}; repeat {1:d}".format(counter, repeat) )
+
+			# increment counter
+			counter+=1
+
+			if repeat and counter==max_attemps:
+				mssg="Failed to draw a good MC sample in {0:d} attempts. Exiting!".format(max_attemps)
+				print(mssg)
+				exit()
 				#self.logfile.write(mssg)
 
-			counter+=1
+			
+
+		print("accepted log-net sample after {0:d} attempts.".format(counter))
 
 
 		params_dict['E_diff']=E_diff_real

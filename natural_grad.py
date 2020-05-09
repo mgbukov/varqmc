@@ -203,7 +203,7 @@ class natural_gradient():
 		finite_k,=np.where( (np.abs(self.VF_overlap)/np.max(np.abs(self.VF_overlap))>1E-14) & (np.abs(lmbda)/np.max(np.abs(lmbda))>1E-14) )
 					
 		self.SNR_exact[finite_k]=np.abs(self.VF_overlap[finite_k])/(np.sqrt(np.abs(self.Q_expt[finite_k])) + 1E-14)
-		self.SNR_gauss[finite_k]=1.0/np.sqrt(1.0 + (lmbda[finite_k]/(self.VF_overlap[finite_k]**2 ) )*Eloc_var)
+		self.SNR_gauss[finite_k]=1.0/np.sqrt(1.0 + (np.abs(lmbda[finite_k])/(self.VF_overlap[finite_k]**2 ) )*Eloc_var)
 
 
 		if self.mode=='MC':
@@ -518,6 +518,7 @@ class Runge_Kutta_solver():
 			self.counter+=1
 
 			error_ratio=0.0
+			local_iteration=0
 			while error_ratio<1.0:
 
 				### RK step 1
@@ -576,6 +577,10 @@ class Runge_Kutta_solver():
 				self.step_size*=min(2.0,max(0.2,0.9*error_ratio**self.RK_inv_p))
 				
 				self.counter+=4 # five gradient calculations
+
+
+				print('completed RK gradient estimate, iter {0:d}'.format(local_iteration) )
+				local_iteration+=1
 
 
 		else:
