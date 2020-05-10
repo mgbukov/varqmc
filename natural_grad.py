@@ -348,16 +348,20 @@ class natural_gradient():
 
 	def compute(self,NN_params,batch,Eloc_params_dict,):
 		
-		ti=time.time()
+		t0=time.time()
 		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,)
-		print("gradients evaluation took {0:0.6} secs.".format(time.time()-ti) )
-	
+		t1=time.time()
 		self.compute_F_vector(Eloc_params_dict=Eloc_params_dict,)
+		t2=time.time()
 		self.compute_S_matrix(Eloc_params_dict=Eloc_params_dict,)
+		t3=time.time()
+
+		print("evaluation took gradients: {0:0.6} secs; F_vector: {1:0.6} secs; S-matrix: {2:0.6} secs.".format(t1-t0, t2-t1, t3-t2) )
+	
 
 		### compute natural_gradients using cg
 		# regularize Fisher metric
-		print("max[diag(S)]", np.abs(np.diag(self.S_matrix)).max())
+		#print("max[diag(S)]", np.abs(np.diag(self.S_matrix)).max())
 
 		if not self.adaptive_SR_cutoff:
 			self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
@@ -422,8 +426,8 @@ class natural_gradient():
 
 	def update_NG_params(self,grad_guess,self_time=1.0):
 
-		if self.delta>self.tol:
-			self.delta *= np.exp(-0.075*self_time)
+		#if self.delta>self.tol:
+		self.delta *= np.exp(-0.075*self_time)
 		
 
 		self.nat_grad_guess[:]=grad_guess
@@ -521,6 +525,8 @@ class Runge_Kutta_solver():
 			local_iteration=0
 			while error_ratio<1.0:
 
+				print('    RK iteration {0:d}:'.format(local_iteration) )
+
 				### RK step 1
 				self.k1[:]=-self.step_size*self.init_grad
 			
@@ -579,7 +585,7 @@ class Runge_Kutta_solver():
 				self.counter+=4 # five gradient calculations
 
 
-				print('completed RK gradient estimate, iter {0:d}'.format(local_iteration) )
+				
 				local_iteration+=1
 
 
@@ -606,7 +612,7 @@ class Runge_Kutta_solver():
 		self.iteration+=1
 		self.time+=self.step_size
 		
-		print('RK_steps={0:d}-step_size={1:0.15f}-time={2:0.4f}-norm={3:0.14f}.\n'.format(self.counter, self.step_size, self.time, norm, ) )
+		print('    RK_steps={0:d}-step_size={1:0.15f}-time={2:0.4f}-norm={3:0.14f}.\n'.format(self.counter, self.step_size, self.time, norm, ) )
 
 
 		return self.dy_star # - 1.0/6.0*(self.dy-self.dy_star)

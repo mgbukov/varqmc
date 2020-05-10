@@ -547,9 +547,13 @@ class VMC(object):
 		# logfile name
 		#logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		logfile_name= 'LOGFILE--MPIprss_{0:d}'.format(self.comm.Get_rank()) + '.txt'
-		self.logfile = create_open_file(logfile_dir+logfile_name)
+		if self.comm.Get_rank()==0:
+			self.logfile = create_open_file(logfile_dir+logfile_name)
+		else:
+			self.logfile = None
+		
 		self.E_estimator.logfile=self.logfile
-		self.E_estimator.logfile=self.logfile
+		self.E_estimator_log.logfile=self.logfile
 		
 		# redircet warnings to log
 		def customwarn(message, category, filename, lineno, file=None, line=None):
@@ -894,12 +898,12 @@ class VMC(object):
 			_c2=np.abs(Eloc_mean_g.imag)
 			_c3=6.0*self.prev_it_data[2] - E_MC_std_g 
 
-			_b1=np.abs(_c1) > 2.0 
+			_b1=np.abs(_c1) > 2.0 and (_c1<0.0)
 			_b2=_c2 > 5.0*E_MC_std_g 
 			_b3=_c3 < 0.0
 
 			
-			if (_b1 or _b2 or _b3) and (Eloc_mean_g<0.0): # and Eloc_mean_prev < 0.0: 
+			if (_b1 or _b2 or _b3) and (Eloc_mean_prev<0.0): # and Eloc_mean_prev < 0.0: 
 
 				data_tuple=(iteration, Eloc_mean_g.real, Eloc_mean_g.imag, E_MC_std_g,)
 
@@ -1001,8 +1005,9 @@ class VMC(object):
 
 			self.timing_vec[iteration-start_iter]=prss_time
 			
-			self.logfile.flush()
-			os.fsync(self.logfile.fileno())
+			if self.logfile is not None:
+				self.logfile.flush()
+				os.fsync(self.logfile.fileno())
 
 
 			# synch
@@ -1040,7 +1045,9 @@ class VMC(object):
 		# close files
 		self.comm.Barrier()
 
-		self.logfile.close()
+		if self.logfile is not None:
+			self.logfile.close()
+			
 		self.file_energy.close()
 		self.file_loss_log.close()
 		self.file_loss_phase.close()
@@ -1144,7 +1151,7 @@ class VMC(object):
 			# check quality of sample
 			repeat, iteration = self.repeat_iteration(iteration,Eloc_mean_g,E_MC_std_g,go_back_iters=0, load_data=False)
 			
-			print("log-net sampling: attempt {0:d}; repeat {1:d}".format(counter, repeat) )
+			print("{0:d}. log-net sampling: Eloc = {1:14f}; repeat {2:d}".format(counter, Eloc_mean_g, repeat) )
 
 			# increment counter
 			counter+=1

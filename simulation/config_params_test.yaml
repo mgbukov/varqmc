@@ -1,12 +1,12 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 6
+L: 4
 
-N_iterations: 2 # 500
+N_iterations: 500
 
 NN_dtype: real-decoupled # cpx #
 
-NN_shape_str: (6x6-12--1x1-8,6x6-24--1x1-12)  #   (16--12--8,16--24--12) # 
+NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12)  #   (16--12--8,16--24--12) # 
 NN_type: CNN 
 
 # NN_shape_str: (36--12--8,36--24--12) #    (16--12--8,16--24--12) # 
@@ -17,7 +17,7 @@ MC_thermal: true
 MC_prop_threshold: 1.0 # large values means local proposals
 minibatch_size: 200
 
-N_MC_points: 100 #
+N_MC_points: 1000 #
 mode: MC 
 
 # N_MC_points: 107 # 
@@ -31,7 +31,7 @@ grad_update_mode: normal # log_mod #   phase #  alternating #
 alt_iter: 20 # of iterations to keep each alternating update for  
 
 TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
-opt: (RK,RK) # adam, sgd, RK
+opt: (sgd,sgd) # adam, sgd, RK
 adaptive_step: true # adaptive step size for 2nd order RK
 step_size: (1E-2,1E-2) # (5E-3,5E-3), (1E-2,5E-2)
 
