@@ -454,7 +454,7 @@ class Runge_Kutta_solver():
 		self.adaptive_step=adaptive_step
 		self.step_size=step_size
 		self.time=0.0
-		self.RK_tol=1E-4 # 5E-5 
+		self.RK_tol=1E-5 # 5E-5 
 		self.RK_inv_p=1.0/3.0
 		
 		self.counter=0
@@ -498,7 +498,6 @@ class Runge_Kutta_solver():
 			self.NG.debug_mode=False
 
 			self.S_matrix[:,:]=self.NG.S_matrix
-			#self.S_matrix[:,:]=self.NG.S_approx
 			#S_norm=self.NG.S_norm
 
 			self.r2=self.compute_r2(Eloc_params_dict)
@@ -570,7 +569,6 @@ class Runge_Kutta_solver():
 				#######
 				if self.NG is not None:
 					norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix, self.dy-self.dy_star) ) )/params_norm
-					#norm=np.sqrt( np.dot(self.dy-self.dy_star, np.dot(self.S_matrix/S_norm, self.dy-self.dy_star) ) )/params_norm
 					#norm=np.linalg.norm(self.dy-self.dy_star)/params_norm
 				else:
 					norm=np.linalg.norm(self.dy-self.dy_star)/params_norm

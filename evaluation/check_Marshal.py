@@ -42,96 +42,24 @@ import yaml
 #########################
 
 # n=-1
-# iteration=999+n+1 # last line with saved E-data
-# L=6
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_dtype='real-decoupled'
-# NN_shape_str='(36--12,36--24--12)'
-# N_MC_points=200
-# N_prss=4
-# NMCchains=2
-# sys_time='2020_03_15-16_39_47'
-
-
-# n=-1
-# iteration=37+n+1 # last line with saved E-data
-# L=6
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_dtype='real-decoupled'
-# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-# N_MC_points=100000
-# N_prss=260
-# NMCchains=1
-# sys_time= '2020_03_15-19_12_08'
-
-
-# n=-1
-# iteration=700+n+1 # last line with saved E-data
-# L=4
-# J2=0.5
-# opt='NG'
-# mode='MC'
-# NN_dtype='real-decoupled'
-# NN_shape_str='({0:d}--10,{0:d}--24--12)'.format(L**2)
-# N_MC_points=80000
-# N_prss=130
-# NMCchains=1
-# sys_time= '2020_03_11-16_22_19'  
-
-
-# n=-1
 # iteration=499+n+1 # last line with saved E-data
-# L=4
 # J2=0.5
-# opt='NG'
-# mode='exact'
-# NN_dtype='real-decoupled'
-# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-# N_MC_points=107
-# N_prss=1
-# NMCchains=2
-# sys_time= '2020_03_18-15_52_01' 
-
-
-# n=-1
-# iteration=500+n+1 # last line with saved E-data
 # L=4
-# J2=0.5
-# opt='sgd_RK'
+# opt='sgd_sgd' # 'RK_RK' # 
 # cost='SR_SR'
-# mode='exact' #'MC' # 
-# NN_dtype='real-decoupled'
-# NN_shape_str='({0:d}--12,{0:d}--24--12)'.format(L**2)
-# N_MC_points=107 # 10000 # 
-# N_prss=1 # 260 # 
-# NMCchains=1 # 
-# sys_time= '2020_03_29-17_15_46' 
+# mode='exact' # 'MC' # 
+# sys_time= '2020_04_15-13_28_33'
 
 
 
 n=-1
-iteration=499+n+1 # last line with saved E-data
+iteration=800+n+1 # last line with saved E-data
 J2=0.5
-L=4
+L=6
 opt='sgd_sgd' # 'RK_RK' # 
 cost='SR_SR'
-mode='exact' # 'MC' # 
-sys_time= '2020_04_15-13_28_33'
-
-
-
-# n=-1
-# iteration=1083+n+1 # last line with saved E-data
-# J2=0.5
-# L=6
-# opt='sgd_sgd' # 'RK_RK' # 
-# cost='SR_SR'
-# mode='MC' # 'exact' #
-# sys_time= '2020_04_11-16_44_55'
+mode='MC' # 'exact' #
+sys_time= '2020_05_10-09_32_21'
 
 
 

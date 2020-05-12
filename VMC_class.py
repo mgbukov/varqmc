@@ -283,7 +283,7 @@ class VMC(object):
 		
 		with open(self.file_MC_data.name) as file:
 			for i in range(start_iter):
-					MC_data_str = file.readline().rstrip().split(' : ')				
+				MC_data_str = file.readline().rstrip().split(' : ')				
 
 		it_MC, acceptance_ratio_g, acceptance_ratios, s0_g, sf_g =  MC_data_str
 
@@ -1047,7 +1047,7 @@ class VMC(object):
 
 		if self.logfile is not None:
 			self.logfile.close()
-			
+
 		self.file_energy.close()
 		self.file_loss_log.close()
 		self.file_loss_phase.close()
@@ -1274,29 +1274,32 @@ class VMC(object):
 
 		if self.grad_update_mode=='normal':
 			# order is important !!! (energy_lib stores log-values)
-			self.DNN_phase.params, self.DNN_phase.params_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
-			self.DNN_log.params,   self.DNN_log.params_update[:]  , self.r2[0]   = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
+			phase_params, phase_params_update, self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
+			log_params,   log_params_update  , self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
 			
 
 		elif self.grad_update_mode=='alternating':
 			if (iteration//self.alt_iters)%2==1: # phase grads
-				self.DNN_log.params_update*=0.0
-				self.DNN_phase.params_phase, self.DNN_phase.params_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
+				log_params_update*=0.0
+				phase_params, phase_params_update, self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
 
 			else: # log grads
-				self.DNN_log.params, self.DNN_log.params_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
-				self.DNN_phase.params_update*=0.0
+				log_params, log_params_update, self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
+				phase_params_update=0.0
 
 		elif self.grad_update_mode=='phase':
-			self.DNN_log.params_update*=0.0
-			r2_log=0.0
-			self.DNN_phase.params, self.DNN_phase.params_update[:], self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
-
+			log_params_update=0.0
+			phase_params, phase_params_update, self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
 
 		elif self.grad_update_mode=='log_mod':
-			self.DNN_log.params, self.DNN_log.params_update[:], self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
-			self.DNN_phase.params_update*=0.0
-			r2_phase=0.0
+			log_params, log_params_update, self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
+			phase_params_update=0.0
+
+
+		# update params
+		self.DNN_phase.params, self.DNN_phase.params_update[:] = phase_params, phase_params_update
+		self.DNN_log.params,   self.DNN_log.params_update[:]   = log_params  , log_params_update
+
 
 		#print(self.opt_phase.Runge_Kutta.step_size, self.opt_phase.step_size)
 
