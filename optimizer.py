@@ -193,17 +193,20 @@ class optimizer(object):
 		
 		elif self.opt=='sgd':
 			grads=self.compute_grad(NN_params,batch,params_dict.copy(),)
-				
-			self.NG.update_NG_params(grads,) # update NG params
-			self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
+			
+			if self.cost=='SR':
+				self.NG.update_NG_params(grads,) # update NG params
+				self.is_finite = np.isfinite(self.NG.S_matrix).all() and np.isfinite(self.NG.F_vector).all()
 
-			S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
-			if self.comm.Get_rank()==0:
-				print(S_str)
-			#self.logfile.write(S_str)
+				S_str=self.label+": norm(S)={0:0.14f}, norm(F)={1:0.14f}, S_condnum={2:0.14f}".format(self.NG.S_norm, self.NG.F_norm, self.NG.S_logcond) 		
+				if self.comm.Get_rank()==0:
+					print(S_str)
+				#self.logfile.write(S_str)
 
-			r2=self.NG.compute_r2_cost(params_dict.copy())
-			self.NG.dE*=self.step_size
+				r2=self.NG.compute_r2_cost(params_dict.copy())
+				self.NG.dE*=self.step_size
+			else:
+				r2=0.0
 
 			# adaptive step size
 			

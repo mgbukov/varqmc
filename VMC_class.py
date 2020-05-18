@@ -100,14 +100,16 @@ def load_opt_data(opt,file_name,start_iter):
 	print(start_iter, opt_data_str)	
 
 	opt.iteration=int(opt_data_str[0])+1
-	opt.NG.iteration=int(opt_data_str[0])+1
-	opt.NG.delta=np.float64(opt_data_str[1])
-	opt.NG.tol=np.float64(opt_data_str[2])
-
-	opt.NG.SNR_weight_sum_exact=np.float64(opt_data_str[3])
-	opt.NG.SNR_weight_sum_gauss=np.float64(opt_data_str[4])
-
 	opt.time=np.float64(opt_data_str[7])
+
+	if opt.cost=='SR':
+		opt.NG.iteration=int(opt_data_str[0])+1
+		opt.NG.delta=np.float64(opt_data_str[1])
+		opt.NG.tol=np.float64(opt_data_str[2])
+
+		opt.NG.SNR_weight_sum_exact=np.float64(opt_data_str[3])
+		opt.NG.SNR_weight_sum_gauss=np.float64(opt_data_str[4])
+
 
 	if opt.opt=='RK':
 		opt.Runge_Kutta.counter=int(opt_data_str[5])
@@ -474,7 +476,10 @@ class VMC(object):
 		if self.NN_type=='DNN':
 			self.input_shape=(-1,self.N_symm,self.L**2)
 		elif self.NN_type=='CNN':
-			self.input_shape=(-1,self.N_symm,1,self.L,self.L)
+			if self.cost[0]=='SR':
+				self.input_shape=(-1,self.N_symm,1,self.L,self.L)
+			else:
+				self.input_shape=(-1,1,self.L,self.L)
 
 		self.MC_tool_log=MC_sampler(self.comm,self.N_MC_chains)
 		self.MC_tool_log.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.N_symm,self.NN_type,self.E_estimator_log.basis_type,self.E_estimator_log.MPI_basis_dtype,self.n_iter)
@@ -674,13 +679,14 @@ class VMC(object):
 		
 		######################################################
 
-
-		MC_data_1="{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])
-		MC_data_2=' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "
-		MC_data_3=' '.join(str(s) for s in self.MC_tool.s0_g)+" : "
-		MC_data_4=' '.join(str(s) for s in self.MC_tool.sf_g)
-		self.file_MC_data.write(MC_data_1  +  MC_data_2  +  MC_data_3 +  MC_data_4 + "\n") #		
-		
+		if self.mode=='MC':
+			
+			MC_data_1="{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])
+			MC_data_2=' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "
+			MC_data_3=' '.join(str(s) for s in self.MC_tool.s0_g)+" : "
+			MC_data_4=' '.join(str(s) for s in self.MC_tool.sf_g)
+			self.file_MC_data.write(MC_data_1  +  MC_data_2  +  MC_data_3 +  MC_data_4 + "\n") #		
+			
 
 		######################################################
 
@@ -715,21 +721,19 @@ class VMC(object):
 
 		######################################################
 
+		if self.opt_log.cost=='SR':
+			self.file_S_eigvals_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.S_eigvals) + '\n' )
+			self.file_VF_overlap_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' )
+			self.file_SNR_gauss_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_gauss) + '\n' )
+			self.file_SNR_exact_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_exact) + '\n' )
+			
+			
 
-		self.file_S_eigvals_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.S_eigvals) + '\n' )
-		self.file_S_eigvals_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.S_eigvals) + '\n' )
-		
-
-		self.file_VF_overlap_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' )
-		self.file_VF_overlap_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' )
-		
-
-		self.file_SNR_exact_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_exact) + '\n' )
-		self.file_SNR_gauss_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_gauss) + '\n' )
-
-		self.file_SNR_exact_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_exact) + '\n' )
-		self.file_SNR_gauss_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_gauss) + '\n' )
-
+		if self.opt_phase.cost=='SR':
+			self.file_S_eigvals_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.S_eigvals) + '\n' )
+			self.file_VF_overlap_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' )
+			self.file_SNR_exact_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_exact) + '\n' )
+			self.file_SNR_gauss_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_gauss) + '\n' )
 
 
 		######################################################
