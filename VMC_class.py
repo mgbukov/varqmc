@@ -283,9 +283,11 @@ class VMC(object):
 		### load MC 
 		print(self.comm.Get_rank(),"loading iteration {0:d}".format(start_iter), truncate_files, repeat)
 		
-		with open(self.file_MC_data.name) as file:
+		with open(self.file_MC_data.name, 'rb') as file: # no b encoding
 			for i in range(start_iter):
-				MC_data_str = file.readline().rstrip().split(' : ')				
+				MC_data_str = file.readline()
+
+		MC_data_str=MC_data_str.decode('utf8').rstrip().split(' : ') # .decode("utf-8")		
 
 		it_MC, acceptance_ratio_g, acceptance_ratios, s0_g, sf_g =  MC_data_str
 
@@ -541,11 +543,11 @@ class VMC(object):
 			# open log_file
 			if os.path.exists(file_name):
 				if self.load_data:
-				    append_write = 'a+' # append if already exists
+				    append_write = 'a+b' # append if already exists
 				else:
-					append_write = 'w' # make a new file if not
+					append_write = 'wb' # make a new file if not
 			else:
-				append_write = 'w+' # append if already exists
+				append_write = 'w+b' # append if already exists
 
 			return open(file_name, append_write)
 
@@ -562,7 +564,8 @@ class VMC(object):
 		
 		# redircet warnings to log
 		def customwarn(message, category, filename, lineno, file=None, line=None):
-			self.logfile.write('\n'+warnings.formatwarning(message, category, filename, lineno)+'\n')
+			s='\n'+warnings.formatwarning(message, category, filename, lineno)+'\n'
+			self.logfile.write(s.encode('utf8'))
 		warnings.showwarning = customwarn
 
 		# redirect std out
@@ -654,7 +657,8 @@ class VMC(object):
 	def save_sim_data(self, iteration, grads_max, r2, phase_hist):
 
 		# data
-		self.file_energy.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.Eloc_std_g, self.E_MC_std_g))
+		en_data="{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.Eloc_std_g, self.E_MC_std_g)
+		self.file_energy.write(en_data.encode('utf8'))
 		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
 		
 
@@ -666,7 +670,7 @@ class VMC(object):
 			data_tuple+= (self.opt_log.NG.dE, self.opt_log.NG.curvature, self.opt_log.NG.F_norm, self.opt_log.NG.S_norm, self.opt_log.NG.S_logcond, )
 		else:
 			data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
-		self.file_loss_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple))
+		self.file_loss_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple).encode('utf8'))
 		
 
 		data_tuple=(iteration, r2[1], grads_max[1], )
@@ -674,18 +678,19 @@ class VMC(object):
 			data_tuple+= (self.opt_phase.NG.dE, self.opt_phase.NG.curvature, self.opt_phase.NG.F_norm, self.opt_phase.NG.S_norm, self.opt_phase.NG.S_logcond, )
 		else:
 			data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
-		self.file_loss_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple))
+		self.file_loss_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple).encode('utf8'))
 
 		
 		######################################################
 
 		if self.mode=='MC':
-			
+
 			MC_data_1="{0:d} : {1:0.4f} : ".format(iteration, self.MC_tool.acceptance_ratio_g[0])
 			MC_data_2=' '.join('{0:0.4f}'.format(r) for r in self.MC_tool.acceptance_ratio)+" : "
 			MC_data_3=' '.join(str(s) for s in self.MC_tool.s0_g)+" : "
 			MC_data_4=' '.join(str(s) for s in self.MC_tool.sf_g)
-			self.file_MC_data.write(MC_data_1  +  MC_data_2  +  MC_data_3 +  MC_data_4 + "\n") #		
+			MC_str=MC_data_1  +  MC_data_2  +  MC_data_3 +  MC_data_4 + "\n" 
+			self.file_MC_data.write(MC_str.encode('utf8')) #		
 			
 
 		######################################################
@@ -702,7 +707,7 @@ class VMC(object):
 			data_opt=(self.opt_log.iteration,self.opt_log.step_size,self.opt_log.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple))
+		self.file_opt_data_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple).encode('utf8'))
 
 
 		if self.opt_phase.cost=='SR':
@@ -716,30 +721,30 @@ class VMC(object):
 			data_opt=(self.opt_phase.iteration,self.opt_phase.step_size,self.opt_phase.time,)
 
 		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple))
+		self.file_opt_data_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple).encode('utf8'))
 
 
 		######################################################
 
 		if self.opt_log.cost=='SR':
-			self.file_S_eigvals_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.S_eigvals) + '\n' )
-			self.file_VF_overlap_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' )
-			self.file_SNR_gauss_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_gauss) + '\n' )
-			self.file_SNR_exact_log.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_exact) + '\n' )
+			self.file_S_eigvals_log.write( ( "{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.S_eigvals) + '\n' ).encode('utf8'))
+			self.file_VF_overlap_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' ).encode('utf8'))
+			self.file_SNR_gauss_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_gauss) + '\n' ).encode('utf8'))
+			self.file_SNR_exact_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_exact) + '\n' ).encode('utf8'))
 			
 			
 
 		if self.opt_phase.cost=='SR':
-			self.file_S_eigvals_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.S_eigvals) + '\n' )
-			self.file_VF_overlap_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' )
-			self.file_SNR_exact_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_exact) + '\n' )
-			self.file_SNR_gauss_phase.write("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_gauss) + '\n' )
+			self.file_S_eigvals_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.S_eigvals) + '\n' ).encode('utf8'))
+			self.file_VF_overlap_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' ).encode('utf8'))
+			self.file_SNR_exact_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_exact) + '\n' ).encode('utf8'))
+			self.file_SNR_gauss_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_gauss) + '\n' ).encode('utf8'))
 
 
 		######################################################
 
-		
-		self.file_phase_hist.write("{0:d} : ".format(iteration) + ''.join("{0:0.6f}, ".format(value) for value in phase_hist) + '\n' )
+		phase_str="{0:d} : ".format(iteration) + ''.join("{0:0.6f}, ".format(value) for value in phase_hist) + '\n' 
+		self.file_phase_hist.write(phase_str.encode('utf8'))
 
 
 		######################################################
