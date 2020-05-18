@@ -17,11 +17,11 @@ MC_thermal: true
 MC_prop_threshold: 1.0 # large values means local proposals
 minibatch_size: 200
 
-# N_MC_points: 1000 #
-# mode: MC 
+N_MC_points: 1000 #
+mode: MC 
 
-N_MC_points: 107 # 
-mode: exact
+# N_MC_points: 107 # 
+# mode: exact
 
 
 batchnorm: false

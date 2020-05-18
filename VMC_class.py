@@ -67,11 +67,11 @@ def truncate_file(file, start_iter):
 			if i < start_iter:
 				keep_lines.append(line)
 
-	with open(file.name, 'w') as f:
+	with open(file.name, 'wb') as f:
 		for line in keep_lines:
-			f.write(line)
+			f.write(line.encode('utf8'))
 
-	return open(file.name, 'a+')
+	return open(file.name, 'ab+')
 
 
 
@@ -283,22 +283,23 @@ class VMC(object):
 		### load MC 
 		print(self.comm.Get_rank(),"loading iteration {0:d}".format(start_iter), truncate_files, repeat)
 		
-		with open(self.file_MC_data.name, 'rb') as file: # no b encoding
-			for i in range(start_iter):
-				MC_data_str = file.readline()
+		if self.mode=='MC':
+			with open(self.file_MC_data.name, 'rb') as file: # no b encoding
+				for i in range(start_iter):
+					MC_data_str = file.readline()
 
-		MC_data_str=MC_data_str.decode('utf8').rstrip().split(' : ') # .decode("utf-8")		
+			MC_data_str=MC_data_str.decode('utf8').rstrip().split(' : ') # .decode("utf-8")		
 
-		it_MC, acceptance_ratio_g, acceptance_ratios, s0_g, sf_g =  MC_data_str
+			it_MC, acceptance_ratio_g, acceptance_ratios, s0_g, sf_g =  MC_data_str
 
-		self.MC_tool.acceptance_ratio_g[0]=np.float64(acceptance_ratio_g)
-		self.MC_tool.s0_g=np.array([self.E_estimator.basis_type(s0) for s0 in s0_g.split(' ')] )
-		self.MC_tool.sf_g=np.array([self.E_estimator.basis_type(sf) for sf in sf_g.split(' ')] )
+			self.MC_tool.acceptance_ratio_g[0]=np.float64(acceptance_ratio_g)
+			self.MC_tool.s0_g=np.array([self.E_estimator.basis_type(s0) for s0 in s0_g.split(' ')] )
+			self.MC_tool.sf_g=np.array([self.E_estimator.basis_type(sf) for sf in sf_g.split(' ')] )
 
-		m_l=self.N_MC_chains*self.comm.Get_rank()
-		m_r=self.N_MC_chains*(self.comm.Get_rank()+1)
+			m_l=self.N_MC_chains*self.comm.Get_rank()
+			m_r=self.N_MC_chains*(self.comm.Get_rank()+1)
 
-		self.DNN_log._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
+			self.DNN_log._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
 
 
 
@@ -335,9 +336,11 @@ class VMC(object):
 
 		### load energy
 
-		with open(self.file_energy.name) as file:
+		with open(self.file_energy.name,'rb') as file:
 			for i in range(start_iter):
-					energy_data_str = file.readline().rstrip().split(' : ')				
+					energy_data_str = file.readline()
+
+		energy_data_str=energy_data_str.decode('utf8').rstrip().split(' : ')				
 
 		it_E, Eloc_mean_g_real , Eloc_mean_g_imag, Eloc_std_g, E_MC_std_g = energy_data_str
 
@@ -543,11 +546,11 @@ class VMC(object):
 			# open log_file
 			if os.path.exists(file_name):
 				if self.load_data:
-				    append_write = 'a+b' # append if already exists
+				    append_write = 'ab+' # append if already exists
 				else:
 					append_write = 'wb' # make a new file if not
 			else:
-				append_write = 'w+b' # append if already exists
+				append_write = 'wb+' # append if already exists
 
 			return open(file_name, append_write)
 
@@ -658,6 +661,8 @@ class VMC(object):
 
 		# data
 		en_data="{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.Eloc_std_g, self.E_MC_std_g)
+		print('HHHHHHHHH', type(en_data), en_data)
+		print(self.file_energy.mode,)
 		self.file_energy.write(en_data.encode('utf8'))
 		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
 		
