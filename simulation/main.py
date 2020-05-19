@@ -17,7 +17,7 @@ import yaml
 # request interactive node
 # salloc -N 64 -t 240 -C haswell -q interactive
 
-# qrsh -pe mpi_28_tasks_per_node 112
+# qrsh -l h_rt=2:00:00 -pe mpi_28_tasks_per_node 280
 
 
 if len(sys.argv)>1:

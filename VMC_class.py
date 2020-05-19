@@ -205,8 +205,6 @@ class VMC(object):
 			print('unrecognized operation mode!')
 			
 
-		
-		
 	
 		model_params=dict(model=self.NN_type+self.NN_dtype,
 						  mode=self.mode,
@@ -231,6 +229,7 @@ class VMC(object):
 
 		# create log file and directory
 
+
 		# auxiliary variable
 		self.prev_it_data=np.zeros(5) # Eloc_real, Eloc_imag, Eloc_std, S_norm, F_norm
 
@@ -240,6 +239,7 @@ class VMC(object):
 
 			self._copy_code()
 			self._create_logs()
+
 
 			if self.load_data:
 				self._load_data(self.start_iter, truncate_files=True)
@@ -283,12 +283,14 @@ class VMC(object):
 		### load MC 
 		print(self.comm.Get_rank(),"loading iteration {0:d}".format(start_iter), truncate_files, repeat)
 		
+		self.comm.Barrier()
+		
 		if self.mode=='MC':
-			with open(self.file_MC_data.name, 'rb') as file: # no b encoding
+			with open(self.file_MC_data.name, 'rb') as file: 
 				for i in range(start_iter):
 					MC_data_str = file.readline()
 
-			MC_data_str=MC_data_str.decode('utf8').rstrip().split(' : ') # .decode("utf-8")		
+			MC_data_str=MC_data_str.decode('utf8').rstrip().split(' : ') 
 
 			it_MC, acceptance_ratio_g, acceptance_ratios, s0_g, sf_g =  MC_data_str
 
@@ -542,15 +544,18 @@ class VMC(object):
 		self.comm.Barrier()
 
 
-		def create_open_file(file_name):
+		def create_open_file(file_name,binary=True):
 			# open log_file
 			if os.path.exists(file_name):
 				if self.load_data:
-				    append_write = 'ab+' # append if already exists
+				    append_write = 'a+' # append if already exists
 				else:
-					append_write = 'wb' # make a new file if not
+					append_write = 'w' # make a new file if not
 			else:
-				append_write = 'wb+' # append if already exists
+				append_write = 'w+' # append if already exists
+
+			if binary:
+				append_write+='b'
 
 			return open(file_name, append_write)
 
@@ -558,7 +563,7 @@ class VMC(object):
 		#logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		logfile_name= 'LOGFILE--MPIprss_{0:d}'.format(self.comm.Get_rank()) + '.txt'
 		if self.comm.Get_rank()==0:
-			self.logfile = create_open_file(logfile_dir+logfile_name)
+			self.logfile = create_open_file(logfile_dir+logfile_name,binary=False)
 		else:
 			self.logfile = None
 		
@@ -568,14 +573,14 @@ class VMC(object):
 		# redircet warnings to log
 		def customwarn(message, category, filename, lineno, file=None, line=None):
 			s='\n'+warnings.formatwarning(message, category, filename, lineno)+'\n'
-			self.logfile.write(s.encode('utf8'))
+			self.logfile.write(s)
 		warnings.showwarning = customwarn
 
 		# redirect std out
 		if not self.print:
 			sys.stdout = self.logfile
 			sys.stderr = self.logfile
-
+			#pass
 		
 		self.debug_file_SF_log       =self.savefile_dir_debug + 'debug-SF_data_log'            #+'--' + self.file_name
 		self.debug_file_SF_phase     =self.savefile_dir_debug + 'debug-SF_data_phase'
@@ -657,12 +662,12 @@ class VMC(object):
 						 self.MC_tool.log_psi_shift,
 						 ], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+
+
 	def save_sim_data(self, iteration, grads_max, r2, phase_hist):
 
 		# data
 		en_data="{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.Eloc_std_g, self.E_MC_std_g)
-		print('HHHHHHHHH', type(en_data), en_data)
-		print(self.file_energy.mode,)
 		self.file_energy.write(en_data.encode('utf8'))
 		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
 		
@@ -1140,8 +1145,14 @@ class VMC(object):
 				self.MC_tool_log.exact(self.DNN_log, self.DNN_phase, )
 
 			elif self.mode=='MC':
+				ti=time.time()
 				# sample
 				acceptance_ratio_g = self.MC_tool_log.sample(self.DNN_log, self.DNN_phase, )
+
+				MC_str="MC with acceptance ratio={0:.4f} took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
+				#self.logfile.write(MC_str)
+				if self.comm.Get_rank()==0:
+					print(MC_str)
 				
 
 			##### compute local energies #####

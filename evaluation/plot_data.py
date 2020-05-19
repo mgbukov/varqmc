@@ -38,13 +38,13 @@ save=True #False #
 
 
 
-iterations=[0,100,200,300,400,]
+iterations=[999,]
 J2=0.5
-L=4
-opt='RK_RK' # 'sgd_sgd' #  'adam_adam' #
-cost='SR_SR' #'energy_energy' # 
-mode='exact' #'MC' # 
-sys_time= '2020_05_18-10_57_02'
+L=6
+opt='adam_adam' # 'sgd_sgd' # 'sgd_sgd' #  
+cost='energy_energy' # 'SR_SR' #
+mode='MC' # 'exact' #
+sys_time= '2020_05_16-14_05_22'
 
 
 
@@ -53,8 +53,8 @@ sys_time= '2020_05_18-10_57_02'
 
 
 data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
-#load_dir='data/' + data_name 
-load_dir='data/L=4_data_exact/' + data_name 
+load_dir='data/' + data_name 
+#load_dir='data/L=4_data_exact/' + data_name 
 
 #data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 #params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)

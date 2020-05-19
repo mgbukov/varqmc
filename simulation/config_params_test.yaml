@@ -1,13 +1,18 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 4
+L: 6
 
-N_iterations: 20 #00 # 500
+N_iterations: 200 #00 # 500
 
 NN_dtype: real-decoupled # cpx #
 
-NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12)  #   (16--12--8,16--24--12) # 
+#NN_shape_str: (8x8-8--3x3-6--2x2-4--1x1-4--1x1-2,8x8-16--1x1-12--1x1-8)  
+NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8)  
+#NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
 NN_type: CNN 
+
+# NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12)  
+# NN_type: CNN 
 
 # NN_shape_str: (36--12--8,36--24--12) #    (16--12--8,16--24--12) # 
 # NN_type: DNN  
@@ -31,11 +36,11 @@ grad_update_mode: normal # log_mod #   phase #  alternating #
 alt_iter: 20 # of iterations to keep each alternating update for  
 
 TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
-opt: (sgd,sgd) # adam, sgd, RK
+opt: (RK,RK) # adam, sgd, RK
 adaptive_step: true # adaptive step size for 2nd order RK
 step_size: (5E-3,5E-3) # (5E-3,5E-3), (1E-2,5E-2)
 
-cost: (energy,energy) # SR, energy
+cost: (SR,SR) # SR, energy
 
 print: true
 save_data: true

@@ -138,7 +138,11 @@ def logcosh(x):
 
 @jit
 def xtanh(x):
-    return jnp.abs(x)*jnp.tanh(x)
+    #return jnp.abs(x)*jnp.tanh(x)
+    #return jnp.tanh(x)
+    #return jnp.sinh(x)
+    return x-0.5*jnp.tanh(x)
+    #return 2.0*x-jnp.tanh(x)
     
 #@jit
 def symmetric_pool(x,reduce_shape, output_shape,):
