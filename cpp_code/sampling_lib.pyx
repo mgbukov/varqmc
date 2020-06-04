@@ -996,7 +996,7 @@ def _init_apply_fun_args(rng, comm, NN_architecture, apply_fun_args,apply_fun_ar
 @cython.boundscheck(False)
 cdef class Log_Net:
 
-    cdef object evaluate
+    cdef object evaluate, evaluate_sampling
 
     cdef object NN_Tree
     cdef int N_varl_params
@@ -1196,7 +1196,8 @@ cdef class Log_Net:
         #self.evaluate  =self._evaluate
         
         # define network evaluation on GPU
-        self.evaluate  =jit(self._evaluate)
+        self.evaluate           =jit(self._evaluate)
+        self.evaluate_sampling  =jit(self._evaluate_sampling)
         
         if self.NN_type=='DNN':
             self.spin_config=<func_type>int_to_spinstate
@@ -1347,7 +1348,6 @@ cdef class Log_Net:
 
     @cython.boundscheck(False)
     cpdef object _evaluate(self, object params, object batch):
-
         # reshaping required inside evaluate func because of per-sample gradients
         #batch=batch.reshape(self.input_shape)
 
@@ -1356,6 +1356,10 @@ cdef class Log_Net:
         return log_psi
 
 
+    @cython.boundscheck(False)
+    cpdef object _evaluate_sampling(self, object params, object batch):
+        log_psi = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        return log_psi
 
 
     @cython.boundscheck(False)
@@ -1511,7 +1515,7 @@ cdef class Log_Net:
         # evaluate DNN on GPU
         if thread_id==0:
             with gil:
-                self.log_psi_s=self.evaluate(self.params, self.spinstate_s_py);
+                self.log_psi_s=self.evaluate_sampling(self.params, self.spinstate_s_py);
         # set barrier
         OMP_BARRIER_PRAGMA()
         mod_psi_s=exp(self.log_psi_s[chain_n]);
@@ -1547,7 +1551,7 @@ cdef class Log_Net:
             # evaluate DNN on GPU
             if thread_id==0:
                 with gil:
-                    self.log_psi_t=self.evaluate(self.params, self.spinstate_t_py);
+                    self.log_psi_t=self.evaluate_sampling(self.params, self.spinstate_t_py);
             # set barrier
             OMP_BARRIER_PRAGMA()
             mod_psi_t=exp(self.log_psi_t[chain_n]);
@@ -1725,7 +1729,7 @@ cdef class Phase_Net:
           
             output_shape = (-1,shape_last_layer[1],)
 
-            scale=1.5
+            scale=1.0
 
             # define CNN   
             NN_arch = {     

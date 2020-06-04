@@ -426,32 +426,31 @@ class Energy_estimator():
 			num_complete_batches, leftover = divmod(self.nn_uq, self.minibatch_size)
 			N_minibatches = num_complete_batches + bool(leftover)
 
-			data=self._spinstates_bra[:self.nn][self.index]
-			batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
+			#data=self._spinstates_bra[:self.nn][self.index]
+			#batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
 
-			'''
+			#'''
 			data=np.zeros((N_minibatches*self.minibatch_size,)+self._spinstates_bra.shape[1:],dtype=self._spinstates_bra.dtype)
 			data[:self.nn_uq,...]=self._spinstates_bra[:self.nn][self.index]
-			'''
+			#'''
 			# preallocate data
-			prediction_bras=np.zeros(self.nn_uq,dtype=np.float64)
+			#prediction_bras=np.zeros(self.nn_uq,dtype=np.float64)
+			prediction_bras=np.zeros(N_minibatches*self.minibatch_size,dtype=np.float64)
 			
 			ti=time.time()
 			for j in range(N_minibatches):
+				ti=time.time()
 
-				batch, batch_idx, = next(batches)
-				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),  )
+				#batch, batch_idx, = next(batches)
+				#prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),  )
 				
 
-				'''
+				#'''
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
 				batch=data[batch_idx].reshape(input_shape)
-
-				if j==N_minibatches-1:
-					prediction_bras[batch_idx[0]:self.nn_uq] = evaluate_NN(NN_params, batch,  )[:self.nn_uq-batch_idx[0]]
-				else:
-					prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,  )
-				'''
+				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,  )
+				#'''
+				
 				
 				# with disable_jit():
 				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
@@ -459,6 +458,10 @@ class Energy_estimator():
 				#print(log_psi_bras[batch_idx]-log)
 				#print(log[:2])
 
+				tf=time.time()
+				print('time: {}'.format(tf-ti))
+
+			prediction_bras=prediction_bras[:self.nn_uq]
 			print("network evaluation on {0:d} configs took {1:0.6} secs.".format(data.shape[0], time.time()-ti) )
 	
 

@@ -11,8 +11,8 @@ echo "#!/bin/bash -login" > submission.sh
 
 #echo "#SBATCH --account = <NERSC Repository>" >> submission.sh
 #echo "#SBATCH --qos=debug" >> submission.sh
-#echo "#SBATCH --qos=regular" >> submission.sh 
-echo "#SBATCH --qos=premium" >> submission.sh
+echo "#SBATCH --qos=regular" >> submission.sh 
+#echo "#SBATCH --qos=premium" >> submission.sh
 echo "#SBATCH --time=24:00:00" >> submission.sh
 
 echo "#SBATCH --constraint=haswell" >> submission.sh # haswell: 2 sockets x 16 cores per node and 2 threads per core
@@ -22,7 +22,7 @@ echo "#SBATCH --nodes=${N_nodes}" >> submission.sh
 #echo "#SBATCH --tasks=4" >> submission.sh # total number of tasks
 #echo "#SBATCH --cpus-per-task=272" >> submissio.sh # #OMP processes
 
-echo "#SBATCH --tasks-per-node=32" >> submission.sh # 26/32
+#echo "#SBATCH --tasks-per-node=32" >> submission.sh # 26/32
 #echo "#SBATCH --tasks-per-node=68" >> submission.sh
 
 

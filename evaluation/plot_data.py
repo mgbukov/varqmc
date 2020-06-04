@@ -38,13 +38,13 @@ save=True #False #
 
 
 
-iterations=[999,]
+iterations=[200,400,600,800,1000,1500,2300]
 J2=0.5
 L=6
-opt='adam_adam' # 'sgd_sgd' # 'sgd_sgd' #  
-cost='energy_energy' # 'SR_SR' #
+opt='RK_RK' # 'sgd_sgd' # 'sgd_sgd' #  
+cost='SR_SR' # 'SR_SR' #
 mode='MC' # 'exact' #
-sys_time= '2020_05_16-14_05_22'
+sys_time= '2020_05_21-07_47_04'
 
 
 

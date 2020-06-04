@@ -15,9 +15,9 @@ import yaml
 # sacct -j "" --format="JobID,MaxRSS,AveRSS,MaxRSSNode"
 
 # request interactive node
-# salloc -N 64 -t 240 -C haswell -q interactive
+# salloc -N 64 -t 240 -C knl -q interactive
 
-# qrsh -l h_rt=2:00:00 -pe mpi_28_tasks_per_node 280
+# qrsh -now n -l h_rt=12:00:00 -pe mpi_28_tasks_per_node 280
 
 
 if len(sys.argv)>1:

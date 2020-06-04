@@ -1313,11 +1313,13 @@ class VMC(object):
 				phase_params_update=0.0
 
 		elif self.grad_update_mode=='phase':
+			log_params=self.DNN_log.params
 			log_params_update=0.0
 			phase_params, phase_params_update, self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
 
 		elif self.grad_update_mode=='log_mod':
 			log_params, log_params_update, self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
+			phase_params=self.DNN_phase.params
 			phase_params_update=0.0
 
 

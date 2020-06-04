@@ -45,7 +45,6 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
         
         # normalize W
         norm=jnp.sqrt(filter_shape[0]*filter_shape[1]*(input_shape[1]+out_chan))
-        #norm=jnp.sqrt(filter_shape[0]*filter_shape[1]+out_chan)
         W/=norm
         
         # output

@@ -726,6 +726,8 @@ def plot_energy(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 	plt.yscale('log')
 
+	plt.ylim([1E-3,2E0])
+
 	#plt.legend()
 	plt.grid()
 	plt.tight_layout()
