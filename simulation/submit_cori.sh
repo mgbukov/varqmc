@@ -1,5 +1,5 @@
 #!bin/bash -l
-let "N_nodes=10" # 5
+let "N_nodes=64" # 5
 let "N_mpi=$(( 32*${N_nodes} ))"
 
 if [ -e  submission.sh ]
@@ -15,8 +15,8 @@ echo "#SBATCH --qos=regular" >> submission.sh
 #echo "#SBATCH --qos=premium" >> submission.sh
 echo "#SBATCH --time=48:00:00" >> submission.sh
 
-#echo "#SBATCH --constraint=haswell" >> submission.sh # haswell: 2 sockets x 16 cores per node and 2 threads per core
-echo "#SBATCH --constraint=knl" >> submission.sh # knl: 68 cores per node and 4 threads per core
+echo "#SBATCH --constraint=haswell" >> submission.sh # haswell: 2 sockets x 16 cores per node and 2 threads per core
+#echo "#SBATCH --constraint=knl" >> submission.sh # knl: 68 cores per node and 4 threads per core
 
 echo "#SBATCH --nodes=${N_nodes}" >> submission.sh
 #echo "#SBATCH --tasks=4" >> submission.sh # total number of tasks
@@ -39,9 +39,9 @@ data_dir="$(/global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python make_data_f
 
 ### CPU
 #echo srun --ntasks-per-core 15 -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
-#echo srun -c 2 --cpu_bind=cores -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+echo srun -c 2 --cpu_bind=cores -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
-echo srun -c 1 --cpu_bind=cores -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
+#echo srun -c 1 --cpu_bind=cores -n ${N_mpi} /global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
 
 

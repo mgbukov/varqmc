@@ -1,5 +1,5 @@
 N_nodes=64
-N_mpi=$(( 68*${N_nodes} ))
+N_mpi=$(( 32*${N_nodes} ))
 
 data_dir="$(/global/cfs/cdirs/m3444/.conda/envs/jax-noGPU/bin/python make_data_file_linux.py)"
 
