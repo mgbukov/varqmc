@@ -47,5 +47,5 @@ save_data: true
 load_data: false
 start_iter: 0
 
-seed: 0 # 123 # 24011992 # 777
+seed: 24011992 # 0 # 123 #  # 777
 
