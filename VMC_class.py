@@ -41,7 +41,6 @@ import pickle
 
 from cpp_code import Log_Net, Phase_Net
 from cpp_code import integer_to_spinstate
-from cpp_code import scale_cpx
 
 from MC_lib import MC_sampler
 from energy_lib import Energy_estimator
@@ -433,6 +432,9 @@ class VMC(object):
 		self.DNN_log=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 		self.DNN_phase=Phase_Net(self.comm, self.shapes[1], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 
+		#print(self.DNN_phase.params[0][0][0,...])
+		#print(self.DNN_phase.params[0][0][:,0])
+		#exit()
 
 		self.N_symm = np.max([self.DNN_log.N_symm,self.DNN_phase.N_symm])
 
@@ -1295,6 +1297,8 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 			print(mssg)
 		#self.logfile.write(mssg)
+
+		#exit()
 
 		# record gradients
 

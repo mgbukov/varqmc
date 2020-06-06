@@ -323,6 +323,7 @@ class natural_gradient():
 			#lmbda, V = eigh(S/self.S_norm,)
 			lmbda*=self.S_norm
 
+			#lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
 
 			# a1= jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda+1E-14)), jnp.dot(V.T, F) ) ) #[-4:]
 			# a2 = inv(S/self.S_norm).dot(F)/self.S_norm #[-4:]
@@ -334,7 +335,6 @@ class natural_gradient():
 			self.VF_overlap[:]= jnp.dot(V.T, F)
 			SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
 
-
 			if self.adaptive_SR_cutoff:
 				self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
 			else:
@@ -342,7 +342,7 @@ class natural_gradient():
 			
 			# exp cutoff
 			#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 1.0/(1.0 + np.exp( -(lmbda-self.tol)/(1E-1*self.tol) ) ) * 1.0/lmbda ), self.VF_overlap ) )
-			
+
 		return info
 
 
@@ -383,8 +383,6 @@ class natural_gradient():
 		self.F_norm=np.linalg.norm(self.F_vector)
 		self.S_logcond=np.log(np.linalg.cond(self.S_matrix))
 
-
-
 		#######################################################
 
 		
@@ -405,7 +403,6 @@ class natural_gradient():
 
 		# clip gradients
 		# self.nat_grad[:]=np.where(np.abs(self.nat_grad) < self.grad_clip, self.nat_grad, self.grad_clip) 
-
 
 
 		# normalize gradients
