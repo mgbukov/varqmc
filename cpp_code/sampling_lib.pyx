@@ -1098,11 +1098,13 @@ cdef class Log_Net:
                             # 'reg': Regularization(reduce_shape, output_shape, ),
 
 
-                            'layer_1': GeneralDense(shapes['layer_1'], 1, shapes['layer_1'][1], self.N_sites, ignore_b=True, init_value_W=1.0),  # 1E-2
+                            'layer_1': GeneralDense(1, shapes['layer_1'][1], self.N_sites, ignore_b=True, init_value_W=1.0),  # 1E-2
                             'nonlin_1': elementwise(logcosh),
-                            'layer_2': GeneralDense(shapes['layer_2'], shapes['layer_2'][0], shapes['layer_2'][1], 1 , ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),  # 1E-1
+                            'layer_2': GeneralDense(shapes['layer_2'][0], shapes['layer_2'][1], 1 , ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),  # 1E-1
                             'nonlin_2': elementwise(xtanh),
-                            'reg': Regularization(reduce_shape, output_shape, ),
+                            'symm': elementwise(symmetrize, reduce_shape=reduce_shape, ),
+                            'pool': elementwise(uniform_pool, output_shape=output_shape ),
+                            'reg': Regularization(a=8.0),
 
                             # 'layer_1': GeneralDense(shapes_log['layer_1'], ignore_b=True, init_value_W=1E-1),  # 1E-2
                             # 'nonlin_1': elementwise(logcosh),
@@ -1133,31 +1135,40 @@ cdef class Log_Net:
 
             # define CNN   
             NN_arch = {     
-                            # DNN equivalent
+                            #mixed
                             'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], ignore_b=True, init_value_W=scale, ), 
                             'nonlin_1': elementwise(logcosh),
 
                             'layer_2': GeneralConvPeriodic(dim_nums, shapes['layer_2'][1], shapes['layer_2'][0], ignore_b=False, init_value_W=scale, init_value_b=scale, ), 
                             'nonlin_2': elementwise(xtanh),
 
-                            'layer_3': GeneralConvPeriodic(dim_nums, shapes['layer_3'][1], shapes['layer_3'][0], ignore_b=False, dense_output=True, init_value_W=scale, init_value_b=scale, ), 
+                            'layer_3': GeneralConvPeriodic(dim_nums, shapes['layer_3'][1], shapes['layer_3'][0], dense_output=True, ignore_b=False, init_value_W=scale, init_value_b=scale, ), 
                             'nonlin_3': elementwise(xtanh),
 
-                            'layer_4': GeneralDense((shapes['layer_3'][1],shapes['layer_4'][1]), shapes['layer_3'][1], shapes['layer_4'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ),  # 1E-1
+                            'layer_4': GeneralDense(shapes['layer_3'][1], shapes['layer_4'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ), 
                             'nonlin_4': elementwise(xtanh),
 
-                            'layer_5': GeneralDense((shapes['layer_4'][1],shapes['layer_5'][1]), shapes['layer_4'][1], shapes['layer_5'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ),  # 1E-1
+                            'layer_5': GeneralDense(shapes['layer_4'][1], shapes['layer_5'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ),  
                             'nonlin_5': elementwise(xtanh),
 
-                            'reg': Regularization(reduce_shape, output_shape, ),
+                            # 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape ),
+
+                            'symm': elementwise(symmetrize, reduce_shape=reduce_shape, ),
+                            
+                            'pool': elementwise(uniform_pool, output_shape=output_shape ),
+                            #'layer_6': GeneralDense(shapes['layer_5'][1], 1, 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ),  #
+                            
+                            'reg': Regularization(a=8.0),
 
 
                             # # DNN equivalent
                             # 'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
                             # 'nonlin_1': elementwise(logcosh),
-                            # 'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
+                            # 'layer_2': GeneralDense(shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ), 
                             # 'nonlin_2': elementwise(xtanh),
-                            # 'reg': Regularization(reduce_shape, output_shape, ),
+                            # 'symm': elementwise(symmetrize, reduce_shape=reduce_shape, ),
+                            # 'pool': elementwise(uniform_pool, output_shape=output_shape ),
+                            # 'reg': Regularization(a=8.0),
 
 
 
@@ -1193,7 +1204,8 @@ cdef class Log_Net:
 
     def _init_evaluate(self):
 
-        #self.evaluate  =self._evaluate
+        # self.evaluate  =self._evaluate
+        # self.evaluate_sampling  =self._evaluate_sampling
         
         # define network evaluation on GPU
         self.evaluate           =jit(self._evaluate)
@@ -1694,11 +1706,12 @@ cdef class Phase_Net:
                                 # 'nonlin_2': elementwise(logcosh),
                                 # 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
                             
-                                'layer_1': GeneralDense(shapes['layer_1'], 1, shapes['layer_1'][1], self.N_sites, ignore_b=True, init_value_W=1.0 ),  # 1E-2
+                                'layer_1': GeneralDense(1, shapes['layer_1'][1], self.N_sites, ignore_b=True, init_value_W=1.0 ),  # 1E-2
                                 'nonlin_1': elementwise(logcosh),
-                                'layer_2': GeneralDense(shapes['layer_2'], shapes['layer_2'][0], shapes['layer_2'][1], 1,ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),
+                                'layer_2': GeneralDense(shapes['layer_2'][0], shapes['layer_2'][1], 1,ignore_b=False, init_value_W=1.0, init_value_b=1.0 ),
                                 'nonlin_2': elementwise(xtanh),
-                                'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape )
+                                'symm': elementwise(symmetrize, reduce_shape=reduce_shape, ),
+                                'pool': elementwise(uniform_pool, output_shape=output_shape ),
 
                                 # 'layer_1': GeneralDense(shapes_phase['layer_1'], ignore_b=True, init_value_W=1E-1, ), #3E-1
                                 # 'nonlin_1': elementwise(logcosh),
@@ -1733,23 +1746,26 @@ cdef class Phase_Net:
 
             # define CNN   
             NN_arch = {     
-                            # deep DNN
+                            #mixed
                             'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
                             'nonlin_1': elementwise(logcosh),
                             
-                            'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
+                            'layer_2': GeneralDense(shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
                             'nonlin_2': elementwise(xtanh),
                             
-                            'layer_3': GeneralDense((shapes['layer_2'][1],shapes['layer_3'][1]), shapes['layer_2'][1], shapes['layer_3'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
+                            'layer_3': GeneralDense(shapes['layer_2'][1], shapes['layer_3'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
                             'nonlin_3': elementwise(xtanh),
                             
-                            'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape ),
+                            'symm': elementwise(symmetrize, reduce_shape=reduce_shape, ),
+                            'pool': elementwise(uniform_pool, output_shape=output_shape ),
+
+                            #'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape ),
 
 
                             # # DNN equivalent
                             # 'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
                             # 'nonlin_1': elementwise(logcosh),
-                            # 'layer_2': GeneralDense((shapes['layer_1'][1],shapes['layer_2'][1]), shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
+                            # 'layer_2': GeneralDense(shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
                             # 'nonlin_2': elementwise(xtanh),
                             # 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape ),
 

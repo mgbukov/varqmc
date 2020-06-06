@@ -390,6 +390,8 @@ class Energy_estimator():
 			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[self._ints_ket_ind_holder[:n]]
 			self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
 
+			#sample: [s1, s2, s3, ]
+			#s_primes: [ [s11, s12, s12], [s21, s22,], [...], ]
 			
 			self._n_per_term[j]=n
 			nn+=n
@@ -439,7 +441,7 @@ class Energy_estimator():
 			
 			ti=time.time()
 			for j in range(N_minibatches):
-				ti=time.time()
+				#ti=time.time()
 
 				#batch, batch_idx, = next(batches)
 				#prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),  )
@@ -448,7 +450,7 @@ class Energy_estimator():
 				#'''
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
 				batch=data[batch_idx].reshape(input_shape)
-				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,  )
+				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,)
 				#'''
 				
 				
@@ -458,8 +460,8 @@ class Energy_estimator():
 				#print(log_psi_bras[batch_idx]-log)
 				#print(log[:2])
 
-				tf=time.time()
-				print('time: {}'.format(tf-ti))
+				# tf=time.time()
+				# print('time: {}'.format(tf-ti))
 
 			prediction_bras=prediction_bras[:self.nn_uq]
 			print("network evaluation on {0:d} configs took {1:0.6} secs.".format(data.shape[0], time.time()-ti) )

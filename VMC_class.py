@@ -1088,47 +1088,6 @@ class VMC(object):
 		# store data from last 6 iterations
 		self.run_debug_helper(run=True,)
 
-
-	'''
-
-	def _update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
-		layers_type=list(layers.keys())
-		for j, layer_type in enumerate(layers_type):
-			if 'batch_norm' in layer_type:
-				self.DNN.apply_fun_args_dyn[j]['fixpoint_iter']=set_fixpoint_iter
-			
-	
-
-	def compute_batchnorm_params(self,NN_params,N_iter):
-	
-		ti=time.time()
-
-		#print(self.DNN.apply_fun_args_dyn[2]['mean'])
-		for i in range(N_iter):
-			
-			# draw MC sample
-			acceptance_ratio_g = self.MC_tool.sample(self.DNN, compute_phases=False)
-			
-			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=True)
-			log_psi, phase_psi = self.evaluate_NN_dyn(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
-			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=False)
-
-			#norm_str="iter: {0:d}, min(log_psi)={1:0.8f}, max(log_psi)={2:0.8f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
-			psi_str="log_psi_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
-		
-
-			self.logfile.write(psi_str)
-			if self.comm.Get_rank()==0:
-				print(psi_str)
-		#print(self.DNN.apply_fun_args_dyn[2]['mean'], self.DNN.apply_fun_args[2]['mean'])
-
-								
-		MC_str="\nweight normalization with final MC acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
-		self.logfile.write(MC_str)
-		if self.comm.Get_rank()==0:
-			print(MC_str)
-
-	'''
 	
 	def reestimate_local_energy_log(self, iteration, NN_params_log, batch, params_dict,):
 
@@ -1203,7 +1162,6 @@ class VMC(object):
 
 		return params_dict, batch
 	
-
 
 	def get_training_data(self,iteration,):
 
@@ -1302,7 +1260,6 @@ class VMC(object):
 			phase_params, phase_params_update, self.r2[1] = self.opt_phase.return_grad(iteration, self.DNN_phase.params, self.batch, self.Eloc_params_dict_phase, )
 			log_params,   log_params_update  , self.r2[0] = self.opt_log.return_grad(iteration, self.DNN_log.params, self.batch, self.Eloc_params_dict_log, )
 			
-
 		elif self.grad_update_mode=='alternating':
 			if (iteration//self.alt_iters)%2==1: # phase grads
 				log_params_update*=0.0
@@ -1354,3 +1311,43 @@ class VMC(object):
 		return grads_max
 
 
+	'''
+
+	def _update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
+		layers_type=list(layers.keys())
+		for j, layer_type in enumerate(layers_type):
+			if 'batch_norm' in layer_type:
+				self.DNN.apply_fun_args_dyn[j]['fixpoint_iter']=set_fixpoint_iter
+			
+	
+
+	def compute_batchnorm_params(self,NN_params,N_iter):
+	
+		ti=time.time()
+
+		#print(self.DNN.apply_fun_args_dyn[2]['mean'])
+		for i in range(N_iter):
+			
+			# draw MC sample
+			acceptance_ratio_g = self.MC_tool.sample(self.DNN, compute_phases=False)
+			
+			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=True)
+			log_psi, phase_psi = self.evaluate_NN_dyn(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
+			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=False)
+
+			#norm_str="iter: {0:d}, min(log_psi)={1:0.8f}, max(log_psi)={2:0.8f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
+			psi_str="log_psi_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
+		
+
+			self.logfile.write(psi_str)
+			if self.comm.Get_rank()==0:
+				print(psi_str)
+		#print(self.DNN.apply_fun_args_dyn[2]['mean'], self.DNN.apply_fun_args[2]['mean'])
+
+								
+		MC_str="\nweight normalization with final MC acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
+		self.logfile.write(MC_str)
+		if self.comm.Get_rank()==0:
+			print(MC_str)
+
+	'''
