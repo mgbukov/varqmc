@@ -8,8 +8,6 @@ import itertools
 import jax.numpy as jnp
 import numpy as np
 
-#from mpi4py import MPI
-
 from jax.nn.initializers import glorot_normal, normal, ones, zeros
 
 
@@ -100,19 +98,20 @@ def GeneralDense(in_chan, out_chan, filter_size, ignore_b=False, init_value_W=1E
 
 		if out_chan==1:
 			output_shape=(input_shape[0],)
-			W = random.uniform(rng,shape=(input_shape[1],), minval=-init_value_W, maxval=+init_value_W)
+			W_shape=(input_shape[1],)
+			b_shape=(1,)
 		else:
-			output_shape=(input_shape[0],out_chan)
-			W = random.uniform(rng,shape=(input_shape[1],out_chan), minval=-init_value_W, maxval=+init_value_W)
+			output_shape=(input_shape[0],out_chan)   
+			W_shape=(input_shape[1],out_chan)
+			b_shape=(output_shape[1],)		
+
+		W = random.uniform(rng,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
 			
 		W/=norm # see apply func
 
 		if not ignore_b:
 			rng, k1 = random.split(rng)
-			if out_chan==1:
-				b = random.uniform(k1,shape=(1,), minval=-init_value_b, maxval=+init_value_b)
-			else:
-				b = random.uniform(k1,shape=(output_shape[1],), minval=-init_value_b, maxval=+init_value_b)
+			b = random.uniform(k1,shape=b_shape, minval=-init_value_b, maxval=+init_value_b)
 			params=(W,b,)
 		
 		else:
@@ -131,7 +130,7 @@ def GeneralDense(in_chan, out_chan, filter_size, ignore_b=False, init_value_W=1E
 
 
 
-
+##########################
 
 # nonlinearities
 
@@ -148,7 +147,11 @@ def xtanh(x):
 	#return jnp.sinh(x)
 	return x-0.5*jnp.tanh(x)
 	#return 2.0*x-jnp.tanh(x)
-	
+
+
+##########################
+
+
 #@jit
 def symmetric_pool(x,reduce_shape, output_shape,):
 	# symmetrize

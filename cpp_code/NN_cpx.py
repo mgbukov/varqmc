@@ -5,7 +5,7 @@ import jax.numpy as jnp
 
 from .DNN_architectures_common import *
 from .DNN_architectures_real import *
-from .DNN_architectures_cpx import *
+from .DNN_architectures_cpx2 import *
 
 
 def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale ):
@@ -19,7 +19,18 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 			pass
 
 		elif n_layers==2:
-			pass
+			
+			NN_archs['DNN_2']=	{
+
+								'layer_1': GeneralDenseComplex(1, shapes['layer_1'][1], input_shape[-1], ignore_b=True, init_value_W=scale),  
+								'nonlin_1': elementwise(poly_cpx),
+								'layer_2': GeneralDenseComplex(shapes['layer_2'][0], shapes['layer_2'][1], 1 , ignore_b=False, init_value_W=scale, init_value_b=scale ),  
+								'nonlin_2': elementwise(poly_cpx),
+								'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, ),
+								'pool': elementwise(uniform_pool_cpx, output_shape=output_shape ),
+								'reg': RegularizationComplex(a=8.0),
+
+								}
 
 
 	##########################################################################

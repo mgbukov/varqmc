@@ -22,9 +22,9 @@ def NN_log_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 
 			NN_archs['DNN_2']=	{
 
-								'layer_1': GeneralDense(1, shapes['layer_1'][1], input_shape[-1], ignore_b=True, init_value_W=scale),  # 1E-2
+								'layer_1': GeneralDense(1, shapes['layer_1'][1], input_shape[-1], ignore_b=True, init_value_W=scale), 
 								'nonlin_1': elementwise(logcosh),
-								'layer_2': GeneralDense(shapes['layer_2'][0], shapes['layer_2'][1], 1 , ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
+								'layer_2': GeneralDense(shapes['layer_2'][0], shapes['layer_2'][1], 1 , ignore_b=False, init_value_W=scale, init_value_b=scale ),
 								'nonlin_2': elementwise(xtanh),
 								'symm': elementwise(symmetrize, reduce_shape=reduce_shape, ),
 								'pool': elementwise(uniform_pool, output_shape=output_shape ),

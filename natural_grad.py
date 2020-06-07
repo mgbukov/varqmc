@@ -17,10 +17,11 @@ import pickle, time
 
 class natural_gradient():
 
-	def __init__(self,comm,compute_grad_log_psi, NN_Tree, TDVP_opt, mode='MC', RK=False, adaptive_SR_cutoff=False):
+	def __init__(self,comm,compute_grad_log_psi, NN_dtype, NN_Tree, TDVP_opt, mode='MC', RK=False, adaptive_SR_cutoff=False):
 				 
 		self.comm=comm
 		self.logfile=None
+		self.NN_dtype=NN_dtype
 
 		self.NN_Tree=NN_Tree
 		self.mode=mode
@@ -72,10 +73,23 @@ class natural_gradient():
 
 		######  preallocate memory
 		dtype=np.float64
-				
-		self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=dtype)
 
 		self.F_vector=np.zeros(self.N_varl_params,dtype=dtype)
+		
+		if self.NN_dtype=='real':
+			self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=np.float64)
+			self.O_expt=np.zeros(self.N_varl_params,dtype=np.float64)
+
+			self.F_vector_log=None
+			self.F_vector_phase=None
+		
+		elif self.NN_dtype=='cpx':
+			self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=np.complex128)
+			self.O_expt=np.zeros(self.N_varl_params,dtype=np.complex128)
+
+			self.F_vector_log=np.zeros_like(self.F_vector)
+			self.F_vector_phase=np.zeros_like(self.F_vector)
+
 		
 		self.nat_grad=np.zeros_like(self.F_vector)
 		self.current_grad_guess=np.zeros_like(self.F_vector)
@@ -83,7 +97,6 @@ class natural_gradient():
 		self.S_matrix_reg=1E-15*np.eye(self.F_vector.shape[0])
 		self.nat_grad_guess=np.zeros_like(self.F_vector)
 
-		self.O_expt=np.zeros(self.N_varl_params,dtype=dtype)
 		self.OO_expt=np.zeros([self.N_varl_params,self.N_varl_params],dtype=dtype)
 		self.O_expt2=np.zeros_like(self.OO_expt)
 
@@ -136,7 +149,12 @@ class natural_gradient():
 			abs_psi_2=Eloc_params_dict['abs_psi_2']#.copy()
 
 			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi).block_until_ready() 
-			self.OO_expt[:] = jnp.dot(self.dlog_psi.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi)	).block_until_ready()  		
+				
+			if self.NN_dtype=='real':
+				self.OO_expt[:] = jnp.dot(self.dlog_psi.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi)	).block_until_ready()  		
+			elif self.NN_dtype=='cpx':
+				self.OO_expt[:] = jnp.dot(self.dlog_psi.real.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi.real)  ).block_until_ready() \
+								+ jnp.dot(self.dlog_psi.imag.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi.imag)  ).block_until_ready()  		
 
 			
 		elif self.mode=='MC':
@@ -146,13 +164,24 @@ class natural_gradient():
 			
 			self.O_expt/=self.N_MC_points
 
-			self.comm.Allreduce(( jnp.dot(self.dlog_psi.T, self.dlog_psi).block_until_ready()  )._value, self.OO_expt[:], op=MPI.SUM )
-			#self.comm.Allreduce( np.dot(self.dlog_psi.T, self.dlog_psi), self.OO_expt[:], op=MPI.SUM )
+			if self.NN_dtype=='real':
+				self.comm.Allreduce(( jnp.dot(self.dlog_psi.T, self.dlog_psi).block_until_ready()  )._value, self.OO_expt[:], op=MPI.SUM )
+				#self.comm.Allreduce( np.dot(self.dlog_psi.T, self.dlog_psi), self.OO_expt[:], op=MPI.SUM )
+			elif self.NN_dtype=='cpx':
+				self.comm.Allreduce(	(  jnp.dot(self.dlog_psi.real.T, self.dlog_psi.real).block_until_ready() \
+				                	  	  +jnp.dot(self.dlog_psi.imag.T, self.dlog_psi.imag).block_until_ready()    )._value, \
+									self.OO_expt[:], op=MPI.SUM
+									)
 
 			self.OO_expt/=self.N_MC_points
 
 
-		self.O_expt2[:] = jnp.outer(self.O_expt,self.O_expt)	
+		if self.NN_dtype=='real':
+			self.O_expt2[:] = jnp.outer(self.O_expt,self.O_expt)
+		elif self.NN_dtype=='cpx':
+			self.O_expt2[:] = jnp.outer(self.O_expt.real,self.O_expt.real) + jnp.outer(self.O_expt.imag,self.O_expt.imag)
+
+
 		self.S_matrix[:] = self.OO_expt - self.O_expt2 + self.S_matrix_reg
 
 		
@@ -166,13 +195,28 @@ class natural_gradient():
 			abs_psi_2=Eloc_params_dict['abs_psi_2'].copy()
 			self.E_diff_weighted*=abs_psi_2
 
-			self.F_vector[:]   = jnp.dot(self.E_diff_weighted,self.dlog_psi).block_until_ready()
-			#self.F_vector[:]   = np.dot(self.E_diff_weighted,self.dlog_psi)
-			
+			if self.NN_dtype=='real':
+				self.F_vector[:]   = jnp.dot(self.E_diff_weighted,self.dlog_psi).block_until_ready()
+				#self.F_vector[:]   = np.dot(self.E_diff_weighted,self.dlog_psi)
+			elif self.NN_dtype=='cpx':
+				self.F_vector_log[:]   = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready()
+				self.F_vector_phase[:] = jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
+				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
+
 		elif self.mode=='MC':
 		
-			self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
-			#self.comm.Allreduce(np.dot(self.E_diff_weighted, self.dlog_psi), self.F_vector[:], op=MPI.SUM)
+			if self.NN_dtype=='real':
+				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
+				#self.comm.Allreduce(np.dot(self.E_diff_weighted, self.dlog_psi), self.F_vector[:], op=MPI.SUM)
+			elif self.NN_dtype=='cpx':
+				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
+									self.F_vector_log[:], op=MPI.SUM
+									)
+
+				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
+									self.F_vector_phase[:], op=MPI.SUM
+									)
+				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
 
 			self.F_vector/=self.N_MC_points
 
@@ -333,9 +377,11 @@ class natural_gradient():
 
 			self.S_eigvals[:]=lmbda
 			self.VF_overlap[:]= jnp.dot(V.T, F)
-			SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
 
-			if self.adaptive_SR_cutoff:
+			if self.NN_dtype=='real':
+				SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
+
+			if self.adaptive_SR_cutoff and self.NN_dtype=='real':
 				self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
 			else:
 				self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )

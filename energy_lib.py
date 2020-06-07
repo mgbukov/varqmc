@@ -69,6 +69,11 @@ class Energy_estimator():
 		self.DNN_log=DNN_log
 		self.DNN_phase=DNN_phase
 
+		if DNN_phase is None:
+			self.NN_dtype='cpx'
+		else:
+			self.NN_dtype='real'
+
 
 		self.N_MC_points=N_MC_points
 		self.N_batch=N_batch
@@ -306,7 +311,7 @@ class Energy_estimator():
 		params_dict['E_diff']=E_diff_imag
 		params_dict['Eloc_mean']=Eloc_mean_g
 		params_dict['Eloc_var']=Eloc_var_g
-		params_dict['Eloc_mean_part']=Eloc_mean_g.imag
+		#params_dict['Eloc_mean_part']=Eloc_mean_g.imag
 		
 
 		return params_dict, batch
@@ -328,31 +333,25 @@ class Energy_estimator():
 
 		unique_str="{0:d}/{1:d} unique configs; using minibatch size {2:d}.".format(self.nn_uq, self.nn, self.minibatch_size)
 		print(unique_str)
-		#if self.logfile!=None:
-		#	self.logfile.write(unique_str)
-
-
-		ti=time.time()
-		log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
-		log_psi_bras-=log_psi_shift
-
 		
+		ti=time.time()
+		if self.NN_dtype=='real':
+			log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)	
+			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
+		else:
+			log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
+		log_psi_bras-=log_psi_shift
+		
+
+
 		psi_str="log_|psi|_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
-		#if self.logfile!=None:
-		#	self.logfile.write(psi_str)
 		if self.comm.Get_rank()==0 and verbose:
 			print(psi_str)
-		
-
-		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
 
 
 		str_2="evaluating s_primes took {0:.4f} secs.".format(time.time()-ti)
-		#if self.logfile!=None:
-		#	self.logfile.write(str_2)
 		if self.comm.Get_rank()==0 and verbose:
 			print(str_2)
-		
 
 
 		self.compute_Eloc(log_kets, phase_kets, log_psi_bras, phase_psi_bras,)
@@ -428,31 +427,25 @@ class Energy_estimator():
 			num_complete_batches, leftover = divmod(self.nn_uq, self.minibatch_size)
 			N_minibatches = num_complete_batches + bool(leftover)
 
-			#data=self._spinstates_bra[:self.nn][self.index]
-			#batches = data_stream(data,self.minibatch_size,self.nn_uq,N_minibatches)
-
-			#'''
 			data=np.zeros((N_minibatches*self.minibatch_size,)+self._spinstates_bra.shape[1:],dtype=self._spinstates_bra.dtype)
 			data[:self.nn_uq,...]=self._spinstates_bra[:self.nn][self.index]
-			#'''
+		
 			# preallocate data
-			#prediction_bras=np.zeros(self.nn_uq,dtype=np.float64)
 			prediction_bras=np.zeros(N_minibatches*self.minibatch_size,dtype=np.float64)
+			if self.NN_dtype=='cpx':
+				prediction_bras_2=np.zeros_like(prediction_bras)
 			
 			ti=time.time()
 			for j in range(N_minibatches):
 				#ti=time.time()
 
-				#batch, batch_idx, = next(batches)
-				#prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),  )
-				
-
-				#'''
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
 				batch=data[batch_idx].reshape(input_shape)
-				prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,)
-				#'''
-				
+
+				if self.NN_dtype=='real':
+					prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,)
+				else:
+					prediction_bras[batch_idx], prediction_bras_2[batch_idx] = evaluate_NN(NN_params, batch,)
 				
 				# with disable_jit():
 				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
@@ -460,22 +453,26 @@ class Energy_estimator():
 				#print(log_psi_bras[batch_idx]-log)
 				#print(log[:2])
 
-				# tf=time.time()
-				# print('time: {}'.format(tf-ti))
-
 			prediction_bras=prediction_bras[:self.nn_uq]
+			if self.NN_dtype=='cpx':
+				prediction_bras_2=prediction_bras_2[:self.nn_uq]
+			
 			print("network evaluation on {0:d} configs took {1:0.6} secs.".format(data.shape[0], time.time()-ti) )
 	
 
 		else:
 
 			### evaluate network on entire sample
-			prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  )._value
-				
+			if self.NN_dtype=='real':
+				prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  )._value
+			else:	
+				prediction_bras, prediction_bras_2 = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  )._value
+			
 
-
-		return prediction_bras[self.inv_index]
-
+		if self.NN_dtype=='real':
+			return prediction_bras[self.inv_index]
+		else:
+			return prediction_bras[self.inv_index], prediction_bras_2[self.inv_index]
 
 		#######
 

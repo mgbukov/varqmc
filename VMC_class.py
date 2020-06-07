@@ -45,78 +45,13 @@ from cpp_code import integer_to_spinstate
 from MC_lib import MC_sampler
 from energy_lib import Energy_estimator
 from optimizer import optimizer
+from data_lib import *
 
 from copy import copy
 import datetime
 import time
 np.set_printoptions(threshold=np.inf)
 
-
-#from misc.MC_weights import *
-
-
-def truncate_file(file, start_iter):
-
-	file.close()
-
-	with open(file.name) as f:	
-		lines=f.readlines()
-		keep_lines=[]
-		for i,line in enumerate(lines):
-			if i < start_iter:
-				keep_lines.append(line)
-
-	with open(file.name, 'wb') as f:
-		for line in keep_lines:
-			f.write(line.encode('utf8'))
-
-	return open(file.name, 'ab+')
-
-
-
-
-def read_str(tuple_str):
-
-	shape_tuple=()
-
-	tuple_str=tuple_str.replace('(','')
-	tuple_str=tuple_str.replace(')','')
-	tuple_str=tuple_str.split(',')
-
-
-	for NN_str in tuple_str:
-		shape_tuple+=(NN_str,)
-
-	return shape_tuple, len(tuple_str)
-
-
-def load_opt_data(opt,file_name,start_iter):
-
-	with open(file_name) as file:
-		for i in range(start_iter):
-			opt_data_str = file.readline().rstrip().split(' : ')
-
-	print(start_iter, opt_data_str)	
-
-	opt.iteration=int(opt_data_str[0])+1
-	opt.time=np.float64(opt_data_str[7])
-
-	if opt.cost=='SR':
-		opt.NG.iteration=int(opt_data_str[0])+1
-		opt.NG.delta=np.float64(opt_data_str[1])
-		opt.NG.tol=np.float64(opt_data_str[2])
-
-		opt.NG.SNR_weight_sum_exact=np.float64(opt_data_str[3])
-		opt.NG.SNR_weight_sum_gauss=np.float64(opt_data_str[4])
-
-
-	if opt.opt=='RK':
-		opt.Runge_Kutta.counter=int(opt_data_str[5])
-		opt.Runge_Kutta.step_size=np.float64(opt_data_str[6])
-		opt.Runge_Kutta.time=np.float64(opt_data_str[7])
-		opt.Runge_Kutta.iteration=int(opt_data_str[0])+1
-	else:
-		opt.step_size=np.float64(opt_data_str[6])
 
 
 class VMC(object):
@@ -188,6 +123,9 @@ class VMC(object):
 
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
 		
+		if self.NN_dtype!='real' and self.NN_dtype!='cpx':
+			raise ValueError('Invalid input for variable NN_dtype; valid values are real and cpx.')
+
 
 		# number of processors must fix MC sampling ratio
 		if self.mode=='exact':
@@ -300,40 +238,64 @@ class VMC(object):
 			m_l=self.N_MC_chains*self.comm.Get_rank()
 			m_r=self.N_MC_chains*(self.comm.Get_rank()+1)
 
-			self.DNN_log._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
+			if self.NN_dtype=='real':
+				self.DNN_log._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
+			else:
+				self.DNN._init_MC_data(s0_vec=self.MC_tool.s0_g[m_l:m_r], sf_vec=self.MC_tool.sf_g[m_l:m_r], )
 
 
 
 		### load DNN params
 		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter)
 
-		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-			self.DNN_log.params, self.DNN_phase.params, \
-			self.DNN_log.apply_fun_args, self.DNN_phase.apply_fun_args, \
-			self.MC_tool.log_psi_shift = pickle.load(handle)
+		if self.NN_dtype=='real':
+
+			with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+				self.DNN_log.params, self.DNN_phase.params, \
+				self.DNN_log.apply_fun_args, self.DNN_phase.apply_fun_args, \
+				self.MC_tool.log_psi_shift = pickle.load(handle)
+				
+			self.opt_log.init_opt_state(self.DNN_log.params)
+			self.opt_phase.init_opt_state(self.DNN_phase.params)
+
+
+			file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter-1) 
+			with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+				DNN_params_log_old, DNN_params_phase_old, _ ,_ , _ = pickle.load(handle)
+
 			
-		self.opt_log.init_opt_state(self.DNN_log.params)
-		self.opt_phase.init_opt_state(self.DNN_phase.params)
+			if self.opt_log.cost=='SR':
+				self.opt_log.NG.nat_grad_guess[:]  = (self.DNN_log.NN_Tree.ravel(DNN_params_log_old)-self.DNN_log.NN_Tree.ravel(self.DNN_log.params) )/self.opt_log.step_size
+
+			if self.opt_phase.cost=='SR':
+				self.opt_phase.NG.nat_grad_guess[:]= (self.DNN_phase.NN_Tree.ravel(DNN_params_phase_old)-self.DNN_phase.NN_Tree.ravel(self.DNN_phase.params) )/self.opt_phase.step_size
 
 
-		file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter-1) 
-		with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
-			DNN_params_log_old, DNN_params_phase_old, _ ,_ , _ = pickle.load(handle)
+			### load opt data
+			load_opt_data(self.opt_log, self.file_opt_data_log.name, start_iter)
+			load_opt_data(self.opt_phase, self.file_opt_data_phase.name, start_iter)
 
+		else:
+
+			with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+				self.DNN.params, _, \
+				self.DNN.apply_fun_args, _, \
+				self.MC_tool.log_psi_shift = pickle.load(handle)
+				
+			self.opt.init_opt_state(self.DNN.params)
 		
-		if self.opt_log.cost=='SR':
-			self.opt_log.NG.nat_grad_guess[:]  = (self.DNN_log.NN_Tree.ravel(DNN_params_log_old)-self.DNN_log.NN_Tree.ravel(self.DNN_log.params) )/self.opt_log.step_size
+			file_name='/NN_params/NNparams'+'--iter_{0:05d}'.format(start_iter-1) 
+			with open(self.data_dir+file_name+'.pkl', 'rb') as handle:
+				DNN_params_old, _, _ ,_ , _ = pickle.load(handle)
 
-		if self.opt_phase.cost=='SR':
-			self.opt_phase.NG.nat_grad_guess[:]= (self.DNN_phase.NN_Tree.ravel(DNN_params_phase_old)-self.DNN_phase.NN_Tree.ravel(self.DNN_phase.params) )/self.opt_phase.step_size
+			
+			if self.opt.cost=='SR':
+				self.opt.NG.nat_grad_guess[:]  = (self.DNN.NN_Tree.ravel(DNN_params_old)-self.DNN.NN_Tree.ravel(self.DNN.params) )/self.opt.step_size
 
 
-
-
-		### load opt data
-		load_opt_data(self.opt_log, self.file_opt_data_log.name, start_iter)
-		load_opt_data(self.opt_phase, self.file_opt_data_phase.name, start_iter)
-		
+			### load opt data
+			load_opt_data(self.opt, self.file_opt_data.name, start_iter)
+			
 
 		### load energy
 
@@ -344,8 +306,6 @@ class VMC(object):
 		energy_data_str=energy_data_str.decode('utf8').rstrip().split(' : ')				
 
 		it_E, Eloc_mean_g_real , Eloc_mean_g_imag, Eloc_std_g, E_MC_std_g = energy_data_str
-
-
 		self.prev_it_data[0], self.prev_it_data[1], self.prev_it_data[2]=np.float64(Eloc_mean_g_real), np.float(Eloc_mean_g_imag), np.float64(E_MC_std_g)
 			
 
@@ -356,32 +316,22 @@ class VMC(object):
 
 			if repeat:
 				start_iter+=1
+		
+			for file in self.all_data_files:
+				truncate_file(file, start_iter)
 
-			self.file_MC_data=truncate_file(self.file_MC_data, start_iter)
-			self.file_opt_data_log=truncate_file(self.file_opt_data_log, start_iter)
-			self.file_opt_data_phase=truncate_file(self.file_opt_data_phase, start_iter)
-			# clean rest of files
-			self.file_energy = truncate_file(self.file_energy, start_iter)
-			self.file_loss_log=truncate_file(self.file_loss_log, start_iter)
-			self.file_loss_phase=truncate_file(self.file_loss_phase, start_iter)
-			self.file_phase_hist=truncate_file(self.file_phase_hist, start_iter)
-			#
-			self.file_S_eigvals_log=truncate_file(self.file_S_eigvals_log, start_iter)
-			self.file_S_eigvals_phase=truncate_file(self.file_S_eigvals_phase, start_iter)
-			self.file_VF_overlap_log=truncate_file(self.file_VF_overlap_log, start_iter)
-			self.file_VF_overlap_phase=truncate_file(self.file_VF_overlap_phase, start_iter)
-
-			self.file_SNR_exact_log=truncate_file(self.file_SNR_exact_log, start_iter)
-			self.file_SNR_gauss_log=truncate_file(self.file_SNR_gauss_log, start_iter)
-			self.file_SNR_exact_phase=truncate_file(self.file_SNR_exact_phase, start_iter)
-			self.file_SNR_gauss_phase=truncate_file(self.file_SNR_gauss_phase, start_iter)
-
+			self._create_open_data_files()
+		
 		self.comm.Barrier()
 
 		#####
-		assert(int(it_MC)+1==self.opt_log.iteration)
-		assert(int(it_MC)+1==self.opt_phase.iteration)
-		assert(int(it_MC)==int(it_E))
+		if self.mode=='MC':
+			if self.NN_dtype=='real':
+				assert(int(it_MC)+1==self.opt_log.iteration)
+				assert(int(it_MC)+1==self.opt_phase.iteration)
+			else:
+				assert(int(it_MC)+1==self.opt.iteration)
+			assert(int(it_MC)==int(it_E))
 
 
 
@@ -389,26 +339,20 @@ class VMC(object):
 	def _create_NN(self, load_data=False):
 
 		NN_shape_str, M = read_str(self.NN_shape_str)
-
 		self.shapes=tuple({} for _ in range(M) )
 
 		
 		if self.NN_type == 'DNN':
-
 			neurons=tuple([] for _ in range(M))
-	
 			for j in range(M):
 				for neuron in NN_shape_str[j].split('--'):
 					neurons[j].append(int(neuron))
 
 				assert(neurons[j][0]==self.L**2)	
 
-
 			for j in range(M):
 				for i in range(len(neurons[j])-1):
 					self.shapes[j]['layer_{0:d}'.format(i+1)]=[neurons[j][i],neurons[j][i+1]]
-
-	
 
 		elif self.NN_type == 'CNN':
 
@@ -421,7 +365,6 @@ class VMC(object):
 					filters[j].append(tuple(np.array(layer_filter.split('x'),dtype=int)))
 					out_chans[j].append(int(output_channel))
 
-
 			for j in range(M):
 				for i in range(len(filters[j])):
 
@@ -429,40 +372,60 @@ class VMC(object):
 
 
 		### create Neural network
-		self.DNN_log=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
-		self.DNN_phase=Phase_Net(self.comm, self.shapes[1], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
+		if self.NN_dtype=='real':
+			self.DNN_log=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
+			self.DNN_phase=Phase_Net(self.comm, self.shapes[1], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
+			self.DNN=None
+			self.N_symm = self.DNN_log.N_symm
+		elif self.NN_dtype=='cpx':
+			self.DNN=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
+			self.DNN_log, self.DNN_phase = None, None
+			self.N_symm = self.DNN.N_symm
 
-		#print(self.DNN_phase.params[0][0][0,...])
-		#print(self.DNN_phase.params[0][0][:,0])
-		#exit()
-
-		self.N_symm = np.max([self.DNN_log.N_symm,self.DNN_phase.N_symm])
-
+		self.N_features=self.N_symm * self.L**2
+		
 
 	def _create_optimizer(self):
 
-		# log net
-		self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.DNN_log.NN_Tree, label='LOG',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
-		self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_log.N_varl_params, self.n_iter)
-		self.opt_log.define_grad_func(self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
-		self.opt_log.init_opt_state(self.DNN_log.params)
+		if self.NN_dtype=='real':
+
+			# log net
+			self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.NN_dtype, self.DNN_log.NN_Tree, label='LOG',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
+			self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_log.N_varl_params, self.n_iter)
+			self.opt_log.define_grad_func(NN_evaluate=self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
+			self.opt_log.init_opt_state(self.DNN_log.params)
+			
+			# phase net
+			self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.NN_dtype, self.DNN_phase.NN_Tree, label='PHASE', step_size=self.step_sizes[1], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
+			self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_phase.N_varl_params, self.n_iter)
+			self.opt_phase.define_grad_func(NN_evaluate=self.DNN_phase.evaluate, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy_phase )
+			self.opt_phase.init_opt_state(self.DNN_phase.params)
+
+
+			# define variable to keep track of the DNN params update
+			if self.comm.Get_rank()==0:
+				self.params_log_update_lastiters=np.zeros((self.n_iter,self.DNN_log.N_varl_params),dtype=np.float64)
+				self.params_phase_update_lastiters=np.zeros((self.n_iter,self.DNN_phase.N_varl_params),dtype=np.float64)
+			else:
+				self.params_log_update_lastiters=np.array([[None],[None]])
+				self.params_phase_update_lastiters=np.array([[None],[None]])
 		
-		# phase net
-		self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.DNN_phase.NN_Tree, label='PHASE', step_size=self.step_sizes[1], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
-		self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_phase.N_varl_params, self.n_iter)
-		self.opt_phase.define_grad_func(self.DNN_phase.evaluate, TDVP_opt=self.TDVP_opt[1], reestimate_local_energy=self.E_estimator.reestimate_local_energy_phase )
-		self.opt_phase.init_opt_state(self.DNN_phase.params)
-		
 
 
-		# define variable to keep track of the DNN params update
-		if self.comm.Get_rank()==0:
-			self.params_log_update_lastiters=np.zeros((self.n_iter,self.DNN_log.N_varl_params),dtype=np.float64)
-			self.params_phase_update_lastiters=np.zeros((self.n_iter,self.DNN_phase.N_varl_params),dtype=np.float64)
-		else:
-			self.params_log_update_lastiters=np.array([[None],[None]])
-			self.params_phase_update_lastiters=np.array([[None],[None]])
+		elif self.NN_dtype=='cpx':
 
+			self.opt = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.NN_dtype, self.DNN.NN_Tree, label='CPX',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
+			self.opt.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params, self.n_iter)
+			self.opt.define_grad_func(NN_evaluate_log=self.DNN.evaluate_log, NN_evaluate_phase=self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
+			self.opt.init_opt_state(self.DNN.params)
+
+
+			# define variable to keep track of the DNN params update
+			if self.comm.Get_rank()==0:
+				self.params_update_lastiters=np.zeros((self.n_iter,self.DNN.N_varl_params),dtype=np.float64)
+			else:
+				self.params_update_lastiters=np.array([[None],[None]])
+				
 
 		self.r2=np.zeros(2)
 
@@ -470,10 +433,14 @@ class VMC(object):
 
 	def _create_energy_estimator(self):
 		### Energy estimator
-		self.E_estimator=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+		if self.NN_dtype=='real':
+			self.E_estimator    =Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+			self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+		elif self.NN_dtype=='cpx':
+			self.E_estimator    =Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+			self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+		
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
-
-		self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
 		self.E_estimator_log.init_global_params(self.N_MC_points,self.n_iter)
 
 		
@@ -493,8 +460,6 @@ class VMC(object):
 		self.MC_tool_log=MC_sampler(self.comm,self.N_MC_chains)
 		self.MC_tool_log.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.N_symm,self.NN_type,self.E_estimator_log.basis_type,self.E_estimator_log.MPI_basis_dtype,self.n_iter)
 		
-		
-		
 
 
 	def _create_file_name(self,model_params,extra_label=''):
@@ -504,7 +469,60 @@ class VMC(object):
 		file_name=file_name[:-1]
 		self.file_name=file_name+extra_label
 
+	def _create_open_data_files(self):
 
+		self.all_data_files=[]
+
+		self.file_energy= create_open_file(self.savefile_dir+'energy'+self.common_str,self.load_data)
+		self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram'+self.common_str,self.load_data)
+		self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+self.common_str,self.load_data)
+		
+		self.all_data_files.extend([self.file_energy,self.file_phase_hist,self.file_MC_data,])
+
+
+		if self.NN_dtype=='real':
+
+			self.file_loss_log= create_open_file(self.savefile_dir+'loss_log'+self.common_str,self.load_data)
+			self.file_loss_phase= create_open_file(self.savefile_dir+'loss_phase'+self.common_str,self.load_data)
+
+			self.file_opt_data_log= create_open_file(self.savefile_dir+'opt_data_log'+self.common_str,self.load_data)
+			self.file_opt_data_phase= create_open_file(self.savefile_dir+'opt_data_phase'+self.common_str,self.load_data)
+
+			self.all_data_files.extend([self.file_loss_log,self.file_opt_data_log, 
+										self.file_loss_phase,self.file_opt_data_phase ])
+
+
+		
+			self.file_S_eigvals_log=create_open_file(self.savefile_dir+'eigvals_S_matrix_log'+self.common_str,self.load_data)
+			self.file_S_eigvals_phase=create_open_file(self.savefile_dir+'eigvals_S_matrix_phase'+self.common_str,self.load_data)
+			
+			self.file_VF_overlap_log=create_open_file(self.savefile_dir+'overlap_VF_log'+self.common_str,self.load_data)
+			self.file_VF_overlap_phase=create_open_file(self.savefile_dir+'overlap_VF_phase'+self.common_str,self.load_data)
+
+			self.file_SNR_exact_log=create_open_file(self.savefile_dir+'SNR_exact_log'+self.common_str,self.load_data)
+			self.file_SNR_exact_phase=create_open_file(self.savefile_dir+'SNR_exact_phase'+self.common_str,self.load_data)
+
+			self.file_SNR_gauss_log=create_open_file(self.savefile_dir+'SNR_gauss_log'+self.common_str,self.load_data)
+			self.file_SNR_gauss_phase=create_open_file(self.savefile_dir+'SNR_gauss_phase'+self.common_str,self.load_data)
+			
+			self.all_data_files.extend([self.file_S_eigvals_log,self.file_VF_overlap_log,self.file_SNR_exact_log,self.file_SNR_gauss_log, 
+										self.file_S_eigvals_phase,self.file_VF_overlap_phase,self.file_SNR_exact_phase,self.file_SNR_gauss_phase ])
+
+		elif self.NN_dtype=='cpx':
+
+			self.file_loss= create_open_file(self.savefile_dir+'loss'+self.common_str,self.load_data)
+			self.file_opt_data= create_open_file(self.savefile_dir+'opt_data'+self.common_str,self.load_data)
+
+			self.all_data_files.extend([self.file_loss,self.file_opt_data])
+
+			
+			self.file_S_eigvals=create_open_file(self.savefile_dir+'eigvals_S_matrix'+self.common_str,self.load_data)
+			self.file_VF_overlap=create_open_file(self.savefile_dir+'overlap_VF'+self.common_str,self.load_data)
+			self.file_SNR_exact=create_open_file(self.savefile_dir+'SNR_exact'+self.common_str,self.load_data)
+			self.file_SNR_gauss=create_open_file(self.savefile_dir+'SNR_gauss'+self.common_str,self.load_data)
+			
+			self.all_data_files.extend([self.file_S_eigvals,self.file_VF_overlap,self.file_SNR_exact,self.file_SNR_gauss,])
+		
 
 	def _create_logs(self):
 
@@ -545,32 +563,23 @@ class VMC(object):
 		# wait for process 0 to check if directories exist
 		self.comm.Barrier()
 
-
-		def create_open_file(file_name,binary=True):
-			# open log_file
-			if os.path.exists(file_name):
-				if self.load_data:
-				    append_write = 'a+' # append if already exists
-				else:
-					append_write = 'w' # make a new file if not
-			else:
-				append_write = 'w+' # append if already exists
-
-			if binary:
-				append_write+='b'
-
-			return open(file_name, append_write)
-
 		# logfile name
 		#logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		logfile_name= 'LOGFILE--MPIprss_{0:d}'.format(self.comm.Get_rank()) + '.txt'
 		if self.comm.Get_rank()==0:
-			self.logfile = create_open_file(logfile_dir+logfile_name,binary=False)
+			self.logfile = create_open_file(logfile_dir+logfile_name,self.load_data,binary=False)
 		else:
 			self.logfile = None
 		
 		self.E_estimator.logfile=self.logfile
 		self.E_estimator_log.logfile=self.logfile
+			
+		if self.NN_dtype=='real':
+			self.opt_log.logfile=self.logfile
+			self.opt_phase.logfile=self.logfile
+		elif self.NN_dtype=='cpx':
+			self.opt.logfile=self.logfile
+
 		
 		# redircet warnings to log
 		def customwarn(message, category, filename, lineno, file=None, line=None):
@@ -584,8 +593,12 @@ class VMC(object):
 			sys.stderr = self.logfile
 			#pass
 		
-		self.debug_file_SF_log       =self.savefile_dir_debug + 'debug-SF_data_log'            #+'--' + self.file_name
-		self.debug_file_SF_phase     =self.savefile_dir_debug + 'debug-SF_data_phase'
+		if self.NN_dtype=='real':
+			self.debug_file_SF_log       =self.savefile_dir_debug + 'debug-SF_data_log'            #+'--' + self.file_name
+			self.debug_file_SF_phase     =self.savefile_dir_debug + 'debug-SF_data_phase'
+		else:
+			self.debug_file_SF       =self.savefile_dir_debug + 'debug-SF_data' 
+		
 		self.debug_file_logpsi       =self.savefile_dir_debug + 'debug-logpsi_data'        #+'--' + self.file_name
 		self.debug_file_phasepsi     =self.savefile_dir_debug + 'debug-phasepsi_data'      #+'--' + self.file_name
 		self.debug_file_intkets      =self.savefile_dir_debug + 'debug-intkets_data'       #+'--' + self.file_name
@@ -596,36 +609,13 @@ class VMC(object):
 		if self.save_data:
 			# data files
 			#common_str = '--'  self.file_name + '.txt'
-			common_str = '.txt'
+			self.common_str = '.txt'
 
-			self.file_energy= create_open_file(self.savefile_dir+'energy'+common_str)
-			self.file_loss_log= create_open_file(self.savefile_dir+'loss_log'+common_str)
-			self.file_loss_phase= create_open_file(self.savefile_dir+'loss_phase'+common_str)
-			
-			self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram'+common_str)
-
-			self.file_S_eigvals_log=create_open_file(self.savefile_dir+'eigvals_S_matrix_log'+common_str)
-			self.file_S_eigvals_phase=create_open_file(self.savefile_dir+'eigvals_S_matrix_phase'+common_str)
-			
-			self.file_VF_overlap_log=create_open_file(self.savefile_dir+'overlap_VF_log'+common_str)
-			self.file_VF_overlap_phase=create_open_file(self.savefile_dir+'overlap_VF_phase'+common_str)
-
-			self.file_SNR_exact_log=create_open_file(self.savefile_dir+'SNR_exact_log'+common_str)
-			self.file_SNR_exact_phase=create_open_file(self.savefile_dir+'SNR_exact_phase'+common_str)
-
-			self.file_SNR_gauss_log=create_open_file(self.savefile_dir+'SNR_gauss_log'+common_str)
-			self.file_SNR_gauss_phase=create_open_file(self.savefile_dir+'SNR_gauss_phase'+common_str)
-			
-
-			self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+common_str)
-			self.file_opt_data_log= create_open_file(self.savefile_dir+'opt_data_log'+common_str)
-			self.file_opt_data_phase= create_open_file(self.savefile_dir+'opt_data_phase'+common_str)
-
+			self._create_open_data_files()	
 
 		### timing vector
 		self.timing_vec=np.zeros((self.N_iterations+1,),dtype=np.float64)
-		self.opt_log.logfile=self.logfile
-		self.opt_phase.logfile=self.logfile
+		
 		
 
 	def _compute_phase_hist(self, phases, weigths):
@@ -657,12 +647,20 @@ class VMC(object):
 			
 		# NN parameters
 		#file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + self.file_name
-		file_name='NNparams'+'--iter_{0:05d}'.format(iteration) 
-		with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
-			pickle.dump([self.DNN_log.params, self.DNN_phase.params, 
-						 self.DNN_log.apply_fun_args, self.DNN_phase.apply_fun_args,
-						 self.MC_tool.log_psi_shift,
-						 ], handle, protocol=pickle.HIGHEST_PROTOCOL)
+		file_name='NNparams'+'--iter_{0:05d}'.format(iteration)
+
+		if self.NN_dtype=='real': 
+			with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
+				pickle.dump([self.DNN_log.params, self.DNN_phase.params, 
+							 self.DNN_log.apply_fun_args, self.DNN_phase.apply_fun_args,
+							 self.MC_tool.log_psi_shift,
+							 ], handle, protocol=pickle.HIGHEST_PROTOCOL)
+		else:
+			with open(self.savefile_dir_NN+file_name+'.pkl', 'wb') as handle:
+				pickle.dump([self.DNN.params, None, 
+							 self.DNN.apply_fun_args, None,
+							 self.MC_tool.log_psi_shift,
+							 ], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 
@@ -671,29 +669,10 @@ class VMC(object):
 		# data
 		en_data="{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f}\n".format(iteration, self.Eloc_mean_g.real , self.Eloc_mean_g.imag, self.Eloc_std_g, self.E_MC_std_g)
 		self.file_energy.write(en_data.encode('utf8'))
-		#self.file_energy_std.write("{0:d} : {1:0.14f}\n".format(iteration, self.E_MC_std_g))
-		
-
-		######################################################
-
-
-		data_tuple=(iteration, r2[0], grads_max[0], )
-		if self.opt_log.cost=='SR':
-			data_tuple+= (self.opt_log.NG.dE, self.opt_log.NG.curvature, self.opt_log.NG.F_norm, self.opt_log.NG.S_norm, self.opt_log.NG.S_logcond, )
-		else:
-			data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
-		self.file_loss_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple).encode('utf8'))
-		
-
-		data_tuple=(iteration, r2[1], grads_max[1], )
-		if self.opt_phase.cost=='SR':
-			data_tuple+= (self.opt_phase.NG.dE, self.opt_phase.NG.curvature, self.opt_phase.NG.F_norm, self.opt_phase.NG.S_norm, self.opt_phase.NG.S_logcond, )
-		else:
-			data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
-		self.file_loss_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple).encode('utf8'))
 
 		
 		######################################################
+
 
 		if self.mode=='MC':
 
@@ -702,62 +681,51 @@ class VMC(object):
 			MC_data_3=' '.join(str(s) for s in self.MC_tool.s0_g)+" : "
 			MC_data_4=' '.join(str(s) for s in self.MC_tool.sf_g)
 			MC_str=MC_data_1  +  MC_data_2  +  MC_data_3 +  MC_data_4 + "\n" 
-			self.file_MC_data.write(MC_str.encode('utf8')) #		
-			
-
-		######################################################
-
-
-		if self.opt_log.cost=='SR':
-			data_cost=(self.opt_log.NG.delta, self.opt_log.NG.tol,self.opt_log.NG.SNR_weight_sum_exact,self.opt_log.NG.SNR_weight_sum_gauss,) 
-		else:
-			data_cost=(0.0,0.0,0.0,0.0)
-
-		if self.opt_log.opt=='RK':
-			data_opt=(self.opt_log.Runge_Kutta.counter, self.opt_log.Runge_Kutta.step_size, self.opt_log.Runge_Kutta.time, )
-		else:
-			data_opt=(self.opt_log.iteration,self.opt_log.step_size,self.opt_log.time,)
-
-		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_log.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple).encode('utf8'))
-
-
-		if self.opt_phase.cost=='SR':
-			data_cost=(self.opt_phase.NG.delta, self.opt_phase.NG.tol,self.opt_phase.NG.SNR_weight_sum_exact,self.opt_phase.NG.SNR_weight_sum_gauss) 
-		else:
-			data_cost=(0.0,0.0,0.0,0.0)
-
-		if self.opt_phase.opt=='RK':
-			data_opt=(self.opt_phase.Runge_Kutta.counter, self.opt_phase.Runge_Kutta.step_size, self.opt_phase.Runge_Kutta.time, )
-		else:
-			data_opt=(self.opt_phase.iteration,self.opt_phase.step_size,self.opt_phase.time,)
-
-		data_tuple=(iteration,)+data_cost+data_opt
-		self.file_opt_data_phase.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:d} : {6:0.14f} : {7:0.14f}\n".format(*data_tuple).encode('utf8'))
+			self.file_MC_data.write(MC_str.encode('utf8')) #	
 
 
 		######################################################
 
-		if self.opt_log.cost=='SR':
-			self.file_S_eigvals_log.write( ( "{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.S_eigvals) + '\n' ).encode('utf8'))
-			self.file_VF_overlap_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' ).encode('utf8'))
-			self.file_SNR_gauss_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_gauss) + '\n' ).encode('utf8'))
-			self.file_SNR_exact_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_exact) + '\n' ).encode('utf8'))
-			
-			
-
-		if self.opt_phase.cost=='SR':
-			self.file_S_eigvals_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.S_eigvals) + '\n' ).encode('utf8'))
-			self.file_VF_overlap_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' ).encode('utf8'))
-			self.file_SNR_exact_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_exact) + '\n' ).encode('utf8'))
-			self.file_SNR_gauss_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_gauss) + '\n' ).encode('utf8'))
-
-
-		######################################################
 
 		phase_str="{0:d} : ".format(iteration) + ''.join("{0:0.6f}, ".format(value) for value in phase_hist) + '\n' 
 		self.file_phase_hist.write(phase_str.encode('utf8'))
+	
 
+
+		######################################################
+
+		if self.NN_dtype=='real':
+			store_loss(iteration,r2[0], grads_max[0],self.file_loss_log,self.opt_log)
+			store_loss(iteration,r2[1], grads_max[1],self.file_loss_phase,self.opt_phase)
+
+			store_opt_data(iteration,self.file_opt_data_log,self.opt_log)
+			store_opt_data(iteration,self.file_opt_data_phase,self.opt_phase)
+
+			if self.opt_log.cost=='SR':
+				self.file_S_eigvals_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.S_eigvals) + '\n' ).encode('utf8'))
+				self.file_VF_overlap_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.VF_overlap) + '\n' ).encode('utf8'))
+				self.file_SNR_gauss_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_gauss) + '\n' ).encode('utf8'))
+				self.file_SNR_exact_log.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_log.NG.SNR_exact) + '\n' ).encode('utf8'))
+				
+			if self.opt_phase.cost=='SR':
+				self.file_S_eigvals_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.S_eigvals) + '\n' ).encode('utf8'))
+				self.file_VF_overlap_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.VF_overlap) + '\n' ).encode('utf8'))
+				self.file_SNR_exact_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_exact) + '\n' ).encode('utf8'))
+				self.file_SNR_gauss_phase.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt_phase.NG.SNR_gauss) + '\n' ).encode('utf8'))
+
+
+
+		else:
+			store_loss(iteration,r2[0], grads_max[0],self.file_loss,self.opt)
+			store_opt_data(iteration,self.file_opt_data,self.opt)
+
+			if self.opt.cost=='SR':
+				self.file_S_eigvals.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt.NG.S_eigvals) + '\n' ).encode('utf8'))
+				self.file_VF_overlap.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt.NG.VF_overlap) + '\n' ).encode('utf8'))
+				self.file_SNR_gauss.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt.NG.SNR_gauss) + '\n' ).encode('utf8'))
+				self.file_SNR_exact.write(("{0:d} : ".format(iteration) + ''.join("{0:0.15f}, ".format(value) for value in self.opt.NG.SNR_exact) + '\n' ).encode('utf8'))
+			
+	
 
 		######################################################
 
@@ -772,35 +740,27 @@ class VMC(object):
 
 		######################################################
 
-
 		# flush data files
-		self.file_energy.flush()
-		self.file_loss_log.flush()
-		self.file_loss_phase.flush()
-		self.file_MC_data.flush()
-		self.file_opt_data_log.flush()
-		self.file_opt_data_phase.flush()
-		self.file_phase_hist.flush()
-		self.file_S_eigvals_log.flush()
-		self.file_S_eigvals_phase.flush()
-		self.file_VF_overlap_log.flush()
-		self.file_VF_overlap_phase.flush()
-		self.file_SNR_exact_log.flush()
-		self.file_SNR_gauss_log.flush()
-		self.file_SNR_exact_phase.flush()
-		self.file_SNR_gauss_phase.flush()
-
+		flush_all_datafiles(self.all_data_files)
 
 
 	def debug_helper(self,):
 
 		# record DNN params update
 		if self.comm.Get_rank()==0:
-			self.params_log_update_lastiters[:-1,...]=self.params_log_update_lastiters[1:,...]
-			self.params_log_update_lastiters[-1,...]*=0.0
+			
+			if self.NN_dtype=='real':
 
-			self.params_phase_update_lastiters[:-1,...]=self.params_phase_update_lastiters[1:,...]
-			self.params_phase_update_lastiters[-1,...]*=0.0
+				self.params_log_update_lastiters[:-1,...]=self.params_log_update_lastiters[1:,...]
+				self.params_log_update_lastiters[-1,...]*=0.0
+
+				self.params_phase_update_lastiters[:-1,...]=self.params_phase_update_lastiters[1:,...]
+				self.params_phase_update_lastiters[-1,...]*=0.0
+
+			else:
+
+				self.params_update_lastiters[:-1,...]=self.params_update_lastiters[1:,...]
+				self.params_update_lastiters[-1,...]*=0.0
 
 
 
@@ -809,57 +769,58 @@ class VMC(object):
 		# set default flag to False
 		exit_flag=False 
 
+		if self.NN_dtype=='real':
+			opt_flag=(not self.opt_log.is_finite ) or (not self.opt_phase.is_finite )
+		else:
+			opt_flag=(not self.opt.is_finite )
+
 		#
 		##### store data
 		# 
 		if self.comm.Get_rank()==0:
 	
 			# check for nans and infs
-			if run or (not self.opt_log.is_finite ) or (not self.opt_phase.is_finite ) or (not np.isfinite(self.Eloc_mean_g).all() ):
+			if run or opt_flag or (not np.isfinite(self.Eloc_mean_g).all() ):
 				
-				if self.opt_log.cost=='SR':
-					with open(self.debug_file_SF_log+'.pkl', 'wb') as handle:
 
-						pickle.dump([self.opt_log.NG.S_lastiters,   self.opt_log.NG.F_lastiters,   self.opt_log.NG.delta, ], 
+				if self.NN_dtype=='real':
+					store_debug_helper_data(self.debug_file_SF_log,self.opt_log)
+					store_debug_helper_data(self.debug_file_SF_phase,self.opt_phase)
+
+					with open(self.debug_file_params_update+'.pkl', 'wb') as handle:
+						pickle.dump([self.params_log_update_lastiters, self.params_phase_update_lastiters,], 
 										handle, protocol=pickle.HIGHEST_PROTOCOL
 									)
 
-				if self.opt_phase.cost=='SR':
-					with open(self.debug_file_SF_phase+'.pkl', 'wb') as handle:
+				else:
+					store_debug_helper_data(self.debug_file_SF,self.opt)
 
-						pickle.dump([self.opt_phase.NG.S_lastiters, self.opt_phase.NG.F_lastiters, self.opt_phase.NG.delta,], 
+					with open(self.debug_file_params_update+'.pkl', 'wb') as handle:
+						pickle.dump([self.params_update_lastiters, None,], 
 										handle, protocol=pickle.HIGHEST_PROTOCOL
 									)
 
+	
 				with open(self.debug_file_logpsi+'.pkl', 'wb') as handle:
-
 					pickle.dump([self.MC_tool.log_mod_kets_g, self.MC_tool.log_psi_shift_g], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
 				with open(self.debug_file_phasepsi+'.pkl', 'wb') as handle:
-
 					pickle.dump([self.MC_tool.phase_kets_g, ], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
 				with open(self.debug_file_intkets+'.pkl', 'wb') as handle:
-
 					pickle.dump([self.MC_tool.ints_ket_g, ], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
 				with open(self.debug_file_Eloc+'.pkl', 'wb') as handle:
-
 					pickle.dump([self.E_estimator.Eloc_real_g, self.E_estimator.Eloc_imag_g, ], 
 									handle, protocol=pickle.HIGHEST_PROTOCOL
 								)
 
-				with open(self.debug_file_params_update+'.pkl', 'wb') as handle:
-
-					pickle.dump([self.params_log_update_lastiters, self.params_phase_update_lastiters,], 
-									handle, protocol=pickle.HIGHEST_PROTOCOL
-								)
 
 				# set exit variable and bcast it to all processes
 				if not run: 
@@ -890,8 +851,13 @@ class VMC(object):
 			if self.comm.Get_rank()==0 and self.save_data:
 				self.check_point(iteration)
 
+
 			#### update DNN parameters
-			grads_max = self.update_NN_params(iteration)
+			if self.NN_dtype=='real':
+				grads_max = self.update_NN_params_real(iteration)
+			else:
+				grads_max = self.update_NN_params_cpx(iteration)
+
 
 			##### store simulation data
 			if self.mode=='exact':		
@@ -906,6 +872,11 @@ class VMC(object):
 			if self.comm.Get_rank()==0 and self.save_data:
 				#if not(self.load_data and (start_iter==iteration)):
 				self.save_sim_data(iteration,grads_max,self.r2,phase_hist)
+
+
+		# synch repeat_iteration data
+		self.prev_it_data[0], self.prev_it_data[1], self.prev_it_data[2]=self.Eloc_mean_g.real, self.Eloc_mean_g.imag, self.E_MC_std_g
+			
 
 
 	def repeat_iteration(self,iteration,Eloc_mean_g,E_MC_std_g, go_back_iters=0, load_data=True):
@@ -965,19 +936,17 @@ class VMC(object):
 			assert(self.N_MC_points==107) # 107 states in the symmetry reduced sector for L=4
 
 			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
-			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.DNN_log.N_features, NN_type=self.DNN_log.NN_type)
+			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
+			# required to train independent real nets with RK
 			self.MC_tool_log.ints_ket, self.index, self.inv_index, self.count=self.E_estimator_log.get_exact_kets()
-			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.DNN_log.N_features, NN_type=self.DNN_log.NN_type)
+			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
 
 		
 		iteration=start_iter
 		while iteration < start_iter+self.N_iterations:
-		#for iteration in range(start_iter,start_iter+self.N_iterations, 1): 
-
-
-			#self.comm.Barrier()
+	
 			ti=time.time()
 
 			# shift params_update
@@ -986,7 +955,6 @@ class VMC(object):
 			init_iter_str="\n\n\nITERATION {0:d}, PROCESS_RANK {1:d}:\n\n".format(iteration, self.comm.Get_rank())
 			if self.comm.Get_rank()==0:
 				print(init_iter_str)
-			#self.logfile.write(init_iter_str)
 
 
 			##### determine batchnorm mean and variance
@@ -1003,9 +971,7 @@ class VMC(object):
 				olap_str='overlap = {0:0.10f}.\n'.format(self.Eloc_params_dict_log['overlap'])
 				if self.comm.Get_rank()==0:
 					print(olap_str)
-				#self.logfile.write(olap_str)
-
-
+		
 			#exit()
 
 
@@ -1031,10 +997,6 @@ class VMC(object):
 				os.fsync(self.logfile.fileno())
 
 
-			# synch
-			self.prev_it_data[0], self.prev_it_data[1], self.prev_it_data[2]=self.Eloc_mean_g.real, self.Eloc_mean_g.imag, self.E_MC_std_g
-			
-
 			# run debug helper
 			self.run_debug_helper()
 			
@@ -1042,21 +1004,19 @@ class VMC(object):
 			iteration+=1
 			self.comm.Barrier()
 
-			#exit()
 
 		iteration-=1
 
-		
+
+		### store runtime data
+
 		prss_tot_time=time.time()-t_start
 		final_str='\n\n\n\nPROCESS_RANK {0:d}, TOTAL calculation time: {1:0.4f} secs.\n\n'.format(self.comm.Get_rank(),prss_tot_time)
 		print(final_str)
-		#self.logfile.write(final_str)
 		self.timing_vec[iteration+1-start_iter]=prss_tot_time
-
 
 		timing_matrix=np.zeros((self.comm.Get_size(),self.N_iterations+1),dtype=np.float64)
 		self.comm.Allgather(self.timing_vec, timing_matrix)
-
 
 		if self.comm.Get_rank()==0 and self.save_data:
 			timing_matrix_filename = '/simulation_time--start_iter_{0:d}'.format(start_iter) + '.txt'
@@ -1069,33 +1029,20 @@ class VMC(object):
 		if self.logfile is not None:
 			self.logfile.close()
 
-		self.file_energy.close()
-		self.file_loss_log.close()
-		self.file_loss_phase.close()
-		self.file_phase_hist.close()
-
-		self.file_S_eigvals_log.close()
-		self.file_S_eigvals_phase.close()
-		self.file_VF_overlap_log.close()
-		self.file_VF_overlap_phase.close()
-
-		self.file_SNR_exact_log.close()
-		self.file_SNR_gauss_log.close()
-		self.file_SNR_exact_phase.close()
-		self.file_SNR_gauss_phase.close()
+		close_all_datafiles(self.all_data_files)
 
 		self.comm.Barrier()
 
 
-		# store data from last 6 iterations
+		# store data from last n_step iterations
 		self.run_debug_helper(run=True,)
 
 	
-	def reestimate_local_energy_log(self, iteration, NN_params_log, batch, params_dict,):
+	def reestimate_local_energy_log(self, iteration, NN_params, batch, params_dict,):
 
 		max_attemps=10
 
-		self.DNN_log.params=NN_params_log
+		self.DNN_log.params=NN_params
 
 		repeat=True
 		counter=0
@@ -1103,12 +1050,18 @@ class VMC(object):
 
 			##### get spin configs #####
 			if self.mode=='exact':
-				self.MC_tool_log.exact(self.DNN_log, self.DNN_phase, )
+				if self.NN_dtype=='real':
+					self.MC_tool_log.exact(self.DNN_log, self.DNN_phase, )
+				else:
+					self.MC_tool_log.exact(self.DNN, None, )
 
 			elif self.mode=='MC':
 				ti=time.time()
 				# sample
-				acceptance_ratio_g = self.MC_tool_log.sample(self.DNN_log, self.DNN_phase, )
+				if self.NN_dtype=='real':
+					acceptance_ratio_g = self.MC_tool_log.sample(self.DNN_log, self.DNN_phase, )
+				else:
+					acceptance_ratio_g = self.MC_tool_log.sample(self.DNN, None, )
 
 				MC_str="MC with acceptance ratio={0:.4f} took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
 				#self.logfile.write(MC_str)
@@ -1117,7 +1070,11 @@ class VMC(object):
 				
 
 			##### compute local energies #####
-			Eloc = self.E_estimator_log.compute_local_energy(NN_params_log, self.DNN_phase.params, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+			if self.NN_dtype=='real':
+				Eloc = self.E_estimator_log.compute_local_energy(NN_params, self.DNN_phase.params, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+			else:
+				Eloc = self.E_estimator_log.compute_local_energy(NN_params, None, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+			
 
 			if self.mode=='exact':
 				mod_kets=np.exp(self.MC_tool_log.log_mod_kets)
@@ -1152,11 +1109,13 @@ class VMC(object):
 
 		print("accepted log-net sample after {0:d} attempts.".format(counter))
 
-
-		params_dict['E_diff']=E_diff_real
+		if self.NN_dtype=='real':
+			params_dict['E_diff']=E_diff_real
+		else:
+			params_dict['E_diff']=E_diff_real+1j*E_diff_imag
 		params_dict['Eloc_mean']=Eloc_mean_g
 		params_dict['Eloc_var']=Eloc_var_g
-		params_dict['Eloc_mean_part']=Eloc_mean_g.real 
+		#params_dict['Eloc_mean_part']=Eloc_mean_g.real 
 		
 			
 		##### total batch
@@ -1169,13 +1128,19 @@ class VMC(object):
 
 		##### get spin configs #####
 		if self.mode=='exact':
-			self.MC_tool.exact(self.DNN_log, self.DNN_phase, )
+			if self.NN_dtype=='real':
+				self.MC_tool.exact(self.DNN_log, self.DNN_phase, )
+			else:
+				self.MC_tool.exact(self.DNN, None, )
 			
 		elif self.mode=='MC':
 			ti=time.time()
 			
 			# sample
-			acceptance_ratio_g = self.MC_tool.sample(self.DNN_log, self.DNN_phase, )
+			if self.NN_dtype=='real':
+				acceptance_ratio_g = self.MC_tool.sample(self.DNN_log, self.DNN_phase, )
+			else:
+				acceptance_ratio_g = self.MC_tool.sample(self.DNN, None, )
 			
 			MC_str="MC with acceptance ratio={0:.4f} took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
 			#self.logfile.write(MC_str)
@@ -1198,8 +1163,12 @@ class VMC(object):
 
 		##### compute local energies #####
 		ti=time.time()
-		self.E_estimator.compute_local_energy(self.DNN_log.params, self.DNN_phase.params, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
+		if self.NN_dtype=='real':
+			self.E_estimator.compute_local_energy(self.DNN_log.params, self.DNN_phase.params, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
+		else:
+			self.E_estimator.compute_local_energy(self.DNN.params, None, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
 		
+
 		Eloc_str="total local energy calculation took {0:.4f} secs.".format(time.time()-ti)
 		#self.logfile.write(Eloc_str)
 		if self.comm.Get_rank()==0:
@@ -1229,14 +1198,18 @@ class VMC(object):
 		Eloc_params_dict['Eloc_mean']=self.Eloc_mean_g
 		Eloc_params_dict['Eloc_var']=self.Eloc_var_g
 
-		self.Eloc_params_dict_log=Eloc_params_dict.copy()
-		self.Eloc_params_dict_phase=Eloc_params_dict.copy()
+		if self.NN_dtype=='real':
+			self.Eloc_params_dict_log=Eloc_params_dict.copy()
+			self.Eloc_params_dict_phase=Eloc_params_dict.copy()
 
-		self.Eloc_params_dict_log['E_diff']  =E_diff_real
-		self.Eloc_params_dict_phase['E_diff']=E_diff_imag
+			self.Eloc_params_dict_log['E_diff']  =E_diff_real
+			self.Eloc_params_dict_phase['E_diff']=E_diff_imag
 
-		self.Eloc_params_dict_log['Eloc_mean_part']  =self.Eloc_mean_g.real 
-		self.Eloc_params_dict_phase['Eloc_mean_part']=self.Eloc_mean_g.imag
+			#self.Eloc_params_dict_log['Eloc_mean_part']  =self.Eloc_mean_g.real 
+			#self.Eloc_params_dict_phase['Eloc_mean_part']=self.Eloc_mean_g.imag
+		else:
+			self.Eloc_params_dict_log=Eloc_params_dict.copy()
+			self.Eloc_params_dict_log['E_diff']=E_diff_real+1j*E_diff_imag
 		
 		##### total batch
 		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)
@@ -1253,7 +1226,7 @@ class VMC(object):
 		#return self.batch, self.Eloc_params_dict
 		
 
-	def update_NN_params(self,iteration):
+	def update_NN_params_real(self,iteration):
 
 		ti=time.time()
 
@@ -1306,6 +1279,40 @@ class VMC(object):
 			self.params_log_update_lastiters[-1,...]=self.DNN_log.params_update
 			self.params_phase_update_lastiters[-1,...]=self.DNN_phase.params_update
 
+
+		grad_str="\ntotal gradients/NG calculation took {0:.4f} secs.".format(time.time()-ti)
+		#self.logfile.write(grad_str)
+		if self.comm.Get_rank()==0:
+			print(grad_str)	
+		
+		return grads_max
+
+
+	def update_NN_params_cpx(self,iteration):
+
+		assert(self.grad_update_mode=='normal')
+
+		ti=time.time()
+
+		# compute gradients
+		params,   params_update  , self.r2[0] = self.opt.return_grad(iteration, self.DNN.params, self.batch, self.Eloc_params_dict_log, )
+			
+		# update params
+		self.DNN.params,   self.DNN.params_update[:]   = params  , params_update
+
+		##### compute max gradients
+		grads_max=[np.max(np.abs(self.DNN.params_update)),0.0,]
+		
+		
+		mssg="r2 test: {0:0.14f}.".format(self.r2[0]-1.0)
+		if self.comm.Get_rank()==0:
+			print(mssg)
+		
+		# record gradients
+
+		if self.comm.Get_rank()==0:
+			self.params_update_lastiters[-1,...]=self.DNN.params_update
+			
 
 		grad_str="\ntotal gradients/NG calculation took {0:.4f} secs.".format(time.time()-ti)
 		#self.logfile.write(grad_str)

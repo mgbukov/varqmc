@@ -33,7 +33,7 @@ def create_params_file(params):
 	sys_data = comm.bcast(sys_data, root=0)
 
 
-	sys_time=sys_data + read_str(params['opt'])+ '-' + read_str(params['cost']) + '-L_{0:d}-{1:s}'.format(params['L'],params['mode'])
+	sys_time=sys_data + params['NN_type']+ params['NN_dtype'] + '-'+ read_str(params['opt'])+ '-' + read_str(params['cost']) + '-L_{0:d}-{1:s}'.format(params['L'],params['mode'])
 
 
 	data_dir=os.getcwd()+'/data/'+sys_time

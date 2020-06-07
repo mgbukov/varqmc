@@ -17,11 +17,13 @@ import time
 
 class optimizer(object):
 
-	def __init__(self, comm, opt, cost, mode, NN_Tree, label='', step_size=1.0, adaptive_step=True, adaptive_SR_cutoff=False ):
+	def __init__(self, comm, opt, cost, mode, NN_dtype, NN_Tree, label='', step_size=1.0, adaptive_step=True, adaptive_SR_cutoff=False ):
 
 		self.label=label
 
 		self.comm=comm
+
+		self.NN_dtype=NN_dtype
 		
 		self.opt=opt
 		self.cost=cost
@@ -92,27 +94,45 @@ class optimizer(object):
 			
 
 	
-	def define_grad_func(self, NN_evaluate, start_iter=0, TDVP_opt=None, reestimate_local_energy=None ):
+	def define_grad_func(self, NN_evaluate=None, NN_evaluate_log=None, NN_evaluate_phase=None, start_iter=0, TDVP_opt=None, reestimate_local_energy=None ):
 
 		if self.cost=='energy':
 
 			if self.mode=='MC':
 
-				#@partial(jit, static_argnums=(2,))
-				@jit
-				def loss(NN_params,batch,params_dict):
-					prediction = NN_evaluate(NN_params,batch,)
-					energy = 2.0*jnp.sum(prediction*params_dict['E_diff'])/params_dict['N_MC_points']
-					return energy
+				if self.NN_dtype=='real':
+					#@partial(jit, static_argnums=(2,))
+					@jit
+					def loss(NN_params,batch,params_dict):
+						prediction = NN_evaluate(NN_params,batch,)
+						energy = 2.0*jnp.sum(prediction*params_dict['E_diff'])/params_dict['N_MC_points']
+						return energy
+
+				elif self.NN_dtype=='cpx':
+
+					@jit
+					def loss(NN_params,batch,params_dict):
+						log_psi, phase_psi = NN_evaluate(NN_params,batch,)
+						energy = 2.0*jnp.sum(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
+						return energy
 
 			elif self.mode=='exact':	
 
-				#@partial(jit, static_argnums=(2,))
-				@jit
-				def loss(NN_params,batch,params_dict):
-					prediction = NN_evaluate(NN_params,batch,)
-					energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(prediction*params_dict['E_diff']) )
-					return energy			
+				if self.NN_dtype=='real':
+					#@partial(jit, static_argnums=(2,))
+					@jit
+					def loss(NN_params,batch,params_dict):
+						prediction = NN_evaluate(NN_params,batch,)
+						energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(prediction*params_dict['E_diff']) )
+						return energy			
+
+				elif self.NN_dtype=='cpx':
+
+					@jit
+					def loss(NN_params,batch,params_dict):
+						log_psi, phase_psi = NN_evaluate(NN_params,batch,)
+						energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(log_psi*params_dict['E_diff'].real+phase_psi*params_dict['E_diff'].imag) )
+						return energy
 
 			#grad_func=jit(grad(loss), static_argnums=(2,))
 			grad_func=jit(grad(loss) )
@@ -131,24 +151,50 @@ class optimizer(object):
 
 		elif self.cost=='SR':
 
-			@jit
-			def loss_log(NN_params,batch,):
-				prediction = NN_evaluate(NN_params,batch,)	
-				return jnp.sum(prediction)
+			if self.NN_dtype=='real':
 
-			@jit
-			def grad_log(NN_params,batch,):
+				@jit
+				def loss_log(NN_params,batch,):
+					prediction = NN_evaluate(NN_params,batch,)	
+					return jnp.sum(prediction)
 
-				dlog_s   = vmap(partial(jit(grad(loss_log)),   NN_params))(batch, )
-				
-				dlog = []
-				for dlog_W in self.NN_Tree.flatten(dlog_s):
-					dlog.append( dlog_W.reshape(self.N_batch,-1) )
+				@jit
+				def grad_log(NN_params,batch,):
 
-				return jnp.concatenate(dlog, axis=1)
+					dlog_s   = vmap(partial(jit(grad(loss_log)),   NN_params))(batch, )
+					
+					dlog = []
+					for dlog_W in self.NN_Tree.flatten(dlog_s):
+						dlog.append( dlog_W.reshape(self.N_batch,-1) )
+
+					return jnp.concatenate(dlog, axis=1)
+
+			elif self.NN_dtype=='cpx':
+
+				@jit
+				def loss_log(NN_params,batch,):
+					log_psi = NN_evaluate_log(NN_params,batch,)	
+					return jnp.sum(log_psi)
+
+				@jit
+				def loss_phase(NN_params,batch,):
+					phase_psi = NN_evaluate_phase(NN_params,batch,)	
+					return jnp.sum(phase_psi)
+
+				@jit
+				def grad_log(NN_params,batch,):
+
+					dlog_s     = vmap(partial(jit(grad(loss_log)),   NN_params))(batch, )
+					dphase_s   = vmap(partial(jit(grad(loss_phase)), NN_params))(batch, )
+					
+					dlog = []
+					for dlog_W, dphase_W in zip(self.NN_Tree.flatten(dlog_s), self.NN_Tree.flatten(dphase_s)):
+						dlog.append( (dlog_W + 1j*dphase_W).reshape(self.N_batch,-1) )
+
+					return jnp.concatenate(dlog, axis=1)
 
 
-			self.NG=natural_gradient(self.comm, grad_log, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
+			self.NG=natural_gradient(self.comm, grad_log, self.NN_dtype, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 			self.NG.init_global_variables(self.N_MC_points,self.N_batch,self.N_varl_params,self.n_iter,)
 			
 

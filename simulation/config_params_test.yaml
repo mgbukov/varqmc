@@ -2,21 +2,22 @@ J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 4
 
-N_iterations: 4 # 500
+N_iterations: 400 # 500
 
-NN_dtype: real-decoupled # cpx #
+#NN_dtype: real # 
+NN_dtype: cpx #
 
 #NN_shape_str: (8x8-8--3x3-6--2x2-4--1x1-4--1x1-2,8x8-16--1x1-12--1x1-8)  
 #NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8)  
 # NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
 # NN_type: CNN 
 
-NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12)  
-NN_type: CNN 
+# NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12)  
+# NN_type: CNN 
 
 #NN_shape_str: (36--12--8,36--24--12)
-# NN_shape_str: (16--12--8,16--24--12) # 
-# NN_type: DNN  
+NN_shape_str: (16--12--8,16--24--12) # 
+NN_type: DNN  
 
 N_MC_chains: 1
 MC_thermal: true
