@@ -397,7 +397,10 @@ cdef class Log_Net:
             scale=0.8
 
             # define CNN
-            NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)   
+            if self.NN_dtype=='real':
+                NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
+            elif self.NN_dtype=='cpx':   
+                NN_arch = NN_cpx_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
 
         else:
             raise ValueError("unsupported string for variable for NN_type.") 

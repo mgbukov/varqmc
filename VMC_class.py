@@ -416,7 +416,7 @@ class VMC(object):
 
 			self.opt = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.NN_dtype, self.DNN.NN_Tree, label='CPX',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 			self.opt.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params, self.n_iter)
-			self.opt.define_grad_func(NN_evaluate_log=self.DNN.evaluate_log, NN_evaluate_phase=self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
+			self.opt.define_grad_func(NN_evaluate=self.DNN.evaluate, NN_evaluate_log=self.DNN.evaluate_log, NN_evaluate_phase=self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
 			self.opt.init_opt_state(self.DNN.params)
 
 
@@ -1042,7 +1042,10 @@ class VMC(object):
 
 		max_attemps=10
 
-		self.DNN_log.params=NN_params
+		if self.NN_dtype=='real':
+			self.DNN_log.params=NN_params
+		else:
+			self.DNN.params=NN_params
 
 		repeat=True
 		counter=0
