@@ -220,10 +220,6 @@ class Energy_estimator():
 		# y[index]=1.0
 		# print(self.H.expt_value(y))
 
-		# print(ref_states[j])
-		# print(basis.int_to_state(ref_states[j]))
-
-
 		# H_symm=hamiltonian(self.static_off_diag+self.static_diag, [], basis=basis_symm,dtype=np.float64)
 		E,V = self.H.eigsh(k=2,which='BE')
 		self.psi_GS_exact=V[:,0]

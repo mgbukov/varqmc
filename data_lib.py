@@ -8,7 +8,7 @@ def create_open_file(file_name,load_data,binary=True):
 	# open log_file
 	if os.path.exists(file_name):
 		if load_data:
-		    append_write = 'a+' # append if already exists
+			append_write = 'a+' # append if already exists
 		else:
 			append_write = 'w' # make a new file if not
 	else:
@@ -100,10 +100,10 @@ def load_opt_data(opt,file_name,start_iter):
 def store_loss(iteration,r2,grads_max,file_loss,opt):
 	data_tuple=(iteration, r2, grads_max, )
 	if opt.cost=='SR':
-		data_tuple+= (opt.NG.dE, opt.NG.curvature, opt.NG.F_norm, opt.NG.S_norm, opt.NG.S_logcond, )
+		data_tuple+= (opt.NG.dE, opt.NG.curvature, opt.NG.F_norm, opt.NG.S_norm, opt.NG.S_logcond, opt.NG.Flog_norm, opt.NG.Fphase_norm, )
 	else:
 		data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
-	file_loss.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f}\n".format(*data_tuple).encode('utf8'))
+	file_loss.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f} : {8:0.10f} : {9:0.10f}\n".format(*data_tuple).encode('utf8'))
 	
 
 def store_opt_data(iteration,file_opt_data,opt):

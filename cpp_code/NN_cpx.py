@@ -16,7 +16,15 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 	if 'DNN' in net_str:
 
 		if n_layers==1:
-			pass
+			
+			NN_archs['DNN_1']= {
+
+								'layer_1': GeneralDenseComplex(1, shapes['layer_1'][1], input_shape[-1], ignore_b=True, init_value_W=scale), 
+								'nonlin_1': elementwise(logcosh_cpx),
+								'symm': elementwise(symmetric_pool_cpx, reduce_shape=reduce_shape, output_shape=output_shape, ),
+							#	'reg': RegularizationComplex(a=8.0),
+
+								}
 
 		elif n_layers==2:
 			
@@ -43,7 +51,14 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 		dim_nums=('NCHW', 'OIHW', 'NCHW') # default CNN
 
 		if n_layers==1:
-			pass
+
+			NN_archs['CNN_1']= {
+
+										'layer_1': GeneralConvPeriodicComplex(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
+										'nonlin_1': elementwise(logcosh_cpx),
+										'symm': elementwise(symmetric_pool_cpx, reduce_shape=reduce_shape, output_shape=output_shape, ),
+										
+										}
 
 		elif n_layers==2:
 

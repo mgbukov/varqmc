@@ -1,6 +1,12 @@
 import sys,os,warnings
 from mpi4py import MPI
 
+# python variable scripts
+os.environ['LANG']='en_US.UTF-8'
+os.environ['LC_ALL']='en_US.UTF-8'
+os.environ['PYTHONIOENCODING']='UTF-8'
+
+# multi threading
 os.environ['KMP_DUPLICATE_LIB_OK']='True' # uncomment this line if omp error occurs on OSX for python 3
 os.environ['MKL_NUM_THREADS']='1' # set number of MKL threads to run in parallel
 os.environ['OPENBLAS_NUM_THREADS']='1'
@@ -53,6 +59,7 @@ import time
 np.set_printoptions(threshold=np.inf)
 
 
+from cpx_test_weights import *
 
 class VMC(object):
 
@@ -168,7 +175,7 @@ class VMC(object):
 
 
 		# auxiliary variable
-		self.prev_it_data=np.zeros(5) # Eloc_real, Eloc_imag, Eloc_std, S_norm, F_norm
+		self.prev_it_data=np.zeros(5) 
 
 		if self.save_data:
 			if data_dir is None:
@@ -320,7 +327,7 @@ class VMC(object):
 			for file in self.all_data_files:
 				truncate_file(file, start_iter)
 
-			self._create_open_data_files()
+			self._create_open_data_files(load_data=True)
 		
 		self.comm.Barrier()
 
@@ -377,10 +384,19 @@ class VMC(object):
 			self.DNN_phase=Phase_Net(self.comm, self.shapes[1], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 			self.DNN=None
 			self.N_symm = self.DNN_log.N_symm
-		elif self.NN_dtype=='cpx':
+		else:
 			self.DNN=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 			self.DNN_log, self.DNN_phase = None, None
 			self.N_symm = self.DNN.N_symm
+
+
+		#self.DNN.params=[(W_real, W_imag), (), ()]
+
+		# print(len(self.DNN.params))
+
+		# print(self.DNN.params[0][0] )
+		# print(self.DNN.params[0][1] )
+		# exit()
 
 		self.N_features=self.N_symm * self.L**2
 		
@@ -412,7 +428,7 @@ class VMC(object):
 		
 
 
-		elif self.NN_dtype=='cpx':
+		else:
 
 			self.opt = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.NN_dtype, self.DNN.NN_Tree, label='CPX',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 			self.opt.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params, self.n_iter)
@@ -436,7 +452,7 @@ class VMC(object):
 		if self.NN_dtype=='real':
 			self.E_estimator    =Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
 			self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-		elif self.NN_dtype=='cpx':
+		else:
 			self.E_estimator    =Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
 			self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
 		
@@ -469,57 +485,57 @@ class VMC(object):
 		file_name=file_name[:-1]
 		self.file_name=file_name+extra_label
 
-	def _create_open_data_files(self):
+	def _create_open_data_files(self, load_data):
 
 		self.all_data_files=[]
 
-		self.file_energy= create_open_file(self.savefile_dir+'energy'+self.common_str,self.load_data)
-		self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram'+self.common_str,self.load_data)
-		self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+self.common_str,self.load_data)
+		self.file_energy= create_open_file(self.savefile_dir+'energy'+self.common_str,load_data)
+		self.file_phase_hist=create_open_file(self.savefile_dir+'phases_histogram'+self.common_str,load_data)
+		self.file_MC_data= create_open_file(self.savefile_dir+'MC_data'+self.common_str,load_data)
 		
 		self.all_data_files.extend([self.file_energy,self.file_phase_hist,self.file_MC_data,])
 
 
 		if self.NN_dtype=='real':
 
-			self.file_loss_log= create_open_file(self.savefile_dir+'loss_log'+self.common_str,self.load_data)
-			self.file_loss_phase= create_open_file(self.savefile_dir+'loss_phase'+self.common_str,self.load_data)
+			self.file_loss_log= create_open_file(self.savefile_dir+'loss_log'+self.common_str,load_data)
+			self.file_loss_phase= create_open_file(self.savefile_dir+'loss_phase'+self.common_str,load_data)
 
-			self.file_opt_data_log= create_open_file(self.savefile_dir+'opt_data_log'+self.common_str,self.load_data)
-			self.file_opt_data_phase= create_open_file(self.savefile_dir+'opt_data_phase'+self.common_str,self.load_data)
+			self.file_opt_data_log= create_open_file(self.savefile_dir+'opt_data_log'+self.common_str,load_data)
+			self.file_opt_data_phase= create_open_file(self.savefile_dir+'opt_data_phase'+self.common_str,load_data)
 
 			self.all_data_files.extend([self.file_loss_log,self.file_opt_data_log, 
 										self.file_loss_phase,self.file_opt_data_phase ])
 
 
 		
-			self.file_S_eigvals_log=create_open_file(self.savefile_dir+'eigvals_S_matrix_log'+self.common_str,self.load_data)
-			self.file_S_eigvals_phase=create_open_file(self.savefile_dir+'eigvals_S_matrix_phase'+self.common_str,self.load_data)
+			self.file_S_eigvals_log=create_open_file(self.savefile_dir+'eigvals_S_matrix_log'+self.common_str,load_data)
+			self.file_S_eigvals_phase=create_open_file(self.savefile_dir+'eigvals_S_matrix_phase'+self.common_str,load_data)
 			
-			self.file_VF_overlap_log=create_open_file(self.savefile_dir+'overlap_VF_log'+self.common_str,self.load_data)
-			self.file_VF_overlap_phase=create_open_file(self.savefile_dir+'overlap_VF_phase'+self.common_str,self.load_data)
+			self.file_VF_overlap_log=create_open_file(self.savefile_dir+'overlap_VF_log'+self.common_str,load_data)
+			self.file_VF_overlap_phase=create_open_file(self.savefile_dir+'overlap_VF_phase'+self.common_str,load_data)
 
-			self.file_SNR_exact_log=create_open_file(self.savefile_dir+'SNR_exact_log'+self.common_str,self.load_data)
-			self.file_SNR_exact_phase=create_open_file(self.savefile_dir+'SNR_exact_phase'+self.common_str,self.load_data)
+			self.file_SNR_exact_log=create_open_file(self.savefile_dir+'SNR_exact_log'+self.common_str,load_data)
+			self.file_SNR_exact_phase=create_open_file(self.savefile_dir+'SNR_exact_phase'+self.common_str,load_data)
 
-			self.file_SNR_gauss_log=create_open_file(self.savefile_dir+'SNR_gauss_log'+self.common_str,self.load_data)
-			self.file_SNR_gauss_phase=create_open_file(self.savefile_dir+'SNR_gauss_phase'+self.common_str,self.load_data)
+			self.file_SNR_gauss_log=create_open_file(self.savefile_dir+'SNR_gauss_log'+self.common_str,load_data)
+			self.file_SNR_gauss_phase=create_open_file(self.savefile_dir+'SNR_gauss_phase'+self.common_str,load_data)
 			
 			self.all_data_files.extend([self.file_S_eigvals_log,self.file_VF_overlap_log,self.file_SNR_exact_log,self.file_SNR_gauss_log, 
 										self.file_S_eigvals_phase,self.file_VF_overlap_phase,self.file_SNR_exact_phase,self.file_SNR_gauss_phase ])
 
-		elif self.NN_dtype=='cpx':
+		else:
 
-			self.file_loss= create_open_file(self.savefile_dir+'loss'+self.common_str,self.load_data)
-			self.file_opt_data= create_open_file(self.savefile_dir+'opt_data'+self.common_str,self.load_data)
+			self.file_loss= create_open_file(self.savefile_dir+'loss'+self.common_str,load_data)
+			self.file_opt_data= create_open_file(self.savefile_dir+'opt_data'+self.common_str,load_data)
 
 			self.all_data_files.extend([self.file_loss,self.file_opt_data])
 
 			
-			self.file_S_eigvals=create_open_file(self.savefile_dir+'eigvals_S_matrix'+self.common_str,self.load_data)
-			self.file_VF_overlap=create_open_file(self.savefile_dir+'overlap_VF'+self.common_str,self.load_data)
-			self.file_SNR_exact=create_open_file(self.savefile_dir+'SNR_exact'+self.common_str,self.load_data)
-			self.file_SNR_gauss=create_open_file(self.savefile_dir+'SNR_gauss'+self.common_str,self.load_data)
+			self.file_S_eigvals=create_open_file(self.savefile_dir+'eigvals_S_matrix'+self.common_str,load_data)
+			self.file_VF_overlap=create_open_file(self.savefile_dir+'overlap_VF'+self.common_str,load_data)
+			self.file_SNR_exact=create_open_file(self.savefile_dir+'SNR_exact'+self.common_str,load_data)
+			self.file_SNR_gauss=create_open_file(self.savefile_dir+'SNR_gauss'+self.common_str,load_data)
 			
 			self.all_data_files.extend([self.file_S_eigvals,self.file_VF_overlap,self.file_SNR_exact,self.file_SNR_gauss,])
 		
@@ -563,6 +579,12 @@ class VMC(object):
 		# wait for process 0 to check if directories exist
 		self.comm.Barrier()
 
+		# redirect warnings to log
+		def customwarn(message, category, filename, lineno, file=None, line=None):
+			s='\n'+warnings.formatwarning(message, category, filename, lineno)+'\n'
+			self.logfile.write(s)
+		
+
 		# logfile name
 		#logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
 		logfile_name= 'LOGFILE--MPIprss_{0:d}'.format(self.comm.Get_rank()) + '.txt'
@@ -577,20 +599,17 @@ class VMC(object):
 		if self.NN_dtype=='real':
 			self.opt_log.logfile=self.logfile
 			self.opt_phase.logfile=self.logfile
-		elif self.NN_dtype=='cpx':
+		else:
 			self.opt.logfile=self.logfile
 
 		
-		# redircet warnings to log
-		def customwarn(message, category, filename, lineno, file=None, line=None):
-			s='\n'+warnings.formatwarning(message, category, filename, lineno)+'\n'
-			self.logfile.write(s)
-		warnings.showwarning = customwarn
 
 		# redirect std out
 		if not self.print:
+			warnings.showwarning = customwarn
 			sys.stdout = self.logfile
 			sys.stderr = self.logfile
+
 			#pass
 		
 		if self.NN_dtype=='real':
@@ -611,7 +630,7 @@ class VMC(object):
 			#common_str = '--'  self.file_name + '.txt'
 			self.common_str = '.txt'
 
-			self._create_open_data_files()	
+			self._create_open_data_files(self.load_data)	
 
 		### timing vector
 		self.timing_vec=np.zeros((self.N_iterations+1,),dtype=np.float64)
@@ -941,7 +960,6 @@ class VMC(object):
 			# required to train independent real nets with RK
 			self.MC_tool_log.ints_ket, self.index, self.inv_index, self.count=self.E_estimator_log.get_exact_kets()
 			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.N_features, NN_type=self.NN_type)
-
 
 		
 		iteration=start_iter
@@ -1321,6 +1339,9 @@ class VMC(object):
 		#self.logfile.write(grad_str)
 		if self.comm.Get_rank()==0:
 			print(grad_str)	
+
+
+		#exit()
 		
 		return grads_max
 

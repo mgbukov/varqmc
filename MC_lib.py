@@ -189,17 +189,16 @@ class MC_sampler():
 			self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
 
 
-		self.log_psi_shift=np.max(self.log_mod_kets[:])
+		self.log_psi_shift=0.0 # np.max(self.log_mod_kets[:])
 		self.log_mod_kets[:] -= self.log_psi_shift 
 
 		#exit()
 		
-		#print(self.phase_kets)
-		#print(self.log_mod_kets)
+		# print(self.phase_kets[-1])
+		# print(self.log_mod_kets[-1])
 		
 		#print('THERE', self.phase_kets[-16], self.phase_kets[-1])
 		#exit()
-		# print()
 		
 		# print(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)[-1,...])
 

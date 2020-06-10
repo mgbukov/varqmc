@@ -108,7 +108,7 @@ class optimizer(object):
 						energy = 2.0*jnp.sum(prediction*params_dict['E_diff'])/params_dict['N_MC_points']
 						return energy
 
-				elif self.NN_dtype=='cpx':
+				else:
 
 					@jit
 					def loss(NN_params,batch,params_dict):
@@ -126,7 +126,7 @@ class optimizer(object):
 						energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(prediction*params_dict['E_diff']) )
 						return energy			
 
-				elif self.NN_dtype=='cpx':
+				else:
 
 					@jit
 					def loss(NN_params,batch,params_dict):
@@ -169,7 +169,7 @@ class optimizer(object):
 
 					return jnp.concatenate(dlog, axis=1)
 
-			elif self.NN_dtype=='cpx':
+			else:
 
 				@jit
 				def loss_log(NN_params,batch,):
@@ -186,6 +186,24 @@ class optimizer(object):
 
 					dlog_s     = vmap(partial(jit(grad(loss_log)),   NN_params))(batch, )
 					dphase_s   = vmap(partial(jit(grad(loss_phase)), NN_params))(batch, )
+
+					# W_real=NN_params[0][0]
+					# W_imag=NN_params[0][1]
+					# W=W_real+1j*W_imag
+
+					# s=batch[-1,...]
+
+					# G=s[:,0].dot(np.tanh(s.dot(W[:,0]))) #, axis=0)
+
+					# print(G)
+
+					
+					# print( self.NN_Tree.flatten(dlog_s)[0][-1][0][0] +1j* self.NN_Tree.flatten(dphase_s)[0][-1][0][0] )
+
+					
+					# print(s.shape, W.shape, G.shape)
+					
+					# exit()
 					
 					dlog = []
 					for dlog_W, dphase_W in zip(self.NN_Tree.flatten(dlog_s), self.NN_Tree.flatten(dphase_s)):
@@ -227,6 +245,11 @@ class optimizer(object):
 				self.NG.S_eigvals[:]=self.Runge_Kutta.S_eigvals
 				self.NG.VF_overlap[:]=self.Runge_Kutta.VF_overlap
 
+				self.NG.F_norm=self.Runge_Kutta.F_norm
+				self.NG.S_norm=self.Runge_Kutta.S_norm
+				self.NG.Flog_norm=self.Runge_Kutta.Flog_norm
+				self.NG.Fphase_norm=self.Runge_Kutta.Fphase_norm
+				
 				self.NG.SNR_exact[:]=self.Runge_Kutta.SNR_exact
 				self.NG.SNR_gauss[:]=self.Runge_Kutta.SNR_gauss
 				self.NG.SNR_weight_sum_exact=self.Runge_Kutta.SNR_weight_sum_exact

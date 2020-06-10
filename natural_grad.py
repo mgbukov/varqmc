@@ -82,13 +82,17 @@ class natural_gradient():
 
 			self.F_vector_log=None
 			self.F_vector_phase=None
+
+			self.E_diff_weighted=np.zeros(self.N_batch,dtype=dtype)
 		
-		elif self.NN_dtype=='cpx':
+		else:
 			self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=np.complex128)
 			self.O_expt=np.zeros(self.N_varl_params,dtype=np.complex128)
 
 			self.F_vector_log=np.zeros_like(self.F_vector)
 			self.F_vector_phase=np.zeros_like(self.F_vector)
+
+			self.E_diff_weighted=np.zeros(self.N_batch,dtype=np.complex128)
 
 		
 		self.nat_grad=np.zeros_like(self.F_vector)
@@ -111,12 +115,13 @@ class natural_gradient():
 		self.QQ_expt=np.zeros_like(self.dlog_psi)
 
 
-		self.E_diff_weighted=np.zeros(self.N_batch,dtype=dtype)
-
+		
 
 		self.S_norm=0.0 # S-matrix norm
 		self.F_norm=0.0 # F norm
 		self.S_logcond=0.0
+		self.Flog_norm=0.0
+		self.Fphase_norm=0.0
 
 		
 		if self.comm.Get_rank()==0:
@@ -151,8 +156,9 @@ class natural_gradient():
 			self.O_expt[:]=jnp.einsum('s,sj->j',abs_psi_2,self.dlog_psi).block_until_ready() 
 				
 			if self.NN_dtype=='real':
+			
 				self.OO_expt[:] = jnp.dot(self.dlog_psi.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi)	).block_until_ready()  		
-			elif self.NN_dtype=='cpx':
+			else:
 				self.OO_expt[:] = jnp.dot(self.dlog_psi.real.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi.real)  ).block_until_ready() \
 								+ jnp.dot(self.dlog_psi.imag.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi.imag)  ).block_until_ready()  		
 
@@ -167,7 +173,7 @@ class natural_gradient():
 			if self.NN_dtype=='real':
 				self.comm.Allreduce(( jnp.dot(self.dlog_psi.T, self.dlog_psi).block_until_ready()  )._value, self.OO_expt[:], op=MPI.SUM )
 				#self.comm.Allreduce( np.dot(self.dlog_psi.T, self.dlog_psi), self.OO_expt[:], op=MPI.SUM )
-			elif self.NN_dtype=='cpx':
+			else:
 				self.comm.Allreduce(	(  jnp.dot(self.dlog_psi.real.T, self.dlog_psi.real).block_until_ready() \
 				                	  	  +jnp.dot(self.dlog_psi.imag.T, self.dlog_psi.imag).block_until_ready()    )._value, \
 									self.OO_expt[:], op=MPI.SUM
@@ -178,7 +184,7 @@ class natural_gradient():
 
 		if self.NN_dtype=='real':
 			self.O_expt2[:] = jnp.outer(self.O_expt,self.O_expt)
-		elif self.NN_dtype=='cpx':
+		else:
 			self.O_expt2[:] = jnp.outer(self.O_expt.real,self.O_expt.real) + jnp.outer(self.O_expt.imag,self.O_expt.imag)
 
 
@@ -198,27 +204,33 @@ class natural_gradient():
 			if self.NN_dtype=='real':
 				self.F_vector[:]   = jnp.dot(self.E_diff_weighted,self.dlog_psi).block_until_ready()
 				#self.F_vector[:]   = np.dot(self.E_diff_weighted,self.dlog_psi)
-			elif self.NN_dtype=='cpx':
+			else:
+				
 				self.F_vector_log[:]   = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready()
 				self.F_vector_phase[:] = jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
+
 				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
 
 		elif self.mode=='MC':
 		
 			if self.NN_dtype=='real':
+				
 				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
 				#self.comm.Allreduce(np.dot(self.E_diff_weighted, self.dlog_psi), self.F_vector[:], op=MPI.SUM)
-			elif self.NN_dtype=='cpx':
+			
+			else:
 				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
 									self.F_vector_log[:], op=MPI.SUM
 									)
+				self.F_vector_log/=self.N_MC_points
+
 
 				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
 									self.F_vector_phase[:], op=MPI.SUM
 									)
-				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
+				self.F_vector_phase/=self.N_MC_points
 
-			self.F_vector/=self.N_MC_points
+			self.F_vector[:]=self.F_vector_log+self.F_vector_phase
 
 
 	def signal_to_noise_ratio(self,lmbda,V,Eloc_params_dict):
@@ -365,10 +377,10 @@ class natural_gradient():
 			lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
 			#lmbda, V = np.linalg.eigh(S/self.S_norm,)
 			#lmbda, V = eigh(S/self.S_norm,)
+			#lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
 			lmbda*=self.S_norm
 
-			#lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
-
+			
 			# a1= jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda+1E-14)), jnp.dot(V.T, F) ) ) #[-4:]
 			# a2 = inv(S/self.S_norm).dot(F)/self.S_norm #[-4:]
 			# print(np.linalg.norm(a1-a2))
@@ -385,7 +397,9 @@ class natural_gradient():
 				self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
 			else:
 				self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )
+				#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 2.0 / ( lmbda * (1.0 + np.exp(8.0*self.tol/np.abs(lmbda)) )  )   ), self.VF_overlap ) )
 			
+
 			# exp cutoff
 			#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 1.0/(1.0 + np.exp( -(lmbda-self.tol)/(1E-1*self.tol) ) ) * 1.0/lmbda ), self.VF_overlap ) )
 
@@ -428,6 +442,10 @@ class natural_gradient():
 		self.S_norm=np.linalg.norm(self.S_matrix)
 		self.F_norm=np.linalg.norm(self.F_vector)
 		self.S_logcond=np.log(np.linalg.cond(self.S_matrix))
+		if self.NN_dtype=='cpx':
+			self.Flog_norm=np.linalg.norm(self.F_vector_log)
+			self.Fphase_norm=np.linalg.norm(self.F_vector_phase)
+
 
 		#######################################################
 
@@ -469,8 +487,8 @@ class natural_gradient():
 
 	def update_NG_params(self,grad_guess,self_time=1.0):
 
-		#if self.delta>self.tol:
-		self.delta *= np.exp(-0.075*self_time)
+		if self.delta>self.tol:
+			self.delta *= np.exp(-0.075*self_time)
 		
 
 		self.nat_grad_guess[:]=grad_guess
@@ -489,6 +507,11 @@ class Runge_Kutta_solver():
 		self.compute_r2=compute_r2
 		self.r2=0.0
 		self.dE=0.0
+
+		self.S_norm=0.0
+		self.F_norm=0.0
+		self.Flog_norm=0.0
+		self.Fphase_norm=0.0
 
 		self.S_eigvals=np.zeros(NN_Tree.N_varl_params,dtype=np.float64)
 		self.VF_overlap=np.zeros_like(self.S_eigvals)
@@ -545,6 +568,11 @@ class Runge_Kutta_solver():
 
 			self.r2=self.compute_r2(Eloc_params_dict)
 			self.dE=self.NG.dE*self.step_size
+
+			self.F_norm=self.NG.F_norm
+			self.S_norm=self.NG.S_norm
+			self.Flog_norm=self.Flog_norm
+			self.Fphase_norm=self.Fphase_norm
 
 			self.SNR_exact[:]=self.NG.SNR_exact
 			self.SNR_gauss[:]=self.NG.SNR_gauss

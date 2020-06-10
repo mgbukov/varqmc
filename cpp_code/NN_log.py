@@ -47,7 +47,7 @@ def NN_log_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 
 		elif n_layers==2:
 
-			NN_archs['CNN_as_dnn_2']=	{
+			NN_archs['CNN_as_dnn_2']={
 
 										'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
 										'nonlin_1': elementwise(logcosh),
@@ -57,7 +57,7 @@ def NN_log_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 										'pool': elementwise(uniform_pool, output_shape=output_shape ),
 										'reg': Regularization(a=8.0),
 										
-										}
+									}
 
 
 			NN_archs['CNN_pure_2']=	{

@@ -208,7 +208,7 @@ def poly_imag(x):
 ##########################
 
 
-@jit
+#@jit
 def cosh_cpx(Re_a,Im_a):
     # Cosh[a + I b] = Cos[b] Cosh[a] + I Sin[b] Sinh[a]
         
@@ -217,24 +217,33 @@ def cosh_cpx(Re_a,Im_a):
 
     return Re, Im
 
-@jit
+#@jit
 def log_real(Re, Im,):
     #a_fc_real = tf.log( tf.sqrt( (tf.cos(Im_Ws)*tf.cosh(Re_Ws))**2 + (tf.sin(Im_Ws)*tf.sinh(Re_Ws))**2 )  )
     return 0.5*jnp.log(Re**2+Im**2)
   
-@jit
+#@jit
 def log_imag(Re, Im,):
     #a_fc_imag = tf.atan( tf.tan(Im_Ws)*tf.tanh(Re_Ws) )
     return jnp.arctan2(Im,Re)
 
 
-@jit
+#@jit
+# def logcosh_cpx(x):
+#     x_real, x_imag = x
+#     Re, Im  = cosh_cpx(x_real, x_imag)
+#     Re_z = log_real(Re, Im, ) 
+#     Im_z = log_imag(Re, Im, )
+#     return Re_z, Im_z
+
 def logcosh_cpx(x):
     x_real, x_imag = x
-    Re, Im  = cosh_cpx(x_real, x_imag)
-    Re_z = log_real(Re, Im, ) 
-    Im_z = log_imag(Re, Im, )
-    return Re_z, Im_z
+    z=jnp.cosh(x_real+1j*x_imag)
+    z=jnp.log(z)
+    # Re, Im  = cosh_cpx(x_real, x_imag)
+    # z=jnp.log(Re+1j*Im)
+    return z.real, z.imag
+
 
 @jit
 def logcosh_real(Ws):
@@ -264,6 +273,16 @@ def symmetric_pool_cpx(x,reduce_shape, output_shape,):
     Re_z = jnp.sum(Re_z.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
     Im_z = jnp.sum(Im_z.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
     return (Re_z,Im_z)
+
+# def symmetric_pool_cpx(x,reduce_shape, output_shape,):
+#     Re_z, Im_z = x
+#     # symmetrize
+#     Re_z = jnp.sum(Re_z.reshape(reduce_shape,order='C') ,  axis=[1,3])
+#     Im_z = jnp.sum(Im_z.reshape(reduce_shape,order='C') ,  axis=[1,3])
+#     # sum over hidden neurons
+#     Re_z = jnp.sum(Re_z.reshape(output_shape) , axis=[1,])
+#     Im_z = jnp.sum(Im_z.reshape(output_shape) , axis=[1,])
+#     return (Re_z,Im_z)
 
 
 def symmetrize_cpx(x, reduce_shape,):
