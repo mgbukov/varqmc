@@ -73,6 +73,26 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 										'reg': RegularizationComplex(a=8.0),
 										
 										}
-			
+		
+		elif n_layers==3:
+
+			NN_archs['CNN_mixed_3']= {
+
+										'layer_1': GeneralConvPeriodicComplex(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], ignore_b=True, init_value_W=scale, ), 
+										'nonlin_1': elementwise(poly_cpx),
+
+										'layer_2': GeneralConvPeriodicComplex(dim_nums, shapes['layer_2'][1], shapes['layer_2'][0], dense_output=True, ignore_b=False, init_value_W=scale, init_value_b=scale, ), 
+										'nonlin_2': elementwise(poly_cpx),
+
+										'layer_3': GeneralDenseComplex(shapes['layer_2'][1], shapes['layer_3'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ), 
+										'nonlin_3': elementwise(poly_cpx),
+
+										'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, ),
+										'pool': elementwise(uniform_pool_cpx, output_shape=output_shape ),
+										'reg': RegularizationComplex(a=8.0),
+										
+										}
+
+
 	return NN_archs[net_str]
 

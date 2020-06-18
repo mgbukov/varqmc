@@ -130,8 +130,12 @@ class VMC(object):
 
 		os.environ['OMP_NUM_THREADS']='{0:d}'.format(self.N_MC_chains) # set number of OpenMP threads to run in parallel
 		
+		if self.NN_dtype=='real-decoupled':
+			self.NN_dtype='real'
+		
+
 		if self.NN_dtype!='real' and self.NN_dtype!='cpx':
-			raise ValueError('Invalid input for variable NN_dtype; valid values are real and cpx.')
+			raise ValueError('Invalid input {} for variable NN_dtype; valid values are real and cpx.'.format(self.NN_dtype))
 
 
 		# number of processors must fix MC sampling ratio
@@ -223,7 +227,7 @@ class VMC(object):
 
 
 	def _load_data(self, start_iter, truncate_files=True, repeat=False):
-
+		
 		### load MC 
 		print(self.comm.Get_rank(),"loading iteration {0:d}".format(start_iter), truncate_files, repeat)
 		
@@ -391,12 +395,6 @@ class VMC(object):
 
 
 		#self.DNN.params=[(W_real, W_imag), (), ()]
-
-		# print(len(self.DNN.params))
-
-		# print(self.DNN.params[0][0] )
-		# print(self.DNN.params[0][1] )
-		# exit()
 
 		self.N_features=self.N_symm * self.L**2
 		
@@ -901,7 +899,7 @@ class VMC(object):
 	def repeat_iteration(self,iteration,Eloc_mean_g,E_MC_std_g, go_back_iters=0, load_data=True):
 
 		repeat=False
-		if iteration>go_back_iters and self.mode=='MC':
+		if iteration>go_back_iters+1 and self.mode=='MC':
 
 			Eloc_mean_prev=self.prev_it_data[0]
 			

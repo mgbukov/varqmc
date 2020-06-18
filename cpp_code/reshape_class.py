@@ -1,6 +1,8 @@
+from jax.config import config
+config.update("jax_enable_x64", True)
+
 import numpy as np
 import jax.numpy as jnp
-#from jax import jit
 from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
 from jax.flatten_util import ravel_pytree
 

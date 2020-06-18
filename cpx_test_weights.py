@@ -96,8 +96,8 @@ C3=jnp.array([
 		], dtype=jnp.float64).reshape(16,2)
 
 
-W_real=jnp.array([C0[:,0],C1[:,0],C2[:,0],C3[:,0]],)
-W_imag=jnp.array([C0[:,1],C1[:,1],C2[:,1],C3[:,1]],)
+W_real=jnp.array([C0[:,0],C1[:,0],C2[:,0],C3[:,0]],) #+ 1E-15
+W_imag=jnp.array([C0[:,1],C1[:,1],C2[:,1],C3[:,1]],) #- 1E-15
 
 NN_type='CNN' # 'DNN' # 
 

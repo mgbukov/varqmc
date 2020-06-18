@@ -157,7 +157,6 @@ def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iterations, N_MC_points
 		# sample points
 		MC_tool = MC_sample(load_dir, params_log, N_MC_points=N_MC_points, reps=True)
 
-
 		rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
 
 		log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )

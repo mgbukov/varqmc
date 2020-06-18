@@ -98,7 +98,7 @@ def GeneralConvPeriodicComplex(dimension_numbers, out_chan, filter_shape, ignore
         output_imag = lax.conv_general_dilated(inputs_real, W_imag, strides, padding, one, one, dimension_numbers=dimension_numbers)
 
         if inputs_imag is not None:
-            inputs_imag=periodic_padding(inputs_imag,filter_shape,strides)
+            inputs_imag=periodic_padding(inputs_imag,)
 
             output_real -= lax.conv_general_dilated(inputs_imag, W_imag, strides, padding, one, one, dimension_numbers=dimension_numbers)
             output_imag += lax.conv_general_dilated(inputs_imag, W_real, strides, padding, one, one, dimension_numbers=dimension_numbers)
@@ -238,6 +238,8 @@ def log_imag(Re, Im,):
 
 def logcosh_cpx(x):
     x_real, x_imag = x
+    # z=jnp.cosh(x_real+1j*x_imag)
+    # z=log_real(z.real, z.imag) + 1j*log_imag(z.real, z.imag)
     z=jnp.cosh(x_real+1j*x_imag)
     z=jnp.log(z)
     # Re, Im  = cosh_cpx(x_real, x_imag)

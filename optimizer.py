@@ -195,11 +195,13 @@ class optimizer(object):
 
 					# G=s[:,0].dot(np.tanh(s.dot(W[:,0]))) #, axis=0)
 
-					# print(G)
-
-					
-					# print( self.NN_Tree.flatten(dlog_s)[0][-1][0][0] +1j* self.NN_Tree.flatten(dphase_s)[0][-1][0][0] )
-
+					# print(G.imag)
+					# print( self.NN_Tree.flatten(dphase_s)[0][-1][0][0] )
+					# print()
+					# print(G.real)
+					# print( self.NN_Tree.flatten(dlog_s)[0][-1][0][0] )				
+						
+					# #print( self.NN_Tree.flatten(dlog_s)[0][-1][0][0] +1j* self.NN_Tree.flatten(dphase_s)[0][-1][0][0] )
 					
 					# print(s.shape, W.shape, G.shape)
 					

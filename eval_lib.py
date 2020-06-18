@@ -168,9 +168,9 @@ def MC_sample(load_dir,params_log,N_MC_points=10,reps=False):
 	DNN_psi_MC=VMC(load_dir,params_dict=params,train=False)
 	DNN_psi_MC.DNN_log.params=params_log
 
+
 	acceptance_ratio_g = DNN_psi_MC.MC_tool.sample(DNN_psi_MC.DNN_log,DNN_psi_MC.DNN_phase)
 	print('\nacc ratio: {0:0.8f}.\n'.format(acceptance_ratio_g[0]))
-
 
 	return DNN_psi_MC.MC_tool
 

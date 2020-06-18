@@ -43,7 +43,7 @@ class natural_gradient():
 		# CG params
 		self.check_on=False # toggles S-matrix checks
 		self.cg_maxiter=1E4
-		self.tol=1E-7 # 1E-7 # CG tolerance
+		self.tol=1E-7 # CG tolerance
 
 		self.step_size=1.0
 
@@ -51,7 +51,7 @@ class natural_gradient():
 			self.delta=0.0 # NG S matrix regularization strength
 			self.grad_clip=1E4
 		else:
-			self.delta= 100.0 # S-matrix regularizer
+			self.delta=100.0 # S-matrix regularizer
 			self.grad_clip=1E4 #50.0
 
 
@@ -397,12 +397,8 @@ class natural_gradient():
 				self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
 			else:
 				self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )
-				#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 2.0 / ( lmbda * (1.0 + np.exp(8.0*self.tol/np.abs(lmbda)) )  )   ), self.VF_overlap ) )
+				#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 2.0 / ( lmbda * (1.0 + np.exp(8.0*self.tol*lmbda[-1]/np.abs(lmbda)) )  )   ), self.VF_overlap ) )
 			
-
-			# exp cutoff
-			#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 1.0/(1.0 + np.exp( -(lmbda-self.tol)/(1E-1*self.tol) ) ) * 1.0/lmbda ), self.VF_overlap ) )
-
 		return info
 
 
@@ -487,8 +483,8 @@ class natural_gradient():
 
 	def update_NG_params(self,grad_guess,self_time=1.0):
 
-		if self.delta>self.tol:
-			self.delta *= np.exp(-0.075*self_time)
+		#if self.delta>self.tol:
+		self.delta *= np.exp(-0.075*self_time)
 		
 
 		self.nat_grad_guess[:]=grad_guess
