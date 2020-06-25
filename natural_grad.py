@@ -230,6 +230,7 @@ class natural_gradient():
 									)
 				self.F_vector_phase/=self.N_MC_points
 
+
 				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
 
 
@@ -567,8 +568,8 @@ class Runge_Kutta_solver():
 
 			self.F_norm=self.NG.F_norm
 			self.S_norm=self.NG.S_norm
-			self.Flog_norm=self.Flog_norm
-			self.Fphase_norm=self.Fphase_norm
+			self.Flog_norm=self.NG.Flog_norm
+			self.Fphase_norm=self.NG.Fphase_norm
 
 			self.SNR_exact[:]=self.NG.SNR_exact
 			self.SNR_gauss[:]=self.NG.SNR_gauss
