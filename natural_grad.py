@@ -230,7 +230,7 @@ class natural_gradient():
 									)
 				self.F_vector_phase/=self.N_MC_points
 
-			self.F_vector[:]=self.F_vector_log+self.F_vector_phase
+				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
 
 
 	def signal_to_noise_ratio(self,lmbda,V,Eloc_params_dict):
