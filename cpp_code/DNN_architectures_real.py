@@ -108,7 +108,7 @@ def GeneralDense(in_chan, out_chan, filter_size, ignore_b=False, init_value_W=1E
 
         W = random.uniform(rng,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
             
-        W/=norm # see apply func
+        #W/=norm # see apply func
 
         if not ignore_b:
             rng, k1 = random.split(rng)
@@ -121,7 +121,7 @@ def GeneralDense(in_chan, out_chan, filter_size, ignore_b=False, init_value_W=1E
         return output_shape, params
 
     def apply_fun(params,inputs, **kwargs):
-        z = jnp.dot(inputs,params[0])#/norm
+        z = jnp.dot(inputs,params[0])/norm
         if not ignore_b:
             # add bias
             z += params[1]  

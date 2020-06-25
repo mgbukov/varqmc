@@ -945,6 +945,10 @@ class VMC(object):
 
 	def train(self, start_iter=0):
 
+
+		print("remove norm from real net")
+		exit()
+
 		# set timer
 		t_start=time.time()
 

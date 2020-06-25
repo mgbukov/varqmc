@@ -38,7 +38,7 @@ save=True #False #
 
 
 
-iterations=[200,400,600,700,900]
+iterations=[200,400,600,800,1000]
 J2=0.5
 L=6
 opt='RK_RK' # 'sgd_sgd' # 'sgd_sgd' #  
@@ -47,14 +47,15 @@ mode='MC' # 'exact' #
 
 #sys_time = '2020_06_13-09_50_43' # '2020_06_08-22_23_05' #  '2020_06_05-21_55_27', '2020_06_08-22_22_13', '2020_06_08-22_22_42'    
 
-for sys_time in ['2020_06_13-09_51_06', '2020_06_13-09_51_20', '2020_06_13-09_51_33', ]:
+for sys_time in ['2020_06_23-11_45_00']: #['2020_06_13-09_51_06', '2020_06_13-09_51_20', '2020_06_13-09_51_33', ]:
 
 	#### load debug data
 
 	data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
 	#load_dir='data/' + data_name 
 	#load_dir='data/paper_data/seeds/' + data_name 
-	load_dir='data/paper_data/MC_samples/' + data_name 
+	#load_dir='data/paper_data/MC_samples/' + data_name 
+	load_dir='data/paper_data/local_sampling/' + data_name 
 
 	#data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 	#params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
@@ -80,7 +81,7 @@ for sys_time in ['2020_06_13-09_51_06', '2020_06_13-09_51_20', '2020_06_13-09_51
 
 	plot_delta(load_dir, plotfile_dir, params_str, L, J2, save=save)
 
-	if mode=='MC':
+	if 'MC' in mode:
 		plot_acc_ratio(load_dir, plotfile_dir, params_str,L,J2, save=save)
 
 	plot_hist(load_dir, plotfile_dir, params_str,L,J2, save=save)
