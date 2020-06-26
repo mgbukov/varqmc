@@ -58,8 +58,8 @@ import datetime
 import time
 np.set_printoptions(threshold=np.inf)
 
+# from cpx_test_weights import *
 
-from cpx_test_weights import *
 
 class VMC(object):
 
@@ -393,6 +393,8 @@ class VMC(object):
 			self.DNN_log, self.DNN_phase = None, None
 			self.N_symm = self.DNN.N_symm
 
+		# print(self.DNN_log.params[2])
+		# exit()
 
 		#self.DNN.params=[(W_real, W_imag), (), ()]
 
@@ -1294,7 +1296,7 @@ class VMC(object):
 			print(mssg)
 		#self.logfile.write(mssg)
 
-		#exit()
+		exit()
 
 		# record gradients
 

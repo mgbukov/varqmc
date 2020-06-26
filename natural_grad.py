@@ -218,6 +218,8 @@ class natural_gradient():
 				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
 				#self.comm.Allreduce(np.dot(self.E_diff_weighted, self.dlog_psi), self.F_vector[:], op=MPI.SUM)
 			
+				self.F_vector/=self.N_MC_points
+
 			else:
 				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
 									self.F_vector_log[:], op=MPI.SUM
@@ -394,6 +396,7 @@ class natural_gradient():
 			if self.NN_dtype=='real':
 				SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
 
+		
 			if self.adaptive_SR_cutoff and self.NN_dtype=='real':
 				self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
 			else:
@@ -414,8 +417,7 @@ class natural_gradient():
 		t3=time.time()
 
 		print("evaluation took gradients: {0:0.6} secs; F_vector: {1:0.6} secs; S-matrix: {2:0.6} secs.".format(t1-t0, t2-t1, t3-t2) )
-	
-
+		
 		### compute natural_gradients using cg
 		# regularize Fisher metric
 		#print("max[diag(S)]", np.abs(np.diag(self.S_matrix)).max())

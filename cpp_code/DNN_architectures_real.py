@@ -38,20 +38,20 @@ def GeneralConvPeriodic(dimension_numbers, out_chan, filter_shape, ignore_b=Fals
         
         k1, k2 = random.split(rng)
         #W = random.uniform(rng,shape=kernel_shape, minval=-init_value_W, maxval=+init_value_W)
-        W = random.uniform(k1,shape=(kernel_shape[2]*kernel_shape[3]*kernel_shape[1],kernel_shape[0]), minval=-init_value_W, maxval=+init_value_W).T.reshape(kernel_shape)
+        W = random.uniform(rng,shape=(kernel_shape[2]*kernel_shape[3]*kernel_shape[1],kernel_shape[0]), minval=-init_value_W, maxval=+init_value_W).T.reshape(kernel_shape)
         
         # normalize W
         norm=jnp.sqrt(filter_shape[0]*filter_shape[1]*(input_shape[1]+out_chan))
         W/=norm
-                
-
+               
+     
         if ignore_b:
             params=(W,)
         else:  
             bias_shape = [out_chan if c == 'C' else 1 for c in out_spec]
             bias_shape = tuple(itertools.dropwhile(lambda x: x == 1, bias_shape))
 
-            b = random.uniform(k2,shape=bias_shape, minval=-init_value_b, maxval=+init_value_b)
+            b = random.uniform(k1,shape=bias_shape, minval=-init_value_b, maxval=+init_value_b)
             params=(W, b)
 
         # output
@@ -107,7 +107,6 @@ def GeneralDense(in_chan, out_chan, filter_size, ignore_b=False, init_value_W=1E
             b_shape=(output_shape[1],)        
 
         W = random.uniform(rng,shape=W_shape, minval=-init_value_W, maxval=+init_value_W)
-            
         W/=norm # see apply func
 
         if not ignore_b:
@@ -154,24 +153,24 @@ def xtanh(x):
 
 
 #@jit
-def symmetric_pool(x,reduce_shape, output_shape,):
+def symmetric_pool(x,reduce_shape, output_shape, norm,):
     # symmetrize
     x = jnp.sum(x.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])
     # sum over hidden neurons
     x = jnp.sum(x.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
-    return x
+    return x/norm
 
 
-def symmetrize(x, reduce_shape,):
+def symmetrize(x, reduce_shape, norm, ):
     # symmetrize
-    x = jnp.sum(x.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])
-    return x
+    x = jnp.sum(x.reshape(reduce_shape,order='C'),  axis=[1,3])
+    return x/norm
 
-def uniform_pool(x, output_shape,):
+def uniform_pool(x, output_shape, norm,):
     # sum over hidden neurons
-    x = jnp.sum(x.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
+    x = jnp.sum(x.reshape(output_shape), axis=[1,])
     #x = jnp.sum(x.reshape(output_shape),axis=[1,])
-    return x
+    return x/norm
 
 
 

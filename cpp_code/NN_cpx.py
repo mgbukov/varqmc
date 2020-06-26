@@ -21,7 +21,7 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 
 								'layer_1': GeneralDenseComplex(1, shapes['layer_1'][1], input_shape[-1], ignore_b=True, init_value_W=scale), 
 								'nonlin_1': elementwise(logcosh_cpx),
-								'symm': elementwise(symmetric_pool_cpx, reduce_shape=reduce_shape, output_shape=output_shape, ),
+								'symmpool': elementwise(symmetric_pool_cpx, reduce_shape=reduce_shape, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),
 							#	'reg': RegularizationComplex(a=8.0),
 
 								}
@@ -56,7 +56,7 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 
 										'layer_1': GeneralConvPeriodicComplex(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
 										'nonlin_1': elementwise(logcosh_cpx),
-										'symm': elementwise(symmetric_pool_cpx, reduce_shape=reduce_shape, output_shape=output_shape, ),
+										'symmpool': elementwise(symmetric_pool_cpx, reduce_shape=reduce_shape, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),
 										
 										}
 
@@ -68,8 +68,8 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 										'nonlin_1': elementwise(poly_cpx),
 										'layer_2': GeneralDenseComplex(shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ), 
 										'nonlin_2': elementwise(poly_cpx),
-										'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, ),
-										'pool': elementwise(uniform_pool_cpx, output_shape=output_shape ),
+										'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, norm=jnp.sqrt(reduce_shape[1]+reduce_shape[3])),
+										'pool': elementwise(uniform_pool_cpx, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]) ),
 										'reg': RegularizationComplex(a=8.0),
 										
 										}
@@ -87,8 +87,9 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 										'layer_3': GeneralDenseComplex(shapes['layer_2'][1], shapes['layer_3'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ), 
 										'nonlin_3': elementwise(poly_cpx),
 
-										'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, ),
-										'pool': elementwise(uniform_pool_cpx, output_shape=output_shape ),
+										'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, norm=jnp.sqrt(reduce_shape[1]+reduce_shape[3])),
+										'pool': elementwise(uniform_pool_cpx, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]) ),
+										
 										'reg': RegularizationComplex(a=8.0),
 										
 										}
