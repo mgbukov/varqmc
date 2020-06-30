@@ -388,10 +388,20 @@ class VMC(object):
 			self.DNN_phase=Phase_Net(self.comm, self.shapes[1], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 			self.DNN=None
 			self.N_symm = self.DNN_log.N_symm
+		
+			params_str="\nlog-net params:   {0:d}\nphase-net params: {1:d}\n".format(self.DNN_log.N_varl_params, self.DNN_phase.N_varl_params)
+
 		else:
 			self.DNN=Log_Net(self.comm, self.shapes[0], self.N_MC_chains, self.NN_type, self.NN_dtype, seed=self.seed, prop_threshold=self.MC_prop_threshold )
 			self.DNN_log, self.DNN_phase = None, None
 			self.N_symm = self.DNN.N_symm
+
+			params_str="\ncpx-net params: {0:d}\n".format(self.DNN.N_varl_params)
+
+		print(params_str)
+		exit()
+
+
 
 		# print(self.DNN_log.params[2])
 		# exit()
@@ -1295,8 +1305,6 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 			print(mssg)
 		#self.logfile.write(mssg)
-
-		exit()
 
 		# record gradients
 
