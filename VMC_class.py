@@ -399,7 +399,7 @@ class VMC(object):
 			params_str="\ncpx-net params: {0:d}\n".format(self.DNN.N_varl_params)
 
 		print(params_str)
-		exit()
+		#exit()
 
 
 

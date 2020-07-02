@@ -351,7 +351,7 @@ cdef class Log_Net:
         self.NN_type=NN_type
         self.NN_dtype=NN_dtype
 
-        shape_last_layer = shapes['layer_5']
+        shape_last_layer = shapes['layer_2']
         
 
         if NN_type=='DNN':
@@ -373,7 +373,7 @@ cdef class Log_Net:
             if self.NN_dtype=='real':
                 NN_arch = NN_log_arch('DNN_1', shapes, input_shape, reduce_shape, output_shape, scale) 
             elif self.NN_dtype=='cpx':
-                NN_arch = NN_cpx_arch('DNN_1', shapes, input_shape, reduce_shape, output_shape, scale) 
+                NN_arch = NN_cpx_arch('DNN_2', shapes, input_shape, reduce_shape, output_shape, scale) 
            
             
         elif NN_type=='CNN':

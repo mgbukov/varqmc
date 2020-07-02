@@ -34,9 +34,9 @@ def NN_cpx_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 								'nonlin_1': elementwise(poly_cpx),
 								'layer_2': GeneralDenseComplex(shapes['layer_2'][0], shapes['layer_2'][1], 1 , ignore_b=False, init_value_W=scale, init_value_b=scale ),  
 								'nonlin_2': elementwise(poly_cpx),
-								'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, ),
-								'pool': elementwise(uniform_pool_cpx, output_shape=output_shape ),
-								'reg': RegularizationComplex(a=8.0),
+								'symm': elementwise(symmetrize_cpx, reduce_shape=reduce_shape, norm=jnp.sqrt(reduce_shape[1]+reduce_shape[3])),
+								'pool': elementwise(uniform_pool_cpx, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]) ),
+							#	'reg': RegularizationComplex(a=8.0),
 
 								}
 
