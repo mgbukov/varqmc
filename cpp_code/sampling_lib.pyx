@@ -44,10 +44,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -351,7 +351,7 @@ cdef class Log_Net:
         self.NN_type=NN_type
         self.NN_dtype=NN_dtype
 
-        shape_last_layer = shapes['layer_5']
+        shape_last_layer = shapes['layer_2']
         
 
         if NN_type=='DNN':
@@ -398,7 +398,7 @@ cdef class Log_Net:
 
             # define CNN
             if self.NN_dtype=='real':
-                NN_arch = NN_log_arch('CNN_mixed_5', shapes, input_shape, reduce_shape, output_shape, scale)
+                NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
             elif self.NN_dtype=='cpx':   
                 NN_arch = NN_cpx_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
 

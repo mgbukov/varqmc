@@ -1,11 +1,11 @@
 J2: 0.5
-sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 6
+sign: -1 # -1: Marshal rule is on; +1 Marshal rule is off
+L: 4
 
 N_iterations: 2
 
-NN_dtype: real # 
-#NN_dtype: cpx #
+#NN_dtype: real # 
+NN_dtype: cpx #
 
 
 #NN_shape_str: (6x6-10--3x3-8--2x2-6--1x1-4--1x1-2,6x6-20--1x1-16--1x1-12) # (1325,1260)
@@ -15,15 +15,15 @@ NN_dtype: real #
 
 #NN_shape_str: (8x8-8--3x3-6--2x2-4--1x1-4--1x1-2,8x8-16--1x1-12--1x1-8)  
 # NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8)  
-#NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
-NN_type: CNN 
+# NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
+# NN_type: CNN 
 
 
 # NN_shape_str: (6x6-8--3x3-4--1x1-2,6x6-16--1x1-12--1x1-8) # (4x4-8--2x2-4--1x1-2,4x4-16--1x1-12--1x1-8)  
 # NN_type: CNN 
 
-# NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12) # (4x4-4,4x4-24) #  
-# NN_type: CNN 
+NN_shape_str: (4x4-12--1x1-8,4x4-24--1x1-12) # (4x4-4,4x4-24) #  
+NN_type: CNN 
 
 #NN_shape_str: (36--12--8,36--24--12)
 # NN_shape_str: (16--4,16--24--12) # (16--12--8,16--24--12) # 
@@ -34,11 +34,11 @@ MC_thermal: true
 MC_prop_threshold: 1.0 # large values means local proposals
 minibatch_size: 200
 
-N_MC_points: 100
-mode: MC 
+# N_MC_points: 100
+# mode: MC 
 
-# N_MC_points: 107 # 
-# mode: exact
+N_MC_points: 107 # 
+mode: exact
 
 
 batchnorm: false

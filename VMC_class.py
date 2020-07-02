@@ -149,6 +149,20 @@ class VMC(object):
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
 				self.N_batch+=1
+		elif self.mode=='ED':
+
+			if self.L==4:
+				self.N_MC_points=107
+			elif self.L==6:
+				self.N_MC_points=16000000
+			else:
+				raise ValueError('wrong N_MC_points input.')
+
+			self.N_batch=self.N_MC_points//self.comm.Get_size()
+			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
+				self.N_batch+=1
+
+
 		else:
 			print('unrecognized operation mode!')
 			
@@ -398,8 +412,8 @@ class VMC(object):
 
 			params_str="\ncpx-net params: {0:d}\n".format(self.DNN.N_varl_params)
 
-		print(params_str)
-		exit()
+		# print(params_str)
+		# exit()
 
 
 
@@ -975,6 +989,9 @@ class VMC(object):
 			self.MC_tool_log.ints_ket, self.index, self.inv_index, self.count=self.E_estimator_log.get_exact_kets()
 			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
+		elif self.mode=='ED':
+			
+
 		
 		iteration=start_iter
 		while iteration < start_iter+self.N_iterations:
@@ -1004,7 +1021,7 @@ class VMC(object):
 				if self.comm.Get_rank()==0:
 					print(olap_str)
 		
-			#exit()
+			exit()
 
 
 			#### check energy variance, undo update and restart sampling back 10 iterations

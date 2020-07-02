@@ -287,19 +287,19 @@ def symmetric_pool_cpx(x,reduce_shape, output_shape, norm, ):
 #     return (Re_z,Im_z)
 
 
-def symmetrize_cpx(x, reduce_shape,):
+def symmetrize_cpx(x, reduce_shape, norm,):
     # symmetrize
     Re_z, Im_z = x
-    Re_z = jnp.sum(Re_z.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])
-    Im_z = jnp.sum(Im_z.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])
-    return (Re_z,Im_z)
+    Re_z = jnp.sum(Re_z.reshape(reduce_shape,order='C'),  axis=[1,3])
+    Im_z = jnp.sum(Im_z.reshape(reduce_shape,order='C'),  axis=[1,3])
+    return (Re_z/norm, Im_z/norm)
 
-def uniform_pool_cpx(x, output_shape,):
+def uniform_pool_cpx(x, output_shape, norm,):
     Re_z, Im_z = x
     # sum over hidden neurons
-    Re_z = jnp.sum(Re_z.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
-    Im_z = jnp.sum(Im_z.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
-    return (Re_z,Im_z)
+    Re_z = jnp.sum(Re_z.reshape(output_shape), axis=[1,])
+    Im_z = jnp.sum(Im_z.reshape(output_shape), axis=[1,])
+    return (Re_z/norm, Im_z/norm)
 
 
 
