@@ -153,12 +153,12 @@ def xtanh(x):
 
 
 #@jit
-def symmetric_pool(x,reduce_shape, output_shape, norm,):
+def symmetric_pool(x,reduce_shape, output_shape, norm):
     # symmetrize
-    x = jnp.sum(x.reshape(reduce_shape,order='C') / jnp.sqrt(reduce_shape[1]+reduce_shape[3]),  axis=[1,3])
+    x = jnp.sum(x.reshape(reduce_shape,order='C'),  axis=[1,3])
     # sum over hidden neurons
-    x = jnp.sum(x.reshape(output_shape) / jnp.sqrt(output_shape[1]), axis=[1,])
-    return x/norm
+    x = jnp.sum(x.reshape(output_shape), axis=[1,])
+    return x / norm
 
 
 def symmetrize(x, reduce_shape, norm, ):

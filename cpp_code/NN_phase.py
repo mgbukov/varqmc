@@ -29,7 +29,7 @@ def NN_phase_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scal
 								'nonlin_2': elementwise(xtanh),
 								#'symm': elementwise(symmetrize, reduce_shape=reduce_shape, norm=jnp.sqrt(reduce_shape[1]+reduce_shape[3])),
 								#'pool': elementwise(uniform_pool, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]) ),
-								'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),				
+								'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape,  norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),				
 								}
 
 
@@ -61,7 +61,7 @@ def NN_phase_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scal
 									'nonlin_1': elementwise(logcosh),
 									'layer_2': GeneralConvPeriodic(dim_nums, shapes['layer_2'][1], shapes['layer_2'][0], ignore_b=False, init_value_W=scale, init_value_b=scale, ), 
 									'nonlin_2': elementwise(xtanh),
-									'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),
+									'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape,  norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),
 									},
 			
 

@@ -90,7 +90,7 @@ def NN_log_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale 
 										'layer_5': GeneralDense(shapes['layer_4'][1], shapes['layer_5'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale, ),  
 										'nonlin_5': elementwise(xtanh),
 
-										# 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),
+										# 'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape,  norm_1=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])), norm_2=jnp.sqrt(output_shape[1]) ),
 
 										'symm': elementwise(symmetrize, reduce_shape=reduce_shape, norm=jnp.sqrt(reduce_shape[1]+reduce_shape[3])),
 										'pool': elementwise(uniform_pool, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]) ),
