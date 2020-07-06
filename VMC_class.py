@@ -684,7 +684,7 @@ class VMC(object):
 		phases = (phases+np.pi)%(2*np.pi) - np.pi
 		#
 		# density=False: normalization for MC happens after MPI gathers all data
-		if self.mode=='exact':
+		if self.mode=='exact' or self.mode=='ED':
 			phase_hist, bin_edges = np.histogram(phases ,bins=n_bins,range=(-np.pi,np.pi), density=False, weights=weigths)
 		elif self.mode=='MC':
 			phase_hist, bin_edges = np.histogram(phases ,bins=n_bins,range=(-np.pi,np.pi), density=False, )
@@ -896,11 +896,11 @@ class VMC(object):
 		if self.mode=='exact':
 			assert(self.N_MC_points==107) # 107 states in the symmetry reduced sector for L=4
 
-			self.MC_tool.ints_ket, self.index, self.inv_index, self.count=self.E_estimator.get_exact_kets()
+			self.MC_tool.ints_ket, self.index, self.inv_index, self.MC_tool.count=self.E_estimator.get_exact_kets()
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
 			# required to train independent real nets with RK
-			self.MC_tool_log.ints_ket, self.index, self.inv_index, self.count=self.E_estimator_log.get_exact_kets()
+			self.MC_tool_log.ints_ket, self.index, self.inv_index, self.MC_tool_log.count=self.E_estimator_log.get_exact_kets()
 			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
 		elif self.mode=='ED':
@@ -908,7 +908,7 @@ class VMC(object):
 			self.E_estimator.get_exact_kets(self.NN_type,self.MC_tool,self.N_features)
 	
 			# required to train independent real nets with RK
-			self.E_estimator_log.get_exact_kets(self.NN_type,self.MC_tool,self.N_features)
+			self.E_estimator_log.get_exact_kets(self.NN_type,self.MC_tool_log,self.N_features)
 	
 		
 		iteration=start_iter
@@ -936,14 +936,13 @@ class VMC(object):
 				olap_str='overlap = {0:0.10f}.\n'.format(self.Eloc_params_dict_log['overlap'])
 				if self.comm.Get_rank()==0:
 					print(olap_str)
+
+			#exit()
 		
-			exit()
-
-
 			#### check energy variance, undo update and restart sampling back 10 iterations
-			repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1,load_data=True)
-			if repeat:
-				continue
+			# repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1,load_data=True)
+			# if repeat:
+			# 	continue
 
 			##### save data
 			self.save_all_data(iteration,start_iter)
@@ -951,7 +950,6 @@ class VMC(object):
 
 			prss_time=time.time()-ti
 			fin_iter_str="PROCESS_RANK {0:d}, iteration step {1:d} took {2:0.4f} secs.".format(self.comm.Get_rank(), iteration, prss_time)
-			#self.logfile.write(fin_iter_str)
 			print(fin_iter_str)
 			
 
@@ -998,7 +996,7 @@ class VMC(object):
 
 
 		# store data from last n_step iterations
-		self.run_debug_helper(run=True,)
+		#self.run_debug_helper(run=True,)
 
 	
 	def reestimate_local_energy_log(self, iteration, NN_params, batch, params_dict,):
@@ -1015,7 +1013,7 @@ class VMC(object):
 		while repeat and counter<max_attemps:
 
 			##### get spin configs #####
-			if self.mode=='exact':
+			if self.mode=='exact' or self.mode=='ED':
 				if self.NN_dtype=='real':
 					self.MC_tool_log.exact(self.DNN_log, self.DNN_phase, )
 				else:
@@ -1037,31 +1035,36 @@ class VMC(object):
 
 			##### compute local energies #####
 			if self.NN_dtype=='real':
-				Eloc = self.E_estimator_log.compute_local_energy(NN_params, self.DNN_phase.params, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+				self.E_estimator_log.compute_local_energy(NN_params, self.DNN_phase.params, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
 			else:
-				Eloc = self.E_estimator_log.compute_local_energy(NN_params, None, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
+				self.E_estimator_log.compute_local_energy(NN_params, None, self.MC_tool_log.ints_ket,self.MC_tool_log.log_mod_kets,self.MC_tool_log.phase_kets,self.MC_tool_log.log_psi_shift, verbose=False,)
 			
 
 			if self.mode=='exact':
 				mod_kets=np.exp(self.MC_tool_log.log_mod_kets)
-				self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
-				abs_psi_2=self.count*np.abs(self.psi)**2
-
-				params_dict['abs_psi_2']=abs_psi_2
-				overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator_log.psi_GS_exact))**2
+				self.MC_tool_log.psi = mod_kets*np.exp(+1j*self.MC_tool_log.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
+				abs_psi_2=self.MC_tool_log.count*np.abs(self.MC_tool_log.psi)**2
+				
+				params_dict=dict(abs_psi_2=abs_psi_2,)
+				overlap=np.abs(self.MC_tool_log.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
 				params_dict['overlap']=overlap
 
+			elif self.mode=='ED':
+				abs_psi_2=self.MC_tool_log.count*np.abs(self.MC_tool_log.psi)**2
+				params_dict=dict(abs_psi_2=abs_psi_2,)
+
 			
+
 			Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator_log.process_local_energies(params_dict)
 			Eloc_std_g=np.sqrt(Eloc_var_g)
 			E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
 
-
+		
 			# check quality of sample
 			repeat, iteration = self.repeat_iteration(iteration,Eloc_mean_g,E_MC_std_g,go_back_iters=0, load_data=False)
 			
 			print("{0:d}. log-net sampling: Eloc = {1:14f}; repeat {2:d}".format(counter, Eloc_mean_g, repeat) )
-
+			
 			# increment counter
 			counter+=1
 
@@ -1144,7 +1147,7 @@ class VMC(object):
 		if self.mode=='exact':
 			mod_kets=np.exp(self.MC_tool.log_mod_kets)
 			self.MC_tool.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
-			abs_psi_2=self.count*np.abs(self.MC_tool.psi)**2
+			abs_psi_2=self.MC_tool.count*np.abs(self.MC_tool.psi)**2
 			
 			Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
 			overlap=np.abs(self.MC_tool.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
@@ -1239,8 +1242,7 @@ class VMC(object):
 		mssg="r2 test: {0:0.14f}.".format(self.r2[0]+self.r2[1]-1.0)
 		if self.comm.Get_rank()==0:
 			print(mssg)
-		#self.logfile.write(mssg)
-
+		
 		# record gradients
 
 		if self.comm.Get_rank()==0:
@@ -1292,44 +1294,3 @@ class VMC(object):
 		
 		return grads_max
 
-
-	'''
-
-	def _update_batchnorm_params(self,layers, set_fixpoint_iter=True,):
-		layers_type=list(layers.keys())
-		for j, layer_type in enumerate(layers_type):
-			if 'batch_norm' in layer_type:
-				self.DNN.apply_fun_args_dyn[j]['fixpoint_iter']=set_fixpoint_iter
-			
-	
-
-	def compute_batchnorm_params(self,NN_params,N_iter):
-	
-		ti=time.time()
-
-		#print(self.DNN.apply_fun_args_dyn[2]['mean'])
-		for i in range(N_iter):
-			
-			# draw MC sample
-			acceptance_ratio_g = self.MC_tool.sample(self.DNN, compute_phases=False)
-			
-			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=True)
-			log_psi, phase_psi = self.evaluate_NN_dyn(self.DNN.params, self.MC_tool.spinstates_ket.reshape(self.MC_tool.N_batch,self.MC_tool.N_symm,self.MC_tool.N_sites), )
-			self._update_batchnorm_params(self.DNN.NN_architecture, set_fixpoint_iter=False)
-
-			#norm_str="iter: {0:d}, min(log_psi)={1:0.8f}, max(log_psi)={2:0.8f}.".format( i, np.min(np.abs(log_psi)), np.max(np.abs(log_psi)) )
-			psi_str="log_psi_bras: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.\n".format(np.min(log_psi_bras), np.max(log_psi_bras), np.mean(log_psi_bras), np.std(log_psi_bras), np.max(log_psi_bras)-np.min(log_psi_bras) )
-		
-
-			self.logfile.write(psi_str)
-			if self.comm.Get_rank()==0:
-				print(psi_str)
-		#print(self.DNN.apply_fun_args_dyn[2]['mean'], self.DNN.apply_fun_args[2]['mean'])
-
-								
-		MC_str="\nweight normalization with final MC acceptance ratio={0:.4f}: took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
-		self.logfile.write(MC_str)
-		if self.comm.Get_rank()==0:
-			print(MC_str)
-
-	'''

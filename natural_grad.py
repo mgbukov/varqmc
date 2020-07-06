@@ -163,6 +163,24 @@ class natural_gradient():
 								+ jnp.dot(self.dlog_psi.imag.T, jnp.dot(jnp.diag(abs_psi_2), self.dlog_psi.imag)  ).block_until_ready()  		
 
 			
+		elif self.mode=='ED':
+			abs_psi_2=Eloc_params_dict['abs_psi_2']
+
+			self.comm.Allreduce(jnp.dot(abs_psi_2,self.dlog_psi).block_until_ready()._value, self.O_expt[:], op=MPI.SUM) 
+				
+			# expand dimension
+			abs_psi_2=np.tile(abs_psi_2,[self.N_varl_params,1],)
+
+			
+			if self.NN_dtype=='real':
+				self.comm.Allreduce(( jnp.dot(self.dlog_psi.T*abs_psi_2, self.dlog_psi).block_until_ready()  )._value, self.OO_expt[:], op=MPI.SUM )
+			else:
+				self.comm.Allreduce(	(  jnp.dot(self.dlog_psi.real.T*abs_psi_2, self.dlog_psi.real).block_until_ready() \
+				                	  	  +jnp.dot(self.dlog_psi.imag.T*abs_psi_2, self.dlog_psi.imag).block_until_ready()    )._value, \
+									self.OO_expt[:], op=MPI.SUM
+									)
+
+
 		elif self.mode=='MC':
 
 			self.comm.Allreduce(jnp.sum(self.dlog_psi,axis=0).block_until_ready()._value, self.O_expt[:], op=MPI.SUM)
@@ -197,19 +215,38 @@ class natural_gradient():
 
 		self.E_diff_weighted[:]=Eloc_params_dict['E_diff'].copy()
 
-		if self.mode=='exact':
+		if self.mode in 'exact':
 			abs_psi_2=Eloc_params_dict['abs_psi_2'].copy()
 			self.E_diff_weighted*=abs_psi_2
 
 			if self.NN_dtype=='real':
 				self.F_vector[:]   = jnp.dot(self.E_diff_weighted,self.dlog_psi).block_until_ready()
-				#self.F_vector[:]   = np.dot(self.E_diff_weighted,self.dlog_psi)
 			else:
 				
 				self.F_vector_log[:]   = jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready()
 				self.F_vector_phase[:] = jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready()
 
 				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
+
+		if self.mode in 'ED':
+			self.E_diff_weighted*=Eloc_params_dict['abs_psi_2']
+
+			if self.NN_dtype=='real':
+				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
+				
+				
+			else:
+				
+				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
+									self.F_vector_log[:], op=MPI.SUM
+									)
+		
+				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
+									self.F_vector_phase[:], op=MPI.SUM
+									)
+		
+				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
+
 
 		elif self.mode=='MC':
 		
@@ -227,10 +264,12 @@ class natural_gradient():
 				self.F_vector_log/=self.N_MC_points
 
 
+
 				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
 									self.F_vector_phase[:], op=MPI.SUM
 									)
 				self.F_vector_phase/=self.N_MC_points
+
 
 
 				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
@@ -245,7 +284,7 @@ class natural_gradient():
 		
 		Eloc_var=Eloc_params_dict['Eloc_var']
 		E_diff=Eloc_params_dict['E_diff']
-		if self.mode=='exact':
+		if self.mode in ['exact','ED']:
 			E_diff*=np.sqrt( Eloc_params_dict['abs_psi_2'] )
 
 
@@ -383,7 +422,6 @@ class natural_gradient():
 			#lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
 			lmbda*=self.S_norm
 
-			
 			# a1= jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda+1E-14)), jnp.dot(V.T, F) ) ) #[-4:]
 			# a2 = inv(S/self.S_norm).dot(F)/self.S_norm #[-4:]
 			# print(np.linalg.norm(a1-a2))
@@ -415,6 +453,7 @@ class natural_gradient():
 		t2=time.time()
 		self.compute_S_matrix(Eloc_params_dict=Eloc_params_dict,)
 		t3=time.time()
+
 
 		print("evaluation took gradients: {0:0.6} secs; F_vector: {1:0.6} secs; S-matrix: {2:0.6} secs.".format(t1-t0, t2-t1, t3-t2) )
 		

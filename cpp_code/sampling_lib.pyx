@@ -911,7 +911,7 @@ cdef class Phase_Net:
 
         #shapes=shapes[0]
         
-        shape_last_layer = shapes['layer_3']
+        shape_last_layer = shapes['layer_2']
         
 
         if NN_type=='DNN':
@@ -954,7 +954,7 @@ cdef class Phase_Net:
             scale=1.0
 
             # define CNN
-            NN_arch = NN_phase_arch('CNN_mixed_3', shapes, input_shape, reduce_shape, output_shape, scale)   
+            NN_arch = NN_phase_arch('CNN_mixed_2', shapes, input_shape, reduce_shape, output_shape, scale)   
 
             
         else:

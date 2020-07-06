@@ -47,7 +47,7 @@ def NN_phase_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scal
 
 		elif n_layers==2:
 
-			NN_archs['CNN_as_dnn_2']= {
+			NN_archs['CNN_mixed_2']= {
 									'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
 									'nonlin_1': elementwise(logcosh),
 									'layer_2': GeneralDense(shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ), 

@@ -341,10 +341,14 @@ class Energy_estimator_exact():
 
 	def reestimate_local_energy_phase(self, iteration, NN_params_phase, batch, params_dict):
 
-
 		phase_kets = self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape))
 
-		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
+		if self.mode=='ED':
+			self.MC_tool.phase_kets[:]=phase_kets
+			self.comm.Allgatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[:], MPI.DOUBLE], )
+			phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+		else:
+			sphase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
 
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
@@ -363,7 +367,9 @@ class Energy_estimator_exact():
 	def compute_local_energy(self,params_log,params_phase,ints_ket,log_kets,phase_kets,log_psi_shift, verbose=True, ):
 		
 		ti=time.time()
-		self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
+		if not self.mode=='ED':
+			self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
+
 
 		str_1="computing s_primes took {0:.4f} secs.".format(time.time()-ti)
 		#if self.logfile!=None:
@@ -391,6 +397,7 @@ class Energy_estimator_exact():
 			if self.mode=='ED':
 				log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
 				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+
 			else:
 				log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
 		
@@ -508,6 +515,7 @@ class Energy_estimator_exact():
 
 
 	def process_local_energies(self,Eloc_params_dict,):
+
 
 		Eloc=self.Eloc_real+1j*self.Eloc_imag
 		

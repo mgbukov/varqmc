@@ -116,7 +116,7 @@ class optimizer(object):
 						energy = 2.0*jnp.sum(log_psi*params_dict['E_diff'].real + phase_psi*params_dict['E_diff'].imag)/params_dict['N_MC_points']
 						return energy
 
-			elif self.mode=='exact':	
+			elif self.mode in ['exact','ED']:	
 
 				if self.NN_dtype=='real':
 					#@partial(jit, static_argnums=(2,))

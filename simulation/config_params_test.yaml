@@ -4,8 +4,8 @@ L: 4
 
 N_iterations: 2
 
-#NN_dtype: real # 
-NN_dtype: cpx #
+NN_dtype: real # 
+#NN_dtype: cpx #
 
 
 #NN_shape_str: (6x6-10--3x3-8--2x2-6--1x1-4--1x1-2,6x6-20--1x1-16--1x1-12) # (1325,1260)
