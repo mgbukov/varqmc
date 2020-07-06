@@ -50,6 +50,7 @@ from cpp_code import integer_to_spinstate
 
 from MC_lib import MC_sampler
 from energy_lib import Energy_estimator
+from energy_lib_exact import Energy_estimator_exact
 from optimizer import optimizer
 from data_lib import *
 
@@ -473,13 +474,24 @@ class VMC(object):
 
 	def _create_energy_estimator(self):
 		### Energy estimator
-		if self.NN_dtype=='real':
-			self.E_estimator    =Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-			self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+
+		if self.mode=='ED':
+			if self.NN_dtype=='real':
+				self.E_estimator    =Energy_estimator_exact(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator_log=Energy_estimator_exact(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+			else:
+				self.E_estimator    =Energy_estimator_exact(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator_log=Energy_estimator_exact(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+			
 		else:
-			self.E_estimator    =Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-			self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-		
+			if self.NN_dtype=='real':
+				self.E_estimator    =Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+			else:
+				self.E_estimator    =Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+			
+
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 		self.E_estimator_log.init_global_params(self.N_MC_points,self.n_iter)
 
@@ -787,104 +799,6 @@ class VMC(object):
 		flush_all_datafiles(self.all_data_files)
 
 
-	def debug_helper(self,):
-
-		# record DNN params update
-		if self.comm.Get_rank()==0:
-			
-			if self.NN_dtype=='real':
-
-				self.params_log_update_lastiters[:-1,...]=self.params_log_update_lastiters[1:,...]
-				self.params_log_update_lastiters[-1,...]*=0.0
-
-				self.params_phase_update_lastiters[:-1,...]=self.params_phase_update_lastiters[1:,...]
-				self.params_phase_update_lastiters[-1,...]*=0.0
-
-			else:
-
-				self.params_update_lastiters[:-1,...]=self.params_update_lastiters[1:,...]
-				self.params_update_lastiters[-1,...]*=0.0
-
-
-
-	def run_debug_helper(self, run=False,):
-
-		# set default flag to False
-		exit_flag=False 
-
-		if self.NN_dtype=='real':
-			opt_flag=(not self.opt_log.is_finite ) or (not self.opt_phase.is_finite )
-		else:
-			opt_flag=(not self.opt.is_finite )
-
-		#
-		##### store data
-		# 
-		if self.comm.Get_rank()==0:
-	
-			# check for nans and infs
-			if run or opt_flag or (not np.isfinite(self.Eloc_mean_g).all() ):
-				
-
-				if self.NN_dtype=='real':
-					store_debug_helper_data(self.debug_file_SF_log,self.opt_log)
-					store_debug_helper_data(self.debug_file_SF_phase,self.opt_phase)
-
-					with open(self.debug_file_params_update+'.pkl', 'wb') as handle:
-						pickle.dump([self.params_log_update_lastiters, self.params_phase_update_lastiters,], 
-										handle, protocol=pickle.HIGHEST_PROTOCOL
-									)
-
-				else:
-					store_debug_helper_data(self.debug_file_SF,self.opt)
-
-					with open(self.debug_file_params_update+'.pkl', 'wb') as handle:
-						pickle.dump([self.params_update_lastiters, None,], 
-										handle, protocol=pickle.HIGHEST_PROTOCOL
-									)
-
-	
-				with open(self.debug_file_logpsi+'.pkl', 'wb') as handle:
-					pickle.dump([self.MC_tool.log_mod_kets_g, self.MC_tool.log_psi_shift_g], 
-									handle, protocol=pickle.HIGHEST_PROTOCOL
-								)
-
-				with open(self.debug_file_phasepsi+'.pkl', 'wb') as handle:
-					pickle.dump([self.MC_tool.phase_kets_g, ], 
-									handle, protocol=pickle.HIGHEST_PROTOCOL
-								)
-
-				with open(self.debug_file_intkets+'.pkl', 'wb') as handle:
-					pickle.dump([self.MC_tool.ints_ket_g, ], 
-									handle, protocol=pickle.HIGHEST_PROTOCOL
-								)
-
-				with open(self.debug_file_Eloc+'.pkl', 'wb') as handle:
-					pickle.dump([self.E_estimator.Eloc_real_g, self.E_estimator.Eloc_imag_g, ], 
-									handle, protocol=pickle.HIGHEST_PROTOCOL
-								)
-
-
-				# set exit variable and bcast it to all processes
-				if not run: 
-					exit_flag=True
-		
-		exit_flag = self.comm.bcast(exit_flag, root=0)
-				
-		
-
-		self.comm.Barrier()
-
-
-
-		if exit_flag:
-			exit_str="\nEncountered nans or infs!\nExiting simulation...\n"
-			print(exit_str)
-			#self.logfile.write(exit_str)
-			exit()
-
-
-
 
 	def save_all_data(self,iteration,start_iter):
 
@@ -991,16 +905,18 @@ class VMC(object):
 
 		elif self.mode=='ED':
 			
-
+			self.E_estimator.get_exact_kets(self.NN_type,self.MC_tool,self.N_features)
+	
+			# required to train independent real nets with RK
+			self.E_estimator_log.get_exact_kets(self.NN_type,self.MC_tool,self.N_features)
+	
 		
 		iteration=start_iter
 		while iteration < start_iter+self.N_iterations:
 	
 			ti=time.time()
 
-			# shift params_update
-			self.debug_helper()
-
+			
 			init_iter_str="\n\n\nITERATION {0:d}, PROCESS_RANK {1:d}:\n\n".format(iteration, self.comm.Get_rank())
 			if self.comm.Get_rank()==0:
 				print(init_iter_str)
@@ -1046,8 +962,6 @@ class VMC(object):
 				os.fsync(self.logfile.fileno())
 
 
-			# run debug helper
-			self.run_debug_helper()
 			
 
 			iteration+=1
@@ -1179,7 +1093,7 @@ class VMC(object):
 	def get_training_data(self,iteration,):
 
 		##### get spin configs #####
-		if self.mode=='exact':
+		if self.mode=='exact' or self.mode=='ED':
 			if self.NN_dtype=='real':
 				self.MC_tool.exact(self.DNN_log, self.DNN_phase, )
 			else:
@@ -1229,13 +1143,17 @@ class VMC(object):
 
 		if self.mode=='exact':
 			mod_kets=np.exp(self.MC_tool.log_mod_kets)
-			self.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
-			abs_psi_2=self.count*np.abs(self.psi)**2
-
+			self.MC_tool.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
+			abs_psi_2=self.count*np.abs(self.MC_tool.psi)**2
+			
 			Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
-			overlap=np.abs(self.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
+			overlap=np.abs(self.MC_tool.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
 			Eloc_params_dict['overlap']=overlap
 			#print(abs_psi_2)
+
+		elif self.mode=='ED':
+			abs_psi_2=self.MC_tool.count*np.abs(self.MC_tool.psi)**2
+			Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
 
 		
 		elif self.mode=='MC':

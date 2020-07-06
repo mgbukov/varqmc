@@ -71,20 +71,25 @@ class MC_sampler():
 
 	
 		self.ints_ket=np.zeros((N_batch,),dtype=self.basis_type)
-		#self.ints_ket_reps=np.zeros_like(self.ints_ket)
 		self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 
-		self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
-		if self.comm.Get_rank()==0:
-			self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
-			self.log_mod_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
-			self.phase_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
-		else:
-			self.ints_ket_g=np.array([[None],[None]])
-			self.log_mod_kets_g=np.array([[None],[None]])
-			self.phase_kets_g=np.array([[None],[None]])
+		self.ints_ket_g=np.zeros((N_MC_points,),dtype=self.basis_type)
+		#self.count_g=np.zeros((N_MC_points,),dtype=np.uint16)
+
+		self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+		self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+			
+		# self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
+		# if self.comm.Get_rank()==0:
+		# 	self.ints_ket_g=np.zeros((N_MC_points,),dtype=self.basis_type)
+		# 	self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+		# 	self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+		# else:
+		# 	self.ints_ket_g=np.array([[None],])
+		# 	self.log_mod_kets_g=np.array([[None],])
+		# 	self.phase_kets_g=np.array([[None],])
 
 
 		self.s0_g=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
@@ -92,25 +97,24 @@ class MC_sampler():
 
 		self._reset_global_vars()
 		
-	def debug_helper(self):
+	def all_gather(self):
 
-		if self.comm.Get_rank()==0:
-
-			self.log_psi_shift_g[:-1]=self.log_psi_shift_g[1:]
-			self.ints_ket_g[:-1,...]=self.ints_ket_g[1:,...]
-			self.log_mod_kets_g[:-1,...]=self.log_mod_kets_g[1:,...]
-			self.phase_kets_g[:-1,...]=self.phase_kets_g[1:,...]
-
-			self.log_psi_shift_g[-1]=self.log_psi_shift
 			
 		self.comm.Barrier()
 
 		# collect data from multiple processes to root
-		self.comm.Gatherv([self.ints_ket,    self.MPI_basis_dtype], [self.ints_ket_g[-1,:],   self.MPI_basis_dtype], root=0)
-		self.comm.Gatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
-		self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
+		# self.comm.Gatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], root=0)
+		# self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[:], MPI.DOUBLE], root=0)
+		self.comm.Allgatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], )
+		self.comm.Allgatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[:], MPI.DOUBLE], )
 
 
+		mod_psi=np.exp(self.log_mod_kets)
+
+		norm_2=np.zeros(1, dtype=np.float64)
+		self.comm.Allreduce(np.sum(self.count*mod_psi**2), norm_2,  op=MPI.SUM)
+		
+		self.psi = mod_psi*np.exp(+1j*self.phase_kets)/np.sqrt(norm_2[0])
 
 	
 	def _reset_global_vars(self):
@@ -189,8 +193,14 @@ class MC_sampler():
 			self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
 
 
+		self.all_gather()
+
+
 		self.log_psi_shift=0.0 # np.max(self.log_mod_kets[:])
 		self.log_mod_kets[:] -= self.log_psi_shift 
+
+
+
 
 		#exit()
 		
@@ -203,9 +213,6 @@ class MC_sampler():
 		# print(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)[-1,...])
 
 		#exit()
-
-
-		self.debug_helper()
 
 
 		self.compute_acceptance_ratio(0,0,mode='exact')
