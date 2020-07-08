@@ -1,3 +1,5 @@
+import sys, os
+
 from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum
 
 from mpi4py import MPI
@@ -8,6 +10,10 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 from jax import jit, disable_jit
 import jax.numpy as jnp
+
+from cpp_code import integer_to_spinstate
+
+from pandas import read_csv
 
 
 def _consolidate_static(static_list):
@@ -150,6 +156,7 @@ class Energy_estimator():
 
 		self.E_GS_density_approx=-0.5
 		if Lx==4:
+			self.Hdim=107
 			self.basis_type=np.uint16
 			self.MPI_basis_dtype=MPI.SHORT	
 			if J2==0:
@@ -157,6 +164,7 @@ class Energy_estimator():
 			else:
 				self.E_GS= -8.45792 #-0.528620*self.N_sites
 		elif Lx==6:
+			self.Hdim=15804956
 			self.basis_type=np.uint64
 			self.MPI_basis_dtype=MPI.LONG
 			if J2==0:
@@ -164,11 +172,11 @@ class Energy_estimator():
 			else:
 				self.E_GS= -18.13716 #-0.503810*self.N_sites	
 		elif Lx==8:
+			self.Hdim=None
 			self.basis_type=np.uint64
 			self.MPI_basis_dtype=MPI.LONG
 
 		
-
 
 	def get_exact_kets(self):
 
@@ -242,6 +250,83 @@ class Energy_estimator():
 
 
 
+	def load_exact_basis(self,NN_type,MC_tool,N_features):
+
+
+		self.MC_tool=MC_tool
+		self.N_features=N_features
+
+		#assert(self.L==4)
+
+		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
+		path_to_data=os.path.expanduser('~') + '/Google_Drive/frustration_from_RBM/ED_data/'
+	
+		skiprows=self.N_MC_points//self.comm.Get_size()*self.comm.Get_rank()
+		if self.comm.Get_rank() == self.comm.Get_size()-1 and self.comm.Get_size()>1:
+		 	skiprows+=1
+
+		#print(self.comm.Get_rank(), skiprows, self.N_batch)
+
+		ref_states=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=self.basis_type, delimiter=' ',usecols=[0,]) 
+		self.count=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.uint16, delimiter=' ',usecols=[6,]).to_numpy().squeeze() 
+		
+		self.MC_tool.ints_ket=ref_states.to_numpy().squeeze()
+		self.MC_tool.count=self.count
+
+		### compute exact GS
+		
+		# load data
+		log_psi_GS =read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[1,]) 
+		if self.sign>0:
+			sign_psi_GS=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[4,]) 
+		else:
+			sign_psi_GS=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[3,]) 
+		
+		# build psi
+		self.psi_GS_exact = sign_psi_GS.to_numpy().squeeze() * np.exp(log_psi_GS.to_numpy().squeeze())
+
+		#print(np.sum(np.dot(psi_GS,self.count*psi_GS) ))
+		#print(np.sum(self.count*np.abs(psi_GS)**2 ))
+		#exit()
+		
+
+		# bcast psi
+		# if self.comm.Get_rank()==0:
+		# 	self.psi_GS_exact=np.zeros(self.Hdim,dtype=np.float64)
+		# else:
+		# 	self.psi_GS_exact=np.array([None])
+		# self.comm.Gatherv([psi_GS,   MPI.DOUBLE], [self.psi_GS_exact[:],   MPI.DOUBLE], root=0)
+
+
+		# compute spin s-configs
+		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=NN_type)
+
+		
+		# gather s data
+		self.comm.Barrier()
+		self.comm.Allgatherv([self.MC_tool.ints_ket,    self.MC_tool.MPI_basis_dtype], [self.MC_tool.ints_ket_g[:],   self.MC_tool.MPI_basis_dtype], )
+		#self.comm.Gatherv([self.MC_tool.count,   MPI.SHORT], [self.MC_tool.count_g[:],   MPI.SHORT], root=0)
+		
+
+		### compute s'
+		self.compute_s_primes(self.MC_tool.ints_ket,NN_type)
+
+		
+		# find indices of s primes
+		self.s_prime_inds=np.searchsorted(self.MC_tool.ints_ket_g,self.ints_bra_uq,)
+		
+
+
+
+	
+	def lookup_s_primes(self,data):
+		return data[self.s_prime_inds][self.inv_index]
+
+
+
+
+
+
 	def init_global_params(self,N_MC_points,n_iter,SdotS=False):
 
 		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
@@ -249,12 +334,14 @@ class Energy_estimator():
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
 		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
 
-		if self.comm.Get_rank()==0:
-			self.Eloc_real_g=np.zeros((n_iter,N_MC_points),dtype=np.float64)
-			self.Eloc_imag_g=np.zeros_like(self.Eloc_real_g)
-		else:
-			self.Eloc_real_g=np.array([[None],[None]])
-			self.Eloc_imag_g=np.array([[None],[None]])
+		if self.mode=="MC":
+
+			if self.comm.Get_rank()==0:
+				self.Eloc_real_g=np.zeros((n_iter,N_MC_points),dtype=np.float64)
+				self.Eloc_imag_g=np.zeros_like(self.Eloc_real_g)
+			else:
+				self.Eloc_real_g=np.array([[None],[None]])
+				self.Eloc_imag_g=np.array([[None],[None]])
 
 		#self.SdotS_real_tot=np.zeros(N_MC_points,dtype=np.float64)
 		#self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
@@ -295,10 +382,14 @@ class Energy_estimator():
 
 	def reestimate_local_energy_phase(self, iteration, NN_params_phase, batch, params_dict):
 
-
 		phase_kets = self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape))
 
-		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
+		if self.mode=='ED':
+			self.MC_tool.phase_kets[:]=phase_kets
+			self.comm.Allgatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[:], MPI.DOUBLE], )
+			phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+		else:
+			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
 
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
@@ -317,7 +408,9 @@ class Energy_estimator():
 	def compute_local_energy(self,params_log,params_phase,ints_ket,log_kets,phase_kets,log_psi_shift, verbose=True, ):
 		
 		ti=time.time()
-		self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
+		if not self.mode=='ED':
+			self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
+
 
 		str_1="computing s_primes took {0:.4f} secs.".format(time.time()-ti)
 		#if self.logfile!=None:
@@ -332,10 +425,23 @@ class Energy_estimator():
 		
 		ti=time.time()
 		if self.NN_dtype=='real':
-			log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)	
-			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
+
+			if self.mode=='ED':
+				log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
+				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+
+			else:
+				log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)	
+				phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
+
 		else:
-			log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
+			if self.mode=='ED':
+				log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
+				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+
+			else:
+				log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
+		
 		log_psi_bras-=log_psi_shift
 		
 
@@ -354,7 +460,6 @@ class Energy_estimator():
 
 		self.log_kets=log_kets
 		self.log_psi_bras=log_psi_bras
-
 
 
 	def compute_s_primes(self,ints_ket,NN_type):
@@ -400,8 +505,8 @@ class Energy_estimator():
 		# evaluate network on unique representatives only
 
 		# if self.L==4:
-		_ints_bra_uq, index, inv_index, =np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, )
-		nn_uq=_ints_bra_uq.shape[0]
+		self.ints_bra_uq, index, inv_index, =np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, )
+		nn_uq=self.ints_bra_uq.shape[0]
 		# else:
 		# 	nn_uq=nn
 		# 	index=np.arange(nn)
@@ -413,6 +518,7 @@ class Energy_estimator():
 		self.index=index
 		self.inv_index=inv_index
 
+	
 
 	def evaluate_s_primes(self,evaluate_NN,NN_params,input_shape,):
 
@@ -496,7 +602,7 @@ class Energy_estimator():
 		#################################
 		#
 		# check variance of E_loc 
-		if debug_mode:
+		if debug_mode and self.mode=='MC':
 			self.debug_helper()
 
 
@@ -506,14 +612,13 @@ class Energy_estimator():
 
 	def process_local_energies(self,Eloc_params_dict,):
 
-		
+
 		Eloc=self.Eloc_real+1j*self.Eloc_imag
+		
+		Eloc_mean_g=np.zeros(1, dtype=np.complex128)
+		Eloc_var_g=np.zeros(1, dtype=np.float64)
 
-	
 		if self.mode=='MC':
-
-			Eloc_mean_g=np.zeros(1, dtype=np.complex128)
-			Eloc_var_g=np.zeros(1, dtype=np.float64)
 
 			# Eloc_mean=np.mean(Eloc).real
 			# Eloc_var=np.sum( np.abs(Eloc)**2)/self.Eloc_real_tot.shape[0] - Eloc_mean**2
@@ -535,6 +640,18 @@ class Energy_estimator():
 			Eloc_mean_g=np.sum(Eloc*abs_psi_2).real
 			Eloc_var_g=np.sum(abs_psi_2*np.abs(Eloc)**2) - Eloc_mean_g**2
 			
+		elif self.mode=='ED':
+
+			abs_psi_2=Eloc_params_dict['abs_psi_2']
+			Eloc_mean=np.sum(abs_psi_2*Eloc)
+			self.comm.Allreduce(np.sum(Eloc_mean), Eloc_mean_g, op=MPI.SUM)
+			
+			self.comm.Allreduce(np.sum(abs_psi_2*np.abs(Eloc)**2), Eloc_var_g,  op=MPI.SUM)
+			Eloc_var_g-=np.abs(Eloc_mean_g)**2
+
+			Eloc_mean_g=Eloc_mean_g[0]
+			Eloc_var_g=Eloc_var_g[0]
+
 
 
 		E_diff_real=self.Eloc_real-Eloc_mean_g.real

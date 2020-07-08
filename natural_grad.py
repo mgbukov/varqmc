@@ -124,12 +124,15 @@ class natural_gradient():
 		self.Fphase_norm=0.0
 
 		
-		if self.comm.Get_rank()==0:
-			self.S_lastiters=np.zeros([n_iter,self.N_varl_params,self.N_varl_params],dtype=dtype) # array to store last S-matrices
-			self.F_lastiters=np.zeros([n_iter,self.N_varl_params,],dtype=dtype) # array to store last F-vectors
-		else:
-			self.S_lastiters=np.array([[None],[None]])
-			self.F_lastiters=np.array([[None],[None]])
+		if self.mode=='MC':
+
+			if self.comm.Get_rank()==0:
+				self.S_lastiters=np.zeros([n_iter,self.N_varl_params,self.N_varl_params],dtype=dtype) # array to store last S-matrices
+				self.F_lastiters=np.zeros([n_iter,self.N_varl_params,],dtype=dtype) # array to store last F-vectors
+			else:
+				self.S_lastiters=np.array([[None],[None]])
+				self.F_lastiters=np.array([[None],[None]])
+		
 		
 	def debug_helper(self):
 
@@ -455,7 +458,7 @@ class natural_gradient():
 		t3=time.time()
 
 
-		print("evaluation took gradients: {0:0.6} secs; F_vector: {1:0.6} secs; S-matrix: {2:0.6} secs.".format(t1-t0, t2-t1, t3-t2) )
+		print("evaluation took -- gradients: {0:0.6} secs; F_vector: {1:0.6} secs; S-matrix: {2:0.6} secs.".format(t1-t0, t2-t1, t3-t2) )
 		
 		### compute natural_gradients using cg
 		# regularize Fisher metric
@@ -465,7 +468,7 @@ class natural_gradient():
 			self.S_matrix += self.delta*np.diag(np.diag(self.S_matrix))
 			#self.S_matrix += self.delta*np.linalg.norm(self.S_matrix)*np.eye(self.S_matrix.shape[0]) 
 
-		if self.debug_mode:
+		if self.debug_mode and self.mode=='MC':
 			self.debug_helper()
 
 

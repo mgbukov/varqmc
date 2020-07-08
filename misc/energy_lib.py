@@ -1,5 +1,3 @@
-import sys, os
-
 from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum
 
 from mpi4py import MPI
@@ -10,10 +8,6 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 from jax import jit, disable_jit
 import jax.numpy as jnp
-
-from cpp_code import integer_to_spinstate
-
-from pandas import read_csv
 
 
 def _consolidate_static(static_list):
@@ -66,7 +60,7 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
 
 
 
-class Energy_estimator_exact():
+class Energy_estimator():
 
 	def __init__(self,comm,DNN_log,DNN_phase,mode,J2,N_MC_points,N_batch,L,N_symm,sign,minibatch_size):
 
@@ -176,115 +170,75 @@ class Energy_estimator_exact():
 		
 
 
-	def get_exact_kets(self,NN_type,MC_tool,N_features):
+	def get_exact_kets(self):
 
 
-		self.MC_tool=MC_tool
-		self.N_features=N_features
+		assert(self.L==4)
 
-		#assert(self.L==4)
+		from quspin.basis import spin_basis_general
+		from quspin.operators import hamiltonian
 
-		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
-		path_to_data=os.path.expanduser('~') + '/Google_Drive/frustration_from_RBM/ED_data/'
-	
-		skiprows=self.N_MC_points//self.comm.Get_size()*self.comm.Get_rank()
-		if self.comm.Get_rank() == self.comm.Get_size()-1 and self.comm.Get_size()>1:
-		 	skiprows+=1
+		Lx=self.L
+		Ly=self.L
 
-		#print(self.comm.Get_rank(), skiprows, self.N_batch)
+		sites = np.arange(self.N_sites,dtype=np.int32) # sites [0,1,2,....]
+			
+		x = sites%Lx # x positions for sites
+		y = sites//Lx # y positions for sites
 
-		ref_states=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=self.basis_type, delimiter=' ',usecols=[0,]) 
-		self.count=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.uint16, delimiter=' ',usecols=[6,]) 
-	
+		T_x = (x+1)%Lx + Lx*y # translation along x-direction
+		T_y = x +Lx*((y+1)%Ly) # translation along y-direction
+
+		P_x = x + Lx*(Ly-y-1) # reflection about x-axis
+		P_y = (Lx-x-1) + Lx*y # reflection about y-axis
+		P_d = y + Lx*x
+
+		Z   = -(sites+1) # spin inversion
+
+		###### setting up bases ######
+		self.basis_symm = spin_basis_general(self.N_sites, pauli=False, Ns_block_est=200,
+											Nup=self.N_sites//2,
+											kxblock=(T_x,0),kyblock=(T_y,0),
+											pdblock=(P_d,0),
+											pxblock=(P_x,0),pyblock=(P_y,0),
+											zblock=(Z,0),
+											block_order=['zblock','pdblock','pyblock','pxblock','kyblock','kxblock']
+										)
+		self.basis = spin_basis_general(self.N_sites, pauli=False, Nup=self.N_sites//2)
 		
-		self.MC_tool.ints_ket=ref_states.to_numpy().squeeze()
-		self.MC_tool.count=self.count.to_numpy().squeeze()
-
-		# compute spin s-configs
-		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=NN_type)
-
+		self.H=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis,dtype=np.float64) #
+		self.H_symm=hamiltonian(self.static_off_diag+self.static_diag, [], basis=self.basis_symm,dtype=np.float64)
 		
-		# gather s data
-		self.comm.Barrier()
-		self.comm.Allgatherv([self.MC_tool.ints_ket,    self.MC_tool.MPI_basis_dtype], [self.MC_tool.ints_ket_g[:],   self.MC_tool.MPI_basis_dtype], )
-		#self.comm.Gatherv([self.MC_tool.count,   MPI.SHORT], [self.MC_tool.count_g[:],   MPI.SHORT], root=0)
 		
+		ref_states, index, inv_index, count=np.unique(self.basis_symm.representative(self.basis.states), return_index=True, return_inverse=True, return_counts=True)
+		self.ref_states=ref_states
+		self.count=count
 
-		### compute s'
-		self.compute_s_primes(self.MC_tool.ints_ket,NN_type)
+		# j=1#5
+		# y=np.zeros(self.H.Ns)
+		# index=basis.index(ref_states[j])
+		# y[index]=1.0
+		# print(self.H.expt_value(y))
 
-		
-		# find indices of s primes
-		self.s_prime_inds=np.searchsorted(self.MC_tool.ints_ket_g,self.ints_bra_uq,)
-		
-		# if self.comm.Get_rank()==1:
-		# 	print(self.ints_bra_uq)
-		# 	print(self.MC_tool.ints_ket_g)
-		# 	print(self.s_prime_inds)
+		# H_symm=hamiltonian(self.static_off_diag+self.static_diag, [], basis=basis_symm,dtype=np.float64)
+		E,V = self.H.eigsh(k=2,which='BE')
+		self.psi_GS_exact=V[:,0]
+
+		# print(E[:10])
 		# exit()
 
+		# print(E[0],self.SdotS.expt_value(self.psi_GS_exact))
 
-	def compute_s_primes(self,ints_ket,NN_type):
+		# S,_ = self.SdotS.eigsh(k=2,which='BE')
+		# #S,_ = self.SdotS.eigh()
+		# print(S)
 
-		# preallocate variables
-		self._reset_locenergy_params()
+		# print( np.linalg.norm( (self.H.dot(self.SdotS) - self.SdotS.dot(self.H)).toarray() ) )
 
-
-		# diag matrix elements, only real part
-		for opstr,indx,J in self._static_list_diag:
-
-			indx=np.asarray(indx,dtype=np.int32)
-			update_diag_ME(ints_ket,self.Eloc_diag,opstr,indx,J) 
-
-
-		# off-diag matrix elements
-		nn=0
-		for j,(opstr,indx,J) in enumerate(self._static_list_offdiag):
-			
-			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
-			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
-
-			indx=np.asarray(indx,dtype=np.int32)
-			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J,self.N_symm,NN_type)
-			
-			self._MEs[nn:nn+n]=self._MEs_holder[self._ints_ket_ind_holder[:n]]
-			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[self._ints_ket_ind_holder[:n]]
-			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[self._ints_ket_ind_holder[:n]]
-			self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
-
-			#sample: [s1, s2, s3, ]
-			#s_primes: [ [s11, s12, s12], [s21, s22,], [...], ]
-			
-			self._n_per_term[j]=n
-			nn+=n
-
-		# print(ints_ket)
-		# print(self._MEs[:nn])
-		# print(self._ints_bra_rep[:nn])
 		# exit()
 
-
-		# evaluate network on unique representatives only
-
-		# if self.L==4:
-		self.ints_bra_uq, index, inv_index, =np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, )
-		nn_uq=self.ints_bra_uq.shape[0]
-		# else:
-		# 	nn_uq=nn
-		# 	index=np.arange(nn)
-		# 	inv_index=index
-
-
-		self.nn=nn
-		self.nn_uq=nn_uq
-		self.index=index
-		self.inv_index=inv_index
-
-	def lookup_s_primes(self,data):
-		return data[self.s_prime_inds][self.inv_index]
-
-
-
+		
+		return ref_states.astype(self.basis_type), index, inv_index, count
 
 
 
@@ -341,14 +295,10 @@ class Energy_estimator_exact():
 
 	def reestimate_local_energy_phase(self, iteration, NN_params_phase, batch, params_dict):
 
+
 		phase_kets = self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape))
 
-		if self.mode=='ED':
-			self.MC_tool.phase_kets[:]=phase_kets
-			self.comm.Allgatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[:], MPI.DOUBLE], )
-			phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
-		else:
-			sphase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
+		phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
 
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
@@ -367,9 +317,7 @@ class Energy_estimator_exact():
 	def compute_local_energy(self,params_log,params_phase,ints_ket,log_kets,phase_kets,log_psi_shift, verbose=True, ):
 		
 		ti=time.time()
-		if not self.mode=='ED':
-			self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
-
+		self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
 
 		str_1="computing s_primes took {0:.4f} secs.".format(time.time()-ti)
 		#if self.logfile!=None:
@@ -384,23 +332,10 @@ class Energy_estimator_exact():
 		
 		ti=time.time()
 		if self.NN_dtype=='real':
-
-			if self.mode=='ED':
-				log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
-				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
-
-			else:
-				log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)	
-				phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
-
+			log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)	
+			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
 		else:
-			if self.mode=='ED':
-				log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
-				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
-
-			else:
-				log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
-		
+			log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
 		log_psi_bras-=log_psi_shift
 		
 
@@ -422,7 +357,62 @@ class Energy_estimator_exact():
 
 
 
-	
+	def compute_s_primes(self,ints_ket,NN_type):
+
+		# preallocate variables
+		self._reset_locenergy_params()
+
+
+		# diag matrix elements, only real part
+		for opstr,indx,J in self._static_list_diag:
+
+			indx=np.asarray(indx,dtype=np.int32)
+			update_diag_ME(ints_ket,self.Eloc_diag,opstr,indx,J) 
+
+
+		# off-diag matrix elements
+		nn=0
+		for j,(opstr,indx,J) in enumerate(self._static_list_offdiag):
+			
+			self._spinstates_bra_holder[:]=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
+			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
+
+			indx=np.asarray(indx,dtype=np.int32)
+			n = update_offdiag_ME(ints_ket,self._ints_bra_rep_holder,self._spinstates_bra_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J,self.N_symm,NN_type)
+			
+			self._MEs[nn:nn+n]=self._MEs_holder[self._ints_ket_ind_holder[:n]]
+			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[self._ints_ket_ind_holder[:n]]
+			self._spinstates_bra[nn:nn+n]=self._spinstates_bra_holder[self._ints_ket_ind_holder[:n]]
+			self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
+
+			#sample: [s1, s2, s3, ]
+			#s_primes: [ [s11, s12, s12], [s21, s22,], [...], ]
+			
+			self._n_per_term[j]=n
+			nn+=n
+
+		# print(ints_ket)
+		# print(self._MEs[:nn])
+		# print(self._ints_bra_rep[:nn])
+		# exit()
+
+
+		# evaluate network on unique representatives only
+
+		# if self.L==4:
+		_ints_bra_uq, index, inv_index, =np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, )
+		nn_uq=_ints_bra_uq.shape[0]
+		# else:
+		# 	nn_uq=nn
+		# 	index=np.arange(nn)
+		# 	inv_index=index
+
+
+		self.nn=nn
+		self.nn_uq=nn_uq
+		self.index=index
+		self.inv_index=inv_index
+
 
 	def evaluate_s_primes(self,evaluate_NN,NN_params,input_shape,):
 
@@ -516,13 +506,14 @@ class Energy_estimator_exact():
 
 	def process_local_energies(self,Eloc_params_dict,):
 
-
-		Eloc=self.Eloc_real+1j*self.Eloc_imag
 		
-		Eloc_mean_g=np.zeros(1, dtype=np.complex128)
-		Eloc_var_g=np.zeros(1, dtype=np.float64)
+		Eloc=self.Eloc_real+1j*self.Eloc_imag
 
+	
 		if self.mode=='MC':
+
+			Eloc_mean_g=np.zeros(1, dtype=np.complex128)
+			Eloc_var_g=np.zeros(1, dtype=np.float64)
 
 			# Eloc_mean=np.mean(Eloc).real
 			# Eloc_var=np.sum( np.abs(Eloc)**2)/self.Eloc_real_tot.shape[0] - Eloc_mean**2
@@ -544,18 +535,6 @@ class Energy_estimator_exact():
 			Eloc_mean_g=np.sum(Eloc*abs_psi_2).real
 			Eloc_var_g=np.sum(abs_psi_2*np.abs(Eloc)**2) - Eloc_mean_g**2
 			
-		elif self.mode=='ED':
-
-			abs_psi_2=Eloc_params_dict['abs_psi_2']
-			Eloc_mean=np.sum(abs_psi_2*Eloc)
-			self.comm.Allreduce(np.sum(Eloc_mean), Eloc_mean_g, op=MPI.SUM)
-			
-			self.comm.Allreduce(np.sum(abs_psi_2*np.abs(Eloc)**2), Eloc_var_g,  op=MPI.SUM)
-			Eloc_var_g-=np.abs(Eloc_mean_g)**2
-
-			Eloc_mean_g=Eloc_mean_g[0]
-			Eloc_var_g=Eloc_var_g[0]
-
 
 
 		E_diff_real=self.Eloc_real-Eloc_mean_g.real

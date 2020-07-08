@@ -2,10 +2,10 @@ J2: 0.5
 sign: -1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 4
 
-N_iterations: 2
+N_iterations: 3
 
-NN_dtype: real # 
-#NN_dtype: cpx #
+#NN_dtype: real # 
+NN_dtype: cpx #
 
 
 #NN_shape_str: (6x6-10--3x3-8--2x2-6--1x1-4--1x1-2,6x6-20--1x1-16--1x1-12) # (1325,1260)
@@ -34,7 +34,7 @@ MC_thermal: true
 MC_prop_threshold: 1.0 # large values means local proposals
 minibatch_size: 200
 
-# N_MC_points: 100
+# N_MC_points: 100 #00
 # mode: MC 
 
 N_MC_points: 107 # 
