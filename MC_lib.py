@@ -13,7 +13,6 @@ from jax import jit
 
 from mpi4py import MPI
 import numpy as np
-config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import time
 
@@ -38,8 +37,6 @@ class MC_sampler():
 		self.thermal=False
 
 
-
-
 	def compute_acceptance_ratio(self,N_accepted,N_MC_proposals,mode='MC'):
 
 		if mode=='exact':
@@ -57,7 +54,7 @@ class MC_sampler():
 
 
 
-	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,basis_type,MPI_basis_dtype):
+	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,NN_type,basis_type,MPI_basis_dtype,n_iter,mode):
 
 		self.N_batch=N_batch
 		self.N_sites=L**2
@@ -69,39 +66,49 @@ class MC_sampler():
 		self.thermalization_time=10*self.N_sites
 		#self.auto_correlation_time=self.N_sites  # min(0.05, 0.4/acc_ratio * N_site_
 
+		self.NN_type=NN_type
+
 
 	
 		self.ints_ket=np.zeros((N_batch,),dtype=self.basis_type)
-		#self.ints_ket_reps=np.zeros_like(self.ints_ket)
-		self.mod_kets=np.zeros((N_batch,),dtype=np.float64)
+		self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
 		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 
-		n_iter=6
-		self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
-		if self.comm.Get_rank()==0:
-			self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
-			self.mod_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
-			self.phase_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
+		if mode=='MC':
+			self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
+			if self.comm.Get_rank()==0:
+				self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
+				self.log_mod_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
+				self.phase_kets_g=np.zeros((n_iter,N_MC_points,),dtype=np.float64)
+			else:
+				self.ints_ket_g=np.array([[None],[None]])
+				self.log_mod_kets_g=np.array([[None],[None]])
+				self.phase_kets_g=np.array([[None],[None]])
+
+
+			self.s0_g=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
+			self.sf_g=np.zeros_like(self.s0_g)
+
 		else:
-			self.ints_ket_g=np.array([[None],[None]])
-			self.mod_kets_g=np.array([[None],[None]])
-			self.phase_kets_g=np.array([[None],[None]])
 
+			self.ints_ket_g=np.zeros((N_MC_points,),dtype=self.basis_type)
+			#self.count_g=np.zeros((N_MC_points,),dtype=np.uint16)
 
-		self.s0=np.zeros(self.N_MC_chains,dtype=self.basis_type)
-		self.s0_g=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
-
-
+			self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+			self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+			
+	
 		self._reset_global_vars()
 		
+
 	def debug_helper(self):
 
 		if self.comm.Get_rank()==0:
 
 			self.log_psi_shift_g[:-1]=self.log_psi_shift_g[1:]
 			self.ints_ket_g[:-1,...]=self.ints_ket_g[1:,...]
-			self.mod_kets_g[:-1,...]=self.mod_kets_g[1:,...]
+			self.log_mod_kets_g[:-1,...]=self.log_mod_kets_g[1:,...]
 			self.phase_kets_g[:-1,...]=self.phase_kets_g[1:,...]
 
 			self.log_psi_shift_g[-1]=self.log_psi_shift
@@ -110,76 +117,90 @@ class MC_sampler():
 
 		# collect data from multiple processes to root
 		self.comm.Gatherv([self.ints_ket,    self.MPI_basis_dtype], [self.ints_ket_g[-1,:],   self.MPI_basis_dtype], root=0)
-		self.comm.Gatherv([self.mod_kets,    MPI.DOUBLE], [self.mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
+		self.comm.Gatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
 		self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
 
 
+	def all_gather(self):
+
+			
+		self.comm.Barrier()
+
+		# collect data from multiple processes to root
+		# self.comm.Gatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], root=0)
+		# self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[:], MPI.DOUBLE], root=0)
+		self.comm.Allgatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], )
+		self.comm.Allgatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[:], MPI.DOUBLE], )
 
 
-	'''
-	def Allgather(self):
+		mod_psi=np.exp(self.log_mod_kets)
 
-		self.mod_kets_tot*=0.0
-
+		norm_2=np.zeros(1, dtype=np.float64)
+		self.comm.Allreduce(np.sum(self.count*mod_psi**2), norm_2,  op=MPI.SUM)
 		
-		
-		#self.comm.Allgatherv([self.spinstates_ket,  MPI.DOUBLE], [self.spinstates_ket_tot, MPI.DOUBLE])
-		self.comm.Allgatherv([self.mod_kets,    MPI.DOUBLE], [self.mod_kets_tot,   MPI.DOUBLE])
-		self.comm.Allgatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_tot, MPI.DOUBLE])
+		self.psi = mod_psi*np.exp(+1j*self.phase_kets)/np.sqrt(norm_2[0])
 
-
-		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgatherv([self.s0,  MPI.INT], [self.s0_g, MPI.INT])
-		else:
-			self.s0_g=self.s0.copy()
-	'''	
 	
 	def _reset_global_vars(self):
 		self.spinstates_ket=np.zeros((self.N_batch*self.N_features,),dtype=np.int8)
 		
 
 
-	def sample(self,DNN, compute_phases=True):
+	def sample(self, DNN_log, DNN_phase, compute_phases=True):
 
 		self._reset_global_vars()
-		#assert(self.spinstates_ket.max()==0)
 
-		N_accepted, N_MC_proposals = DNN.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
-												self.spinstates_ket,self.ints_ket,self.mod_kets,self.s0, self.thermal,
+		N_accepted, N_MC_proposals = DNN_log.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
+												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
 
-
-		if compute_phases:
-			self.phase_kets[:]=DNN.evaluate_phase(DNN.params, self.spinstates_ket.reshape(self.N_batch*self.N_symm,self.N_sites), )#._value
-
 		
+		if compute_phases:
+			if DNN_phase is not None: # real nets
+				if DNN_phase.semi_exact==False:
+					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), )
+				else:
+					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.ints_ket, )
+			else:
+				if DNN_log.semi_exact==False:
+					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.spinstates_ket.reshape(DNN_log.input_shape), )
+				else:
+					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.ints_ket, )
+
+
+		#print(DNN_log.N_varl_params, DNN_phase.N_varl_params)
+		# print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
+		# print(self.phase_kets.mean(), self.phase_kets.std() )
+		# print(self.log_mod_kets)
+		# exit()
+
+
 		### normalize all kets
 		#
 		self.log_psi_shift=0.0
-		self.mod_psi_norm=1.0
-
+		
 		# compute global max
-		local_max=np.max(self.mod_kets).astype(np.float64)
+		local_max=np.max(self.log_mod_kets).astype(np.float64)
 		global_max=np.zeros(1, dtype=np.float64)
 		self.comm.Reduce(local_max, global_max, op=MPI.MAX) # broadcast to root=0
 		
 		if self.comm.Get_rank()==0:
-			self.log_psi_shift=np.log(global_max[0])
-			self.mod_psi_norm=global_max[0]
+			self.log_psi_shift=global_max[0]
 		# broadcast sys_data
 		self.log_psi_shift = self.comm.bcast(self.log_psi_shift, root=0)
-		self.mod_psi_norm = self.comm.bcast(self.mod_psi_norm, root=0)
 		#
 		# normalize
-		self.mod_kets/=self.mod_psi_norm
+		self.log_mod_kets-=self.log_psi_shift
 
 
 		### gather seeds
 
 		if self.comm.Get_size()*self.N_MC_chains > 1:
-			self.comm.Allgatherv([self.s0,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
+			self.comm.Allgatherv([DNN_log.s0_vec,  self.MPI_basis_dtype], [self.s0_g, self.MPI_basis_dtype])
+			self.comm.Allgatherv([DNN_log.sf_vec,  self.MPI_basis_dtype], [self.sf_g, self.MPI_basis_dtype])
 		else:
-			self.s0_g=self.s0.copy()
+			self.s0_g=DNN_log.s0_vec.copy()
+			self.sf_g=DNN_log.sf_vec.copy()
 
 
 		### compute acceptance ratio
@@ -194,67 +215,48 @@ class MC_sampler():
 
 
 
-	def exact(self,evaluate_NN,DNN):
+	def exact(self, DNN_log, DNN_phase):
 
-		log_psi, phase_kets = evaluate_NN(DNN.params,self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites), DNN.apply_fun_args )
-		
-		#print(log_psi)
-		#exit()
+		if DNN_phase is not None: # real nets
+			if DNN_phase.semi_exact==False:
+				self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+			else:
+				self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params, self.ints_ket, )
 
-		self.log_psi_shift=log_psi[0]._value
-		self.mod_kets[:] = jnp.exp((log_psi-self.log_psi_shift)).block_until_ready()#._value
-		#self.mod_kets = np.exp(log_psi._value)
-		self.phase_kets[:]= phase_kets#._value
+			if DNN_log.semi_exact==False:
+				self.log_mod_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+			else:
+				self.log_mod_kets[:] = DNN_log.evaluate(DNN_phase.params, self.ints_ket, )
+
+		else:
+			if DNN_log.semi_exact==False:
+				self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+			else:
+				self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_phase.params, self.ints_ket, )
+
+		self.all_gather()
 
 
-		# for j, spin_config in enumerate(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)):
-		# 	print(spin_config[0,...].reshape(4,4))
-		# 	print()
-		
-		# print(log_psi)
-		# print()
+		self.log_psi_shift=0.0 # np.max(self.log_mod_kets[:])
+		self.log_mod_kets[:] -= self.log_psi_shift 
+
+
+		# for s, ph in zip(self.ints_ket, self.phase_kets):
+		# 	print(s,ph%(2*np.pi))
+
 		# exit()
+		
+		# print(self.phase_kets[-1])
+		# print(self.log_mod_kets[-1])
+		
+		#print('THERE', self.phase_kets[-16], self.phase_kets[-1])
+		#exit()
+		
+		# print(self.spinstates_ket.reshape(self.N_batch,self.N_symm,self.N_sites)[-1,...])
+
+		#exit()
 
 
 		self.compute_acceptance_ratio(0,0,mode='exact')
 
 
-	'''
-	def check_consistency(self,evaluate_NN,NN_params):
-
-		# reshape
-		spinstates_ket=self.spinstates_ket.reshape(-1,self.N_symm,self.N_sites)
-		
-		# combine results from all cores
-		mod_kets_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-		phase_kets_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-
-		log_psi_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-		phase_psi_tot=np.zeros((self.comm.Get_size()*self.N_batch,),dtype=np.float64)
-		
-		self.comm.Allgather([self.mod_kets,  MPI.DOUBLE], [mod_kets_tot, MPI.DOUBLE])
-		self.comm.Allgather([self.phase_kets,  MPI.DOUBLE], [phase_kets_tot, MPI.DOUBLE])
-		
-
-		# evaluate network in python
-		log_psi, phase_psi = evaluate_NN(NN_params,spinstates_ket) 
-		log_psi-=self.log_psi_shift
-
-		self.comm.Allgather([log_psi._value,  MPI.DOUBLE], [log_psi_tot, MPI.DOUBLE])
-		self.comm.Allgather([phase_psi._value,  MPI.DOUBLE], [phase_psi_tot, MPI.DOUBLE])
-		
-
-
-		# print(phase_kets_tot)
-		# print(phase_psi)
-		# # print()
-		# print(mod_kets_tot)
-		# print(np.exp(log_psi))
-		# print(mod_kets_tot-np.exp(log_psi))
-		# exit()
-
-		
-		# test results for consistency
-		np.testing.assert_allclose(phase_psi_tot, phase_kets_tot)
-		np.testing.assert_allclose(np.exp(log_psi_tot), mod_kets_tot)
-	'''

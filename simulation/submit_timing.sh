@@ -32,11 +32,14 @@ for N_mpi in $(seq 1 1 26)
 	echo "source activate jax-noGPU" >> submission.sh
 
 
+	data_dir="$(~/miniconda3/envs/jax-noGPU/bin/python make_data_file.py)"
+
+
 	### CPU
 	#echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
 	#echo ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
 
-	echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py >> submission.sh
+	echo mpiexec -np ${N_mpi} ~/miniconda3/envs/jax-noGPU/bin/python ./main.py ${data_dir} >> submission.sh
 
 	sbatch submission.sh
 

@@ -84,7 +84,8 @@ DNN_psi=VMC(params,train=False)
 # C_sign_psi_L1_weighted=np.zeros_like(C_KL_div)
 
 
-
+print('USE pandas cvs reader isntead !!!')
+exit()
 
 
 for k, iteration in enumerate(range(N_iter)):
@@ -94,12 +95,11 @@ for k, iteration in enumerate(range(N_iter)):
 	file_name='NNparams'+'--iter_{0:05d}--'.format(iteration) + params_str
 
 	with open(load_dir + 'NN_params/' +file_name+'.pkl', 'rb') as handle:
-		NN_params, apply_fun_args, apply_fun_args_dyn = pickle.load(handle)
+		NN_params, apply_fun_args, log_psi_shift = pickle.load(handle)
 
 	DNN_psi.DNN.update_params(NN_params)
 	DNN_psi.DNN.apply_fun_args=apply_fun_args
-	DNN_psi.DNN.apply_fun_args_dyn=apply_fun_args_dyn
-
+	
 
 	# first loop to compute norm of DNN.psi
 

@@ -1,9 +1,9 @@
 # distutils: language=c++
 # cython: language_level=2
-#cython: boundscheck=False
-#cython: wraparound=False
-#cython: cdivision=True
-#cython: profile=False
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: cdivision=True
+# cython: profile=False
 
 from jax.config import config
 config.update("jax_enable_x64", True)
@@ -13,21 +13,32 @@ from jax import jit, grad, random, device_put, partial
 from jax.tree_util import tree_structure, tree_flatten, tree_unflatten
 
 
-
 cimport cython
 import numpy as np
 cimport numpy as np
 from libcpp.vector cimport vector
-from libc.stdlib cimport rand, srand, RAND_MAX
 from libcpp cimport bool
+from libc.stdlib cimport rand, srand, RAND_MAX
+from libc.math cimport exp #, sin, cos, acos, sqrt, fabs, M_PI, floor, ceil
 
 from cython.parallel cimport prange, threadid, parallel
 cimport openmp
 
+from rng_wrapper cimport *
+from local_sampling cimport *
 
-from DNN_architectures_cpx import *
+
+from .NN_log import *
+from .NN_phase import *
+from .NN_cpx import *
+
+#from DNN_architectures_cpx import *
+# from DNN_architectures_real import *
+# from DNN_architectures_common import *
+
 from reshape_class import NN_Tree
 from functools import partial   
+
 
 
 ##############################################
@@ -39,7 +50,6 @@ cdef extern from *:
     #define _L 4
     """
     pass
-
 
 ##############################################
 
@@ -77,44 +87,6 @@ cdef extern from *:
     void OMP_BARRIER_PRAGMA() nogil
 
 
-cdef extern from "<stdlib.h>" nogil:
-    int rand_r(unsigned int *seed) nogil;
-
-'''
-## cpp mt19937: different on linux and osx 
-cdef extern from "<random>" namespace "std":
-    cdef cppclass mt19937 nogil:
-        mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
-        mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
-
-    cdef cppclass uniform_real_distribution[T] nogil:
-        uniform_real_distribution() nogil
-        uniform_real_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-
-    cdef cppclass uniform_int_distribution[T] nogil:
-        uniform_int_distribution() nogil
-        uniform_int_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-'''
-
-
-cdef extern from "boost/random/mersenne_twister.hpp" namespace "boost::random" nogil:
-    cdef cppclass mt19937 nogil:
-        mt19937() nogil # we need to define this constructor to stack allocate classes in Cython
-        mt19937(unsigned int seed) nogil # not worrying about matching the exact int type for seed
-
-cdef extern from "boost/random/uniform_int_distribution.hpp" namespace "boost::random" nogil:
-    cdef cppclass uniform_int_distribution[T] nogil:
-        uniform_int_distribution() nogil
-        uniform_int_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
-
-cdef extern from "boost/random/uniform_real_distribution.hpp" namespace "boost::random" nogil:
-    cdef cppclass uniform_real_distribution[T] nogil:
-        uniform_real_distribution() nogil
-        uniform_real_distribution(T a, T b) nogil
-        T operator()(mt19937 gen) nogil # ignore the possibility of using other classes for "gen"
 
 
 
@@ -129,7 +101,7 @@ cdef extern from "sample.h":
     
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
-    void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[]) nogil
+    void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[],const double[]) nogil
 
     void int_to_spinstate[T,J](const int,T ,J []) nogil
     void int_to_spinstate_conv[T,J](const int,T ,J []) nogil
@@ -138,6 +110,8 @@ cdef extern from "sample.h":
 
     T rep_int_to_spinstate[T,J](const int,T ,J []) nogil
     T rep_int_to_spinstate_conv[T,J](const int,T ,J []) nogil
+
+    basis_type ref_state(const basis_type) nogil
 
 
 
@@ -173,12 +147,19 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
 
 
 @cython.boundscheck(False)
+def representative(basis_type[:] states,basis_type[:] out,):
+    cdef int i;
+    cdef int Ns=states.shape[0]
+    with nogil:
+        for i in range (Ns):
+            out[i]=ref_state(states[i]) 
+
+
+@cython.boundscheck(False)
 def integer_cyclicity(basis_type[:] states,np.npy_uint32[::1] cycl):
     cdef int i;
     cdef int Ns=states.shape[0];
     cdef int Nsites=N_sites;
-    
-
     with nogil:
         for i in range (Ns):
             cycl[i]=cyclicity(Nsites,states[i])
@@ -227,13 +208,15 @@ def c_offdiag_sum(
                 int[::1] n_per_term,
                 np.uint32_t[::1] ket_indx,
                 double[::1] MEs,
-                const double[::1] psi_bras,
-                const double[::1] phase_psi_bras):
+                const double[::1] log_psi_bras,
+                const double[::1] phase_psi_bras,
+                const double[::1] log_psi_kets
+                ):
     
     cdef int Ns = n_per_term.shape[0]
     
     with nogil:
-        offdiag_sum(Ns,&n_per_term[0],&Eloc_cos[0],&Eloc_sin[0],&ket_indx[0],&MEs[0],&psi_bras[0],&phase_psi_bras[0])
+        offdiag_sum(Ns,&n_per_term[0],&Eloc_cos[0],&Eloc_sin[0],&ket_indx[0],&MEs[0],&log_psi_bras[0],&phase_psi_bras[0],&log_psi_kets[0])
         
 
 
@@ -247,20 +230,69 @@ def c_offdiag_sum(
 
 
 
+def _compute_layers(rng, comm, NN_architecture, input_shape, output_shape, reduce_shape):
+
+    NN_architecture_dyn = NN_architecture.copy()
+    for key in NN_architecture.keys():
+        if 'batch_norm' in key:
+            print('check dynamic layers')
+            exit()
+            NN_architecture_dyn[key]=BatchNorm_cpx_dyn(axis=(0,))
+
+    # create NN
+    init_params, apply_layer, apply_fun_args = serial(*NN_architecture.values())
+    _, apply_layer_dyn, apply_fun_args_dyn = serial(*NN_architecture_dyn.values())
+
+    _, params = init_params(rng,input_shape)
+
+    _init_apply_fun_args(rng, comm, NN_architecture, apply_fun_args,apply_fun_args_dyn, input_shape, output_shape, reduce_shape)
+
+    return params, apply_layer, apply_fun_args, apply_layer_dyn, apply_fun_args_dyn
+
+
+
+
+def _init_apply_fun_args(rng, comm, NN_architecture, apply_fun_args,apply_fun_args_dyn, input_shape, output_shape, reduce_shape):
+    
+    layers_type=list(NN_architecture.keys())
+    init_funs, apply_funs = zip(*NN_architecture.values())
+
+    for j, (init_fun, layer_type) in enumerate(zip(init_funs, layers_type)):        
+        rng, layer_rng = random.split(rng)
+        input_shape, _ = init_fun(layer_rng, input_shape)
+
+        if 'batch_norm' in layer_type:
+            mean, std_mat_inv = init_batchnorm_cpx_params(input_shape)
+            
+            # an update in the parameters of apply_fun_args_dyn UPDATES directly the params of apply_fun_args
+            apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv, )        
+            apply_fun_args_dyn[j]=dict(fixpoint_iter=False, mean=mean, std_mat_inv=std_mat_inv, comm=comm, )
+    
+        # if 'reg' in layer_type:
+        #     D=dict(reduce_shape=reduce_shape, output_shape=output_shape)
+        #     apply_fun_args[j]=D
+        #     apply_fun_args_dyn[j]=D
+
+
+
 
 
 
 @cython.boundscheck(False)
-cdef class Neural_Net:
+cdef class Log_Net:
+
+    cdef bool semi_exact
+    cdef object evaluate, evaluate_log, evaluate_phase, evaluate_sampling
 
     cdef object NN_Tree
+    cdef int N_varl_params
 
-    cdef object NN_architecture, NN_architecture_dyn
+    #cdef object NN_architecture, NN_architecture_dyn
     cdef object apply_layer, apply_layer_dyn
     cdef object apply_fun_args, apply_fun_args_dyn
     
     #cdef object W_real, W_imag
-    cdef object params
+    cdef object params, params_update
     cdef object input_shape, reduce_shape, output_shape, out_chan, strides, filter_shape 
     cdef object NN_type, NN_dtype
     cdef object comm
@@ -268,16 +300,19 @@ cdef class Neural_Net:
     cdef int MPI_rank, seed
     cdef vector[unsigned int] thread_seeds
 
-    cdef int N_varl_params, N_symm, N_sites
-    cdef int N_MC_chains, N_spinconfigelmts, N_layers
+    cdef int N_symm, N_sites, N_features
+    cdef int N_MC_chains, N_spinconfigelmts
 
-    cdef object evaluate_phase, evaluate_log
-
-    cdef vector[double] mod_psi_s, mod_psi_t
+   
+    cdef vector[double] log_psi_s, log_psi_t
+    cdef vector[basis_type] spinconfig_s, spinconfig_t
+    cdef vector[nb_func_type] neighbors
+    cdef double prop_threshold
+    
     cdef np.int8_t[::1] spinstate_s, spinstate_t
     cdef object spinstate_s_py, spinstate_t_py
     cdef func_type spin_config
-    cdef basis_type[::1] sf_vec
+    cdef basis_type[::1] sf_vec, s0_vec
 
     
     cdef vector[np.uint16_t] sites
@@ -286,13 +321,23 @@ cdef class Neural_Net:
 
 
     cdef uniform_real_distribution[double] random_float
-    cdef uniform_int_distribution[int] random_int, rand_int_ordinal
+    cdef uniform_int_distribution[int] random_int, random_int8, rand_int_ordinal
     cdef vector[mt19937] RNGs # hold a C++ instance
         
 
-    def __init__(self,comm,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0):
+    # exact data
+    cdef basis_type[::1] ints_ket_exact
+    cdef object log_psi_exact, phase_psi_exact
+
+
+    def __init__(self,comm,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0,prop_threshold=0.5):
 
         self.N_sites=_L*_L
+        self.prop_threshold=prop_threshold
+
+        self.NN_dtype=NN_dtype
+        self.semi_exact=False
+
 
         self.comm=comm
         self.MPI_rank=self.comm.Get_rank()
@@ -307,123 +352,123 @@ cdef class Neural_Net:
         # order important
         self._init_NN(rng,shapes,NN_type,NN_dtype)
         self._init_evaluate()
-        self._init_variables(N_MC_chains)
+        self._init_MC_variables(N_MC_chains)
+        self._init_MC_data()
+
+
+    def load_exact_data(self,ints_ket_exact,log_psi_exact=None,phase_psi_exact=None):
+        self.ints_ket_exact=ints_ket_exact
+        self.log_psi_exact=log_psi_exact
+        self.phase_psi_exact=phase_psi_exact
+        
+
+        self.evaluate_sampling = self._evaluate_log_exact
+        if self.NN_dtype=='real':
+            self.evaluate=self._evaluate_log_exact
+
+        elif self.NN_dtype=='cpx':
+            self.evaluate=self._evaluate_cpx_exact
+            self.evaluate_phase = self._evaluate_phase_exact
+            self.evaluate_log=self._evaluate_log_exact
+
+        self.semi_exact=True
 
 
 
-    def _init_NN(self,rng,shapes,NN_type,NN_dtype):
+    def _init_NN(self,rng,shapes,NN_type,NN_dtype,):
 
         self.NN_type=NN_type
         self.NN_dtype=NN_dtype
 
+        shape_last_layer = shapes['layer_5']
+        
+
         if NN_type=='DNN':
            
             self.N_symm=_L*_L*2*2*2 # no Z symmetry
-          
-            # define DNN
-            self.NN_architecture = {
-                                    'layer_1': GeneralDense_cpx(shapes['layer_1'], ignore_b=True), 
-                                    'nonlin_1': Poly_cpx,
-                                    'norm_1': Norm_real(),
-                                #    'batch_norm_1': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                #    'layer_2': GeneralDense_cpx_nonholo(shapes['layer_2'], ignore_b=False),
-                                #    'layer_2': GeneralDense_cpx(shapes['layer_2'], ignore_b=False),
-                                #    'nonlin_2': Poly_cpx,
-                                #    'batch_norm_2': BatchNorm_cpx(axis=(0,)), # Normalize_cpx,
-                                #    'layer_3': GeneralDense_cpx_nonholo(shapes['layer_3'], ignore_b=False), 
-                                }
 
-            # create a copy of the NN architecture to update the batch norm mean and variance dynamically
-            self.NN_architecture_dyn = self.NN_architecture.copy()
-            for key in self.NN_architecture.keys():
-                if 'batch_norm' in key:
-                    self.NN_architecture_dyn[key]=BatchNorm_cpx_dyn(axis=(0,))
-
-            # create NN
-            init_params, self.apply_layer, self.apply_fun_args = serial(*self.NN_architecture.values())
-            _, self.apply_layer_dyn, self.apply_fun_args_dyn = serial(*self.NN_architecture_dyn.values())
-           
             # determine shape variables
             input_shape=(1,self.N_sites)
-            output_shape, self.params = init_params(rng,input_shape)
-            self._init_apply_fun_args(rng,input_shape)
+            self.input_shape=(-1,self.N_sites)
 
-
-
-            self.input_shape  = (-1,self.N_sites) # reshape input data batch
-            self.reduce_shape = (-1,self.N_symm,output_shape[1]) # tuple to reshape output before symmetrization
-            self.output_shape = (-1,) + output_shape[1:]
+            reduce_shape = (-1,self.N_symm,shape_last_layer[1],1)
            
-          
-            self.NN_Tree = NN_Tree(self.params)
-            self.N_varl_params=self.NN_Tree.N_varl_params 
-
-
-        elif NN_type=='CNN':
+            output_shape = (-1,shape_last_layer[1],)
             
+            # define variance of uniform distr for weights and biases
+            scale=0.8
+        
+            # define DNN
+            if self.NN_dtype=='real':
+                NN_arch = NN_log_arch('DNN_1', shapes, input_shape, reduce_shape, output_shape, scale) 
+            elif self.NN_dtype=='cpx':
+                NN_arch = NN_cpx_arch('DNN_2', shapes, input_shape, reduce_shape, output_shape, scale) 
+           
+            
+        elif NN_type=='CNN':
+                
             self.N_symm=2*2*2 # no Z, Tx, Ty symmetry
 
-            dim_nums=('NCHW', 'OIHW', 'NCHW') # default
-            
+            dim_nums=('NCHW', 'OIHW', 'NCHW') # default 
+
+            # determine shape variables
+            input_shape   =(+1,1,_L,_L)
+            self.input_shape=(-1,1,_L,_L)
+
+            # CNN symemtrization
+            #reduce_shape =   (-1,self.N_symm,shape_last_layer[1],self.N_sites)
+            # DNN symemtrization
+            reduce_shape = (-1,self.N_symm*self.N_sites, shape_last_layer[1], 1)
+
+            output_shape = (-1,shape_last_layer[1],)
+
+            # define variance of uniform distr for weights and biases
+            scale=0.8
+
             # define CNN
-            init_value_W = 1E-3
-            init_value_b = 1E-1
-            W_init = partial(random.uniform, minval=-init_value_W, maxval=+init_value_W )
-            b_init = partial(random.uniform, minval=-init_value_b, maxval=+init_value_b )
-
-
-            self.NN_architecture = {
-                                    'layer_1': GeneralConv_cpx(dim_nums, shapes['layer_1']['out_chan'], shapes['layer_1']['filter_shape'], strides=shapes['layer_1']['strides'], padding='PERIODIC', ignore_b=True, W_init=W_init, b_init=b_init), 
-                                    'nonlin_1': Poly_cpx,
-                                #    'batch_norm_1': Normalize_cpx,
-                                #    'layer_2': GeneralConv_cpx(dim_nums, shapes['layer_2']['out_chan'], shapes['layer_2']['filter_shape'], strides=shapes['layer_2']['strides'], padding='PERIODIC', ignore_b=False, W_init=W_init, b_init=b_init),     
-                                }
-
-            init_params, self.apply_layer, self.apply_fun_args = serial(*self.NN_architecture)
-            
-            input_shape=np.array((1,1,_L,_L),dtype=np.int) # NCHW input format
-            output_shape, self.params = init_params(rng,input_shape)
-
-            
-            self.input_shape = (-1,1,_L,_L) # reshape input data batch
-            self.reduce_shape = (-1,self.N_symm,)+output_shape[1:] #(-1,self.N_symm,out_chan,_L,_L) # tuple to reshape output before symmetrization
-            self.output_shape = (-1,np.prod(output_shape[1:]) ) #(-1,out_chan*_L*_L)
-           
-
-            self.NN_Tree = NN_Tree(self.params)
-            self.N_varl_params=self.NN_Tree.N_varl_params
-
+            if self.NN_dtype=='real':
+                NN_arch = NN_log_arch('CNN_mixed_5', shapes, input_shape, reduce_shape, output_shape, scale)
+                #NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
+            elif self.NN_dtype=='cpx':   
+                NN_arch = NN_cpx_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
 
         else:
             raise ValueError("unsupported string for variable for NN_type.") 
-        
- 
-    def _init_apply_fun_args(self,rng,input_shape):
-        
-        layers_type=list(self.NN_architecture.keys())
-        init_funs, apply_funs = zip(*self.NN_architecture.values())
 
-        for j, (init_fun, layer_type) in enumerate(zip(init_funs, layers_type)):        
-            
-            rng, layer_rng = random.split(rng)
-            input_shape, _ = init_fun(layer_rng, input_shape)
 
-            if 'batch_norm' in layer_type:
-                mean, std_mat_inv = init_batchnorm_cpx_params(input_shape)
-                
-                # an update in the parameters of apply_fun_args_dyn UPDATES directly the params of apply_fun_args
-                self.apply_fun_args[j]=dict(mean=mean, std_mat_inv=std_mat_inv, )        
-                self.apply_fun_args_dyn[j]=dict(fixpoint_iter=False, mean=mean, std_mat_inv=std_mat_inv, comm=self.comm, )
-        
+        # create a copy of the NN architecture to update the batch norm mean and variance dynamically
+        self.params,   self.apply_layer,  self.apply_fun_args,   self.apply_layer_dyn,   self.apply_fun_args_dyn  = _compute_layers(rng, self.comm, NN_arch, input_shape, output_shape, reduce_shape)
+        self.params_update=np.zeros_like(self.params)
+    
+
+        self.NN_Tree = NN_Tree(self.params)
+        self.N_varl_params  =NN_Tree(self.params).N_varl_params
+       
+        self.N_features=self.N_sites*self.N_symm
+
+
+        self.params_update=0.0*self.NN_Tree.ravel(self.params)._value
+       
+
 
     def _init_evaluate(self):
 
-        #self.evaluate_log  =self._evaluate_log
-        #self.evaluate_phase=self._evaluate_phase
-
+        # self.evaluate  =self._evaluate
+        # self.evaluate_sampling  =self._evaluate_sampling
+        
         # define network evaluation on GPU
-        self.evaluate_log  =jit(self._evaluate_log)
-        self.evaluate_phase=jit(self._evaluate_phase)
+        self.evaluate=jit(self._evaluate)
+
+        if self.NN_dtype=='real':
+            self.evaluate_log      = None
+            self.evaluate_phase    = None
+            self.evaluate_sampling = jit(self._evaluate_sampling)
+        
+        elif self.NN_dtype=='cpx':
+            self.evaluate_log      = jit(self._evaluate_log)
+            self.evaluate_phase    = jit(self._evaluate_phase)
+            self.evaluate_sampling = jit(self._evaluate_sampling_log)
+
         
         if self.NN_type=='DNN':
             self.spin_config=<func_type>int_to_spinstate
@@ -431,13 +476,16 @@ cdef class Neural_Net:
             self.spin_config=<func_type>int_to_spinstate_conv
 
 
-    def _init_variables(self,N_MC_chains):
+    def _init_MC_variables(self,N_MC_chains):
 
         self.N_MC_chains=N_MC_chains
-        self.N_spinconfigelmts=self.N_symm*self.N_sites
+        self.N_spinconfigelmts=self.N_features
 
-        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
-        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_symm*self.N_sites,dtype=np.int8)
+        self.spinstate_s=np.zeros(self.N_MC_chains*self.N_features,dtype=np.int8)
+        self.spinstate_t=np.zeros(self.N_MC_chains*self.N_features,dtype=np.int8)
+
+        self.spinconfig_s=np.zeros(self.N_MC_chains,dtype=basis_type_py)
+        self.spinconfig_t=np.zeros(self.N_MC_chains,dtype=basis_type_py)
 
         # access data in device array; transfer memory from numpy to jax
         if self.NN_type=='DNN':
@@ -447,10 +495,8 @@ cdef class Neural_Net:
         self.spinstate_s_py=np.asarray(self.spinstate_s).reshape(spinstate_shape)
         self.spinstate_t_py=np.asarray(self.spinstate_t).reshape(spinstate_shape)
 
-        self.mod_psi_s=np.zeros(self.N_MC_chains,dtype=np.float64)
-        self.mod_psi_t=np.zeros(self.N_MC_chains,dtype=np.float64)
-
-        self.sf_vec=((1<<(self.N_sites//2))-1) * np.ones(self.N_MC_chains,dtype=basis_type_py)
+        self.log_psi_s=np.zeros(self.N_MC_chains,dtype=np.float64)
+        self.log_psi_t=np.zeros(self.N_MC_chains,dtype=np.float64)
 
         ###############################################################
 
@@ -459,13 +505,44 @@ cdef class Neural_Net:
 
         self.random_float = uniform_real_distribution[double](0.0,1.0)
         self.random_int = uniform_int_distribution[int](0,self.N_sites-1)
+        self.random_int8 = uniform_int_distribution[int](0,7) # 8 = 4 nn + 4nnn on square lattice
         self.rand_int_ordinal = uniform_int_distribution[int](0,choose_n_k(self.N_sites, self.N_sites//2))
 
+        
+        self.neighbors.resize(8)
+
+        self.neighbors[0]=neighbors_func_0
+        self.neighbors[1]=neighbors_func_1
+        self.neighbors[2]=neighbors_func_2
+        self.neighbors[3]=neighbors_func_3
+        self.neighbors[4]=neighbors_func_4
+        self.neighbors[5]=neighbors_func_5
+        self.neighbors[6]=neighbors_func_6
+        self.neighbors[7]=neighbors_func_7
+
+
+    def _init_MC_data(self, s0_vec=None, sf_vec=None, ):
 
         self.thread_seeds=np.zeros(self.N_MC_chains,dtype=np.uint)
+        self.s0_vec=np.zeros(self.N_MC_chains,dtype=basis_type_py)
+        self.sf_vec=np.zeros(self.N_MC_chains,dtype=basis_type_py)
+
         for i in range(self.N_MC_chains):
+
+            if s0_vec is None:
+                self.s0_vec[i]=0
+            else:
+                self.s0_vec[i]=s0_vec[i]
+
+            if sf_vec is None:
+                self.sf_vec[i]=(1<<(self.N_sites//2))-1
+            else:
+                self.sf_vec[i]=sf_vec[i]
+
+
             self.thread_seeds[i]=self.seed + 3333*self.MPI_rank + 7777*i   #(rand()%RAND_MAX)
             self.RNGs.push_back( mt19937(self.thread_seeds[i]) )
+
 
 
 
@@ -476,6 +553,10 @@ cdef class Neural_Net:
     property N_sites:
         def __get__(self):
             return self.N_sites
+
+    property N_features:
+        def __get__(self):
+            return self.N_features
 
     property N_symm:
         def __get__(self):
@@ -489,16 +570,12 @@ cdef class Neural_Net:
         def __get__(self):
             return self.NN_dtype
 
-    property NN_architecture:
-        def __get__(self):
-            return self.NN_architecture
-
     property apply_fun_args:
         def __get__(self):
             return self.apply_fun_args
         def __set__(self,value):
             self.apply_fun_args=value
-
+    
     property apply_fun_args_dyn:
         def __get__(self):
             return self.apply_fun_args_dyn
@@ -511,24 +588,43 @@ cdef class Neural_Net:
 
     property N_varl_params:
         def __get__(self):
-            return self.N_varl_params 
+            return self.N_varl_params
 
     property params:
         def __get__(self):
             return self.params
+        def __set__(self,value):
+            self.params=value
 
-    property evaluate_phase:
+    property params_update:
         def __get__(self):
-            return self.evaluate_phase
+            return self.params_update
+        def __set__(self,value):
+            self.params_update=value
+
+    property evaluate:
+        def __get__(self):
+            return self.evaluate
 
     property evaluate_log:
-        def __get__(self):
-            return self.evaluate_log
+            def __get__(self):
+                    return self.evaluate_log
 
-    property apply_layer:
-        def __get__(self):
-            return self.apply_layer
+    property evaluate_phase:
+            def __get__(self):
+                    return self.evaluate_phase
 
+    property s0_vec:
+        def __get__(self):
+            return self.s0_vec
+
+    property sf_vec:
+        def __get__(self):
+            return self.sf_vec
+
+    property semi_exact:
+        def __get__(self):
+            return self.semi_exact
 
 
     @cython.boundscheck(False)
@@ -536,111 +632,56 @@ cdef class Neural_Net:
         self.params=params
 
 
-
     @cython.boundscheck(False)
-    def evaluate_dyn(self, params, batch,):
-
+    cpdef object _evaluate(self, object params, object batch):
         # reshaping required inside evaluate func because of per-sample gradients
-        batch=batch.reshape(self.input_shape)
-
-        # apply dense layer
-        # Re_Ws, Im_Ws = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
-        # # apply logcosh nonlinearity
-        # Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
-        # #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer_dyn(params,batch,kwargs=self.apply_fun_args_dyn)
-
-        # symmetrize
-        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
-        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
-        
-        return log_psi, phase_psi
-
-
-    @cython.boundscheck(False)
-    def evaluate(self, params, batch, apply_fun_args):
-
-        # reshaping required inside evaluate func because of per-sample gradients
-        batch=batch.reshape(self.input_shape)
-
-        # apply dense layer
-        # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=apply_fun_args)
-        # # apply logcosh nonlinearity
-        # Re_z, Im_z = poly_cpx((Re_Ws, Im_Ws))
-        # #Re_z, Im_z = logcosh_cpx((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer(params,batch,kwargs=apply_fun_args)
-
-        # symmetrize
-        log_psi   = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        log_psi   = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
-        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
-        
-        return log_psi, phase_psi
-
-
-    # @jax.partial(jit, static_argnums=(0,3))
-    # def evaluate(self, params, batch, apply_fun_args):
-    #     return self._evaluate(params, batch, apply_fun_args)
-
-
+        #batch=batch.reshape(self.input_shape)
+        log_psi = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        return log_psi
 
     @cython.boundscheck(False)
     cpdef object _evaluate_log(self, object params, object batch):
-
         # reshaping required inside evaluate func because of per-sample gradients
-        batch=batch.reshape(self.input_shape)
-
-        # apply dense layer
-        # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
-        # # apply logcosh nonlinearity
-        # Re_z = poly_real((Re_Ws, Im_Ws))
-        # #Re_z = logcosh_real((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
-       
-        # symmetrize
-        log_psi = jnp.sum(Re_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        log_psi = jnp.sum(  log_psi.reshape(self.output_shape), axis=[1,])
-        
+        log_psi, phase_psi = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         return log_psi
-
-
-    # @jax.partial(jit, static_argnums=(0,3))
-    # def evaluate_log(self, params, batch, apply_fun_args):
-    #     return self._evaluate_log(params, batch, apply_fun_args)
-
 
     @cython.boundscheck(False)
     cpdef object _evaluate_phase(self, object params, object batch):
-
         # reshaping required inside evaluate func because of per-sample gradients
-        batch=batch.reshape(self.input_shape)
-
-        # apply dense layer
-        # Re_Ws, Im_Ws = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
-        # # apply logcosh nonlinearity
-        # Im_z = poly_imag((Re_Ws, Im_Ws))
-        # #Im_z = logcosh_imag((Re_Ws, Im_Ws))
-        Re_z, Im_z = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
-
-        # symmetrize
-        phase_psi = jnp.sum(Im_z.reshape(self.reduce_shape,order='C'), axis=[1,])
-        # 
-        phase_psi = jnp.sum(phase_psi.reshape(self.output_shape), axis=[1,])
-        
+        log_psi, phase_psi = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         return phase_psi
 
 
-    # @jax.partial(jit, static_argnums=(0,3))
-    # def evaluate_phase(self, params, batch, apply_fun_args):
-    #     return self._evaluate_phase(params, batch, apply_fun_args)
+    @cython.boundscheck(False)
+    cpdef object _evaluate_log_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.log_psi_exact[s_inds]
 
-    
+    @cython.boundscheck(False)
+    cpdef object _evaluate_phase_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.phase_psi_exact[s_inds]
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate_cpx_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.log_psi_exact[s_inds], self.phase_psi_exact[s_inds]
+
+
+
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate_sampling(self, object params, object batch):
+        log_psi = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        return log_psi
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate_sampling_log(self, object params, object batch):
+        log_psi, phase_psi  = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        return log_psi
+
+
+
 
     @cython.boundscheck(False)
     def sample(self,
@@ -650,9 +691,9 @@ cdef class Neural_Net:
                     #
                     np.int8_t[::1] spin_states,
                     basis_type[::1] ket_states,
-                    np.float64_t[::1] mod_kets,
+                    np.float64_t[::1] log_mod_kets,
                     #
-                    basis_type[::1] s0_vec,
+                    # basis_type[::1] s0_vec,
                     bool thermal
                     ):
 
@@ -665,7 +706,7 @@ cdef class Neural_Net:
         
         #print(N_MC_points, n_MC_points,n_MC_points_leftover)
         #
-        cdef int auto_correlation_time = 0.35/np.max([0.05, acceptance_ratio])*self.N_sites
+        cdef int auto_correlation_time = 0.5/np.max([0.05, acceptance_ratio])*self.N_sites
 
         with nogil:
 
@@ -677,10 +718,10 @@ cdef class Neural_Net:
                                            thermalization_time,
                                            auto_correlation_time,
                                            #
-                                           &spin_states[chain_n*n_MC_points*self.N_symm*self.N_sites],
+                                           &spin_states[chain_n*n_MC_points*self.N_features],
                                            &ket_states[chain_n*n_MC_points],
-                                           &mod_kets[chain_n*n_MC_points],
-                                           &s0_vec[0],
+                                           &log_mod_kets[chain_n*n_MC_points],
+                                           # &s0_vec[0],
                                            # 
                                            &self.spinstate_s[chain_n*self.N_spinconfigelmts],
                                            &self.spinstate_t[chain_n*self.N_spinconfigelmts],
@@ -700,10 +741,10 @@ cdef class Neural_Net:
                                            0, # thermalization time
                                            auto_correlation_time,
                                            #
-                                           &spin_states[self.N_MC_chains*n_MC_points*self.N_symm*self.N_sites],
+                                           &spin_states[self.N_MC_chains*n_MC_points*self.N_features],
                                            &ket_states[self.N_MC_chains*n_MC_points],
-                                           &mod_kets[self.N_MC_chains*n_MC_points],
-                                           &s0_vec[0],
+                                           &log_mod_kets[self.N_MC_chains*n_MC_points],
+                                           # &s0_vec[0],
                                            # 
                                            &self.spinstate_s[0],
                                            &self.spinstate_t[0],
@@ -724,6 +765,7 @@ cdef class Neural_Net:
 
         return N_accepted, np.sum(N_MC_proposals);
    
+
     
     @cython.boundscheck(False)
     cdef int _MC_core(self, int N_MC_points,
@@ -733,8 +775,8 @@ cdef class Neural_Net:
                             #
                             np.int8_t * spin_states,
                             basis_type * ket_states,
-                            double * mod_kets,
-                            basis_type[] s0_vec,
+                            double * log_mod_kets,
+                            # basis_type[] s0_vec,
                             #
                             np.int8_t * spinstate_s,
                             np.int8_t * spinstate_t,
@@ -748,11 +790,15 @@ cdef class Neural_Net:
         cdef int i=0, k=0; # counters
         cdef int N_accepted=0;
         cdef int thread_id = threadid();
+
+        cdef int x,y;
         
-        cdef double eps; # acceptance random float
+
+        cdef double mod_psi_s=0.0, mod_psi_t=0.0;
+        cdef double eps, delta; # acceptance random float
 
         cdef basis_type t;
-        cdef np.uint16_t _i,_j;
+        cdef np.uint16_t _i,_j,_k;
 
         
         # draw random initial state
@@ -778,13 +824,11 @@ cdef class Neural_Net:
 
            
         # store initial state for reproducibility
-        s0_vec[chain_n] = s;
+        self.s0_vec[chain_n] = s;
 
-            
         
         # compute initial spin config and its amplitude value
         self.spin_config(self.N_sites,s,&spinstate_s[0]);
-
 
 
         # set omp barrier
@@ -792,18 +836,33 @@ cdef class Neural_Net:
         # evaluate DNN on GPU
         if thread_id==0:
             with gil:
-                self.mod_psi_s=jnp.exp(self.evaluate_log(self.params, self.spinstate_s_py));
+                if self.semi_exact:
+                    self.spinconfig_s[chain_n] = ref_state(s);
+                    self.log_psi_s=self.evaluate_sampling(self.params, self.spinconfig_s);
+                else:
+                    self.log_psi_s=self.evaluate_sampling(self.params, self.spinstate_s_py);
         # set barrier
         OMP_BARRIER_PRAGMA()
+        mod_psi_s=exp(self.log_psi_s[chain_n]);
 
-     
+
         while(k < N_MC_points):
             
             # propose a new state until a nontrivial configuration is drawn
             t=s;
             while(t==s):
                 _i = self.random_int(rng)
-                _j = self.random_int(rng)
+
+                # drwa random number to decide whethr to look for local or nonlocal update
+                delta = self.random_float(rng);
+                if delta>self.prop_threshold: # local update
+                    x=_i%_L;
+                    y=_i//_L;
+
+                    _k=self.random_int8(rng)
+                    _j = self.neighbors[_k](x,y,_L)
+                else: # any update
+                    _j = self.random_int(rng)
                 
                 t = swap_bits(s,_i,_j);
             
@@ -816,32 +875,44 @@ cdef class Neural_Net:
             # evaluate DNN on GPU
             if thread_id==0:
                 with gil:
-                    self.mod_psi_t=jnp.exp(self.evaluate_log(self.params, self.spinstate_t_py));
+                    if self.semi_exact:
+                        self.spinconfig_t[chain_n] = ref_state(t);
+                        self.log_psi_t=self.evaluate_sampling(self.params, self.spinconfig_t);
+                    else:
+                        self.log_psi_t=self.evaluate_sampling(self.params, self.spinstate_t_py);
             # set barrier
             OMP_BARRIER_PRAGMA()
+            mod_psi_t=exp(self.log_psi_t[chain_n]);
 
 
             # MC accept/reject step
             eps = self.random_float(rng);
-            if( (eps*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] <= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n]) & \
-                (500*self.mod_psi_s[chain_n]*self.mod_psi_s[chain_n] >= self.mod_psi_t[chain_n]*self.mod_psi_t[chain_n])      ): # accept
-
+            if( (eps*mod_psi_s*mod_psi_s <= mod_psi_t*mod_psi_t) & (500*mod_psi_s*mod_psi_s >= mod_psi_t*mod_psi_t) ): # accept
+                
                 s = t;
-                self.mod_psi_s[chain_n] = self.mod_psi_t[chain_n];
+                self.log_psi_s[chain_n] = self.log_psi_t[chain_n];
+                mod_psi_s = mod_psi_t;
                 # set spin configs
-                for i in range(self.N_symm*self.N_sites):
+                for i in range(self.N_features):
                     spinstate_s[i] = spinstate_t[i];
+
+                for i in range(self.N_MC_chains):
+                    self.spinconfig_s[i] = self.spinconfig_t[i];
+
                 N_accepted+=1;
     
 
             if( (N_MC_proposals[0] > thermalization_time) & ((N_MC_proposals[0] % auto_correlation_time) == 0) ):
                 
-                for i in range(self.N_symm*self.N_sites):
+                for i in range(self.N_features):
                     spin_states[k*self.N_sites*self.N_symm + i] = spinstate_s[i];
 
-                ket_states[k] = s;
-                mod_kets[k]=self.mod_psi_s[chain_n];
+                if self.semi_exact:
+                    ket_states[k] = self.spinconfig_s[chain_n];
+                else:
+                    ket_states[k] = s;
 
+                log_mod_kets[k]=self.log_psi_s[chain_n];
 
                 k+=1;
                 
@@ -855,4 +926,239 @@ cdef class Neural_Net:
         return N_accepted;
 
         
+
+
+        
+
+@cython.boundscheck(False)
+cdef class Phase_Net:
+
+    cdef bool semi_exact
+
+    cdef object evaluate
+
+    cdef object NN_Tree
+    cdef int N_varl_params
+
+    #cdef object NN_architecture, NN_architecture_dyn
+    cdef object apply_layer, apply_layer_dyn
+    cdef object apply_fun_args, apply_fun_args_dyn
+    
+    #cdef object W_real, W_imag
+    cdef object params, params_update
+    cdef object input_shape, reduce_shape, output_shape, out_chan, strides, filter_shape 
+    cdef object NN_type, NN_dtype
+    cdef object comm
+
+    cdef int MPI_rank, seed
+    
+    cdef int N_symm, N_sites, N_features
+
+    # exact data
+    cdef basis_type[::1] ints_ket_exact
+    cdef object phase_psi_exact
+    
+        
+
+    def __init__(self,comm,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0,prop_threshold=0.5):
+
+        self.N_sites=_L*_L
+        #self.prop_threshold=prop_threshold
+        self.semi_exact=False
+
+
+        self.comm=comm
+        self.MPI_rank=self.comm.Get_rank()
+ 
+        # fix seed
+        self.seed=seed
+        np.random.seed(self.seed+self.MPI_rank)
+        np.random.RandomState(self.seed+self.MPI_rank)
+        srand(self.seed+self.MPI_rank)
+        rng = random.PRNGKey(self.seed) # same seed for all MPI processes to keep NN params the same
+        
+        # order important
+        self._init_NN(rng,shapes,NN_type,NN_dtype)
+        self._init_evaluate()
+        
+
+    def load_exact_data(self,ints_ket_exact,log_psi_exact=None,phase_psi_exact=None):
+        self.ints_ket_exact=ints_ket_exact
+        self.phase_psi_exact=phase_psi_exact
+        
+        self.evaluate=self._evaluate_phase_exact
+        
+        self.semi_exact=True
+
+
+    def _init_NN(self,rng,shapes,NN_type,NN_dtype,):
+
+        self.NN_type=NN_type
+        self.NN_dtype=NN_dtype
+
+        #shapes=shapes[0]
+        
+        shape_last_layer = shapes['layer_3']
+        
+
+        if NN_type=='DNN':
+           
+            self.N_symm=_L*_L*2*2*2 # no Z symmetry
+
+
+            # determine shape variables
+            input_shape=(1,self.N_sites)
+            self.input_shape=(-1,self.N_sites)
+
+            reduce_shape = (-1,self.N_symm,shape_last_layer[1],1)
+            output_shape = (-1,shape_last_layer[1],)
+
+            # define variance of uniform distr for weights and biases
+            scale=1.0
+          
+            # define DNN
+            NN_arch = NN_phase_arch('DNN_2', shapes, input_shape, reduce_shape, output_shape, scale)
+        
+        elif NN_type=='CNN':
+                
+            self.N_symm=2*2*2 # no Z, Tx, Ty symmetry
+
+            dim_nums=('NCHW', 'OIHW', 'NCHW') # default
+
+
+            # determine shape variables
+            input_shape   =(+1,1,_L,_L)
+            self.input_shape=(-1,1,_L,_L)
+
+            # CNN symemtrization
+            #reduce_shape =   (-1,self.N_symm,shape_last_layer[1],self.N_sites)
+            # DNN symemtrization
+            reduce_shape = (-1,self.N_symm*self.N_sites, shape_last_layer[1], 1)
+          
+            output_shape = (-1,shape_last_layer[1],)
+
+            # define variance of uniform distr for weights and biases
+            scale=1.0
+
+            # define CNN
+            NN_arch = NN_phase_arch('CNN_mixed_3', shapes, input_shape, reduce_shape, output_shape, scale)   
+
+            
+        else:
+            raise ValueError("unsupported string for variable for NN_type.") 
+
+
+        # create a copy of the NN architecture to update the batch norm mean and variance dynamically
+        self.params,   self.apply_layer,  self.apply_fun_args,   self.apply_layer_dyn,   self.apply_fun_args_dyn  = _compute_layers(rng, self.comm, NN_arch  , input_shape, output_shape, reduce_shape)      
+        self.params_update=np.zeros_like(self.params)
+    
+
+
+        self.NN_Tree = NN_Tree(self.params)
+        self.N_varl_params  =NN_Tree(self.params).N_varl_params
+       
+        self.N_features=self.N_sites*self.N_symm
+
+
+        self.params_update=0.0*self.NN_Tree.ravel(self.params)._value
+       
+
+
+    def _init_evaluate(self):
+
+        #self.evaluate_log  =self._evaluate_log
+        #self.evaluate_phase=self._evaluate_phase
+
+        # define network evaluation on GPU
+        self.evaluate  =jit(self._evaluate)
+    
+
+
+    property input_shape:
+        def __get__(self):
+            return self.input_shape
+  
+    property N_sites:
+        def __get__(self):
+            return self.N_sites
+
+    property N_features:
+        def __get__(self):
+            return self.N_features
+
+    property N_symm:
+        def __get__(self):
+            return self.N_symm
+
+    property NN_type:
+        def __get__(self):
+            return self.NN_type
+
+    property NN_dtype:
+        def __get__(self):
+            return self.NN_dtype
+
+    property apply_fun_args:
+        def __get__(self):
+            return self.apply_fun_args
+        def __set__(self,value):
+            self.apply_fun_args=value
+    
+    property apply_fun_args_dyn:
+        def __get__(self):
+            return self.apply_fun_args_dyn
+        def __set__(self,value):
+            self.apply_fun_args_dyn=value
+
+    property NN_Tree:
+        def __get__(self):
+            return self.NN_Tree
+
+    property N_varl_params:
+        def __get__(self):
+            return self.N_varl_params
+
+    property params:
+        def __get__(self):
+            return self.params
+        def __set__(self,value):
+            self.params=value
+
+    property params_update:
+        def __get__(self):
+            return self.params_update
+        def __set__(self,value):
+            self.params_update=value
+
+    property evaluate:
+        def __get__(self):
+            return self.evaluate
+
+    property semi_exact:
+        def __get__(self):
+            return self.semi_exact
+
+
+
+    @cython.boundscheck(False)
+    def update_params(self,params):
+        self.params=params
+
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate(self, object params, object batch):
+
+        # reshaping required inside evaluate func because of per-sample gradients
+        #batch=batch.reshape(self.input_shape)
+
+        phase_psi = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
+        
+        return phase_psi
+
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate_phase_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.phase_psi_exact[s_inds]
+
 
