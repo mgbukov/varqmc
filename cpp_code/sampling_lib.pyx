@@ -281,6 +281,7 @@ def _init_apply_fun_args(rng, comm, NN_architecture, apply_fun_args,apply_fun_ar
 @cython.boundscheck(False)
 cdef class Log_Net:
 
+    cdef bool semi_exact
     cdef object evaluate, evaluate_log, evaluate_phase, evaluate_sampling
 
     cdef object NN_Tree
@@ -304,6 +305,7 @@ cdef class Log_Net:
 
    
     cdef vector[double] log_psi_s, log_psi_t
+    cdef vector[basis_type] spinconfig_s, spinconfig_t
     cdef vector[nb_func_type] neighbors
     cdef double prop_threshold
     
@@ -323,10 +325,18 @@ cdef class Log_Net:
     cdef vector[mt19937] RNGs # hold a C++ instance
         
 
+    # exact data
+    cdef basis_type[::1] ints_ket_exact
+    cdef object log_psi_exact, phase_psi_exact
+
+
     def __init__(self,comm,shapes,N_MC_chains,NN_type='DNN',NN_dtype='cpx',seed=0,prop_threshold=0.5):
 
         self.N_sites=_L*_L
         self.prop_threshold=prop_threshold
+
+        self.NN_dtype=NN_dtype
+        self.semi_exact=False
 
 
         self.comm=comm
@@ -346,12 +356,31 @@ cdef class Log_Net:
         self._init_MC_data()
 
 
+    def load_exact_data(self,ints_ket_exact,log_psi_exact=None,phase_psi_exact=None):
+        self.ints_ket_exact=ints_ket_exact
+        self.log_psi_exact=log_psi_exact
+        self.phase_psi_exact=phase_psi_exact
+        
+
+        self.evaluate_sampling = self._evaluate_log_exact
+        if self.NN_dtype=='real':
+            self.evaluate=self._evaluate_log_exact
+
+        elif self.NN_dtype=='cpx':
+            self.evaluate=self._evaluate_cpx_exact
+            self.evaluate_phase = self._evaluate_phase_exact
+            self.evaluate_log=self._evaluate_log_exact
+
+        self.semi_exact=True
+
+
+
     def _init_NN(self,rng,shapes,NN_type,NN_dtype,):
 
         self.NN_type=NN_type
         self.NN_dtype=NN_dtype
 
-        shape_last_layer = shapes['layer_2']
+        shape_last_layer = shapes['layer_5']
         
 
         if NN_type=='DNN':
@@ -373,7 +402,7 @@ cdef class Log_Net:
             if self.NN_dtype=='real':
                 NN_arch = NN_log_arch('DNN_1', shapes, input_shape, reduce_shape, output_shape, scale) 
             elif self.NN_dtype=='cpx':
-                NN_arch = NN_cpx_arch('DNN_1', shapes, input_shape, reduce_shape, output_shape, scale) 
+                NN_arch = NN_cpx_arch('DNN_2', shapes, input_shape, reduce_shape, output_shape, scale) 
            
             
         elif NN_type=='CNN':
@@ -398,7 +427,8 @@ cdef class Log_Net:
 
             # define CNN
             if self.NN_dtype=='real':
-                NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
+                NN_arch = NN_log_arch('CNN_mixed_5', shapes, input_shape, reduce_shape, output_shape, scale)
+                #NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
             elif self.NN_dtype=='cpx':   
                 NN_arch = NN_cpx_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
 
@@ -428,13 +458,15 @@ cdef class Log_Net:
         
         # define network evaluation on GPU
         self.evaluate=jit(self._evaluate)
+
         if self.NN_dtype=='real':
-            self.evaluate_log       = None
-            self.evaluate_phase       = None
+            self.evaluate_log      = None
+            self.evaluate_phase    = None
             self.evaluate_sampling = jit(self._evaluate_sampling)
+        
         elif self.NN_dtype=='cpx':
-            self.evaluate_log       = jit(self._evaluate_log)
-            self.evaluate_phase       = jit(self._evaluate_phase)
+            self.evaluate_log      = jit(self._evaluate_log)
+            self.evaluate_phase    = jit(self._evaluate_phase)
             self.evaluate_sampling = jit(self._evaluate_sampling_log)
 
         
@@ -451,6 +483,9 @@ cdef class Log_Net:
 
         self.spinstate_s=np.zeros(self.N_MC_chains*self.N_features,dtype=np.int8)
         self.spinstate_t=np.zeros(self.N_MC_chains*self.N_features,dtype=np.int8)
+
+        self.spinconfig_s=np.zeros(self.N_MC_chains,dtype=basis_type_py)
+        self.spinconfig_t=np.zeros(self.N_MC_chains,dtype=basis_type_py)
 
         # access data in device array; transfer memory from numpy to jax
         if self.NN_type=='DNN':
@@ -587,6 +622,10 @@ cdef class Log_Net:
         def __get__(self):
             return self.sf_vec
 
+    property semi_exact:
+        def __get__(self):
+            return self.semi_exact
+
 
     @cython.boundscheck(False)
     def update_params(self,params):
@@ -613,6 +652,23 @@ cdef class Log_Net:
         return phase_psi
 
 
+    @cython.boundscheck(False)
+    cpdef object _evaluate_log_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.log_psi_exact[s_inds]
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate_phase_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.phase_psi_exact[s_inds]
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate_cpx_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.log_psi_exact[s_inds], self.phase_psi_exact[s_inds]
+
+
+
 
     @cython.boundscheck(False)
     cpdef object _evaluate_sampling(self, object params, object batch):
@@ -623,6 +679,7 @@ cdef class Log_Net:
     cpdef object _evaluate_sampling_log(self, object params, object batch):
         log_psi, phase_psi  = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         return log_psi
+
 
 
 
@@ -768,7 +825,7 @@ cdef class Log_Net:
            
         # store initial state for reproducibility
         self.s0_vec[chain_n] = s;
-            
+
         
         # compute initial spin config and its amplitude value
         self.spin_config(self.N_sites,s,&spinstate_s[0]);
@@ -779,7 +836,11 @@ cdef class Log_Net:
         # evaluate DNN on GPU
         if thread_id==0:
             with gil:
-                self.log_psi_s=self.evaluate_sampling(self.params, self.spinstate_s_py);
+                if self.semi_exact:
+                    self.spinconfig_s[chain_n] = ref_state(s);
+                    self.log_psi_s=self.evaluate_sampling(self.params, self.spinconfig_s);
+                else:
+                    self.log_psi_s=self.evaluate_sampling(self.params, self.spinstate_s_py);
         # set barrier
         OMP_BARRIER_PRAGMA()
         mod_psi_s=exp(self.log_psi_s[chain_n]);
@@ -804,7 +865,6 @@ cdef class Log_Net:
                     _j = self.random_int(rng)
                 
                 t = swap_bits(s,_i,_j);
-
             
 
             self.spin_config(self.N_sites,t,&spinstate_t[0]);
@@ -815,7 +875,11 @@ cdef class Log_Net:
             # evaluate DNN on GPU
             if thread_id==0:
                 with gil:
-                    self.log_psi_t=self.evaluate_sampling(self.params, self.spinstate_t_py);
+                    if self.semi_exact:
+                        self.spinconfig_t[chain_n] = ref_state(t);
+                        self.log_psi_t=self.evaluate_sampling(self.params, self.spinconfig_t);
+                    else:
+                        self.log_psi_t=self.evaluate_sampling(self.params, self.spinstate_t_py);
             # set barrier
             OMP_BARRIER_PRAGMA()
             mod_psi_t=exp(self.log_psi_t[chain_n]);
@@ -831,7 +895,10 @@ cdef class Log_Net:
                 # set spin configs
                 for i in range(self.N_features):
                     spinstate_s[i] = spinstate_t[i];
-                
+
+                for i in range(self.N_MC_chains):
+                    self.spinconfig_s[i] = self.spinconfig_t[i];
+
                 N_accepted+=1;
     
 
@@ -840,7 +907,11 @@ cdef class Log_Net:
                 for i in range(self.N_features):
                     spin_states[k*self.N_sites*self.N_symm + i] = spinstate_s[i];
 
-                ket_states[k] = s;
+                if self.semi_exact:
+                    ket_states[k] = self.spinconfig_s[chain_n];
+                else:
+                    ket_states[k] = s;
+
                 log_mod_kets[k]=self.log_psi_s[chain_n];
 
                 k+=1;
@@ -862,6 +933,8 @@ cdef class Log_Net:
 @cython.boundscheck(False)
 cdef class Phase_Net:
 
+    cdef bool semi_exact
+
     cdef object evaluate
 
     cdef object NN_Tree
@@ -880,6 +953,10 @@ cdef class Phase_Net:
     cdef int MPI_rank, seed
     
     cdef int N_symm, N_sites, N_features
+
+    # exact data
+    cdef basis_type[::1] ints_ket_exact
+    cdef object phase_psi_exact
     
         
 
@@ -887,6 +964,7 @@ cdef class Phase_Net:
 
         self.N_sites=_L*_L
         #self.prop_threshold=prop_threshold
+        self.semi_exact=False
 
 
         self.comm=comm
@@ -904,6 +982,15 @@ cdef class Phase_Net:
         self._init_evaluate()
         
 
+    def load_exact_data(self,ints_ket_exact,log_psi_exact=None,phase_psi_exact=None):
+        self.ints_ket_exact=ints_ket_exact
+        self.phase_psi_exact=phase_psi_exact
+        
+        self.evaluate=self._evaluate_phase_exact
+        
+        self.semi_exact=True
+
+
     def _init_NN(self,rng,shapes,NN_type,NN_dtype,):
 
         self.NN_type=NN_type
@@ -911,7 +998,7 @@ cdef class Phase_Net:
 
         #shapes=shapes[0]
         
-        shape_last_layer = shapes['layer_2']
+        shape_last_layer = shapes['layer_3']
         
 
         if NN_type=='DNN':
@@ -954,7 +1041,7 @@ cdef class Phase_Net:
             scale=1.0
 
             # define CNN
-            NN_arch = NN_phase_arch('CNN_mixed_2', shapes, input_shape, reduce_shape, output_shape, scale)   
+            NN_arch = NN_phase_arch('CNN_mixed_3', shapes, input_shape, reduce_shape, output_shape, scale)   
 
             
         else:
@@ -1047,6 +1134,10 @@ cdef class Phase_Net:
         def __get__(self):
             return self.evaluate
 
+    property semi_exact:
+        def __get__(self):
+            return self.semi_exact
+
 
 
     @cython.boundscheck(False)
@@ -1063,5 +1154,11 @@ cdef class Phase_Net:
         phase_psi = self.apply_layer(params,batch,kwargs=self.apply_fun_args)
         
         return phase_psi
+
+
+    @cython.boundscheck(False)
+    cpdef object _evaluate_phase_exact(self, object params, object batch):
+        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        return self.phase_psi_exact[s_inds]
 
 

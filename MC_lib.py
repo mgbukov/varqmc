@@ -154,16 +154,24 @@ class MC_sampler():
 												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
 
+		
 		if compute_phases:
 			if DNN_phase is not None: # real nets
-				self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), )
+				if DNN_phase.semi_exact==False:
+					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), )
+				else:
+					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.ints_ket, )
 			else:
-				self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.spinstates_ket.reshape(DNN_log.input_shape), )
+				if DNN_log.semi_exact==False:
+					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.spinstates_ket.reshape(DNN_log.input_shape), )
+				else:
+					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.ints_ket, )
 
-		
-		# print(DNN_log.N_varl_params, DNN_phase.N_varl_params)
+
+		#print(DNN_log.N_varl_params, DNN_phase.N_varl_params)
 		# print(self.log_mod_kets.mean(), self.log_mod_kets.std() )
 		# print(self.phase_kets.mean(), self.phase_kets.std() )
+		# print(self.log_mod_kets)
 		# exit()
 
 
@@ -210,12 +218,21 @@ class MC_sampler():
 	def exact(self, DNN_log, DNN_phase):
 
 		if DNN_phase is not None: # real nets
-			self.log_mod_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
-			self.phase_kets[:]   = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
-			
-		else:
-			self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+			if DNN_phase.semi_exact==False:
+				self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+			else:
+				self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params, self.ints_ket, )
 
+			if DNN_log.semi_exact==False:
+				self.log_mod_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+			else:
+				self.log_mod_kets[:] = DNN_log.evaluate(DNN_phase.params, self.ints_ket, )
+
+		else:
+			if DNN_log.semi_exact==False:
+				self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+			else:
+				self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_phase.params, self.ints_ket, )
 
 		self.all_gather()
 
@@ -224,9 +241,10 @@ class MC_sampler():
 		self.log_mod_kets[:] -= self.log_psi_shift 
 
 
+		# for s, ph in zip(self.ints_ket, self.phase_kets):
+		# 	print(s,ph%(2*np.pi))
 
-
-		#exit()
+		# exit()
 		
 		# print(self.phase_kets[-1])
 		# print(self.log_mod_kets[-1])

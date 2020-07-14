@@ -12,6 +12,8 @@ from .DNN_architectures_real import *
 
 def NN_phase_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scale ):
 
+	#scale=10.0
+
 	NN_archs=dict()
 	n_layers=len(shapes)
 

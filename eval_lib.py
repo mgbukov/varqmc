@@ -281,7 +281,7 @@ def compute_Eloc(load_dir,params_log, params_phase,ints_ket,log_psi,phase_psi,lo
 
 
 
-def compute_Eloc_ED(load_dir,ints_ket,log_kets,phase_kets,L,J2,):
+def compute_Eloc_ED(load_dir,ints_ket,log_kets,phase_kets,L,J2,return_ED_data=False,):
 
 	N_batch=ints_ket.shape[0]
 
@@ -397,8 +397,10 @@ def compute_Eloc_ED(load_dir,ints_ket,log_kets,phase_kets,L,J2,):
 		indx=np.asarray(indx,dtype=np.int32)
 		update_diag_ME(ints_ket, Eloc_real,opstr,indx,J)
 
-
-	return Eloc_real, Eloc_imag 
+	if return_ED_data:
+		return Eloc_real, Eloc_imag, log_psi_bras, phase_psi_bras, phase_psi_bras_J2_0
+	else:
+		return Eloc_real, Eloc_imag
 
 
 

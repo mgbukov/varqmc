@@ -43,7 +43,7 @@ import yaml
 
 save= True # False # 
 
-iteration=1995 # 965 # 
+iteration=1995 # 100 # 200 # 500 # 1000 # 1500 #
 J2=0.5
 L=6
 opt='RK_RK' # 'sgd_sgd' # 'sgd_sgd' #  
@@ -123,7 +123,7 @@ rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
 log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )
 sign_psi = np.exp(-1j*phase_psi)
 
-log_psi, phase_psi,  phase_psi_bras, log_psi_bras = evaluate_sample(load_dir,params_log, params_phase,rep_spin_configs_ints,log_psi,phase_psi,)
+log_psi, phase_psi,  phase_psi_bra, log_psi_bra = evaluate_sample(load_dir,params_log, params_phase,rep_spin_configs_ints,log_psi,phase_psi,)
 
 Eloc_Re, Eloc_Im=compute_Eloc(load_dir,params_log, params_phase,rep_spin_configs_ints,log_psi,phase_psi,)
 
@@ -143,7 +143,7 @@ phase_psi_ED_J2_0 = np.pi*0.5*(sign_psi_ED_J2_0+1.0)
 
 
 # evalute exact Eloc
-Eloc_real_ED ,Eloc_imag_ED = compute_Eloc_ED(load_dir,rep_spin_configs_ints,log_psi_ED,phase_psi_ED,L,J2)
+Eloc_real_ED ,Eloc_imag_ED, log_psi_bra_ED, phase_psi_bra_ED, phase_psi_bra_ED_J2_0 = compute_Eloc_ED(load_dir,rep_spin_configs_ints,log_psi_ED,phase_psi_ED,L,J2, return_ED_data=True)
 
 print('exact:',Eloc_real_ED.mean(), Eloc_imag_ED.mean())
 
@@ -157,7 +157,7 @@ if save:
 	save_file_name='phase_data_'+data_name[:-1]+'_iter={0:d}'.format(iteration)
 
 	with open(save_file_name+'.pkl', 'wb') as handle:
-						pickle.dump([log_psi, phase_psi,  phase_psi_bras, log_psi_bras, ], 
+						pickle.dump([log_psi, phase_psi,  phase_psi_bra, log_psi_bra, ], 
 										handle, protocol=pickle.HIGHEST_PROTOCOL
 									)
 
@@ -167,6 +167,25 @@ if save:
 
 #check logs
 ind=np.argmax(log_psi)
+ind_bra=np.argmax(log_psi_bra)
+
+log_psi-=log_psi_bra[ind]
+log_psi_bra-=log_psi_bra[ind_bra]
+
+
+# take only large amps
+print(log_psi_bra.shape)
+inds,=np.where(2.0*log_psi_bra>-10)
+log_psi_bra=log_psi_bra[inds]
+phase_psi_bra=phase_psi_bra[inds]
+log_psi_bra_ED= log_psi_bra_ED[inds]
+phase_psi_bra_ED= phase_psi_bra_ED[inds]
+phase_psi_bra_ED_J2_0=phase_psi_bra_ED_J2_0[inds]
+
+print(inds.shape, log_psi_bra.shape)
+print('\n\n\n\n\n')
+
+
 C_log     = np.mean( np.abs( (log_psi_ED - log_psi_ED[ind]) - (log_psi - log_psi[ind]) ) )
 C_log_max = np.max(  np.abs( (log_psi_ED - log_psi_ED[ind]) - (log_psi - log_psi[ind]) ) )
 
@@ -202,9 +221,13 @@ print('exact (J2=0-sign): E_real={0:0.8f}, E_imag={1:0.8f}, E_std={2:0.8f}.\n'.f
 # print()
 # print(phase_histpgram(phase_psi_ED_J2_0))
 
-phase_psi=phase_psi-phase_psi[ind]
-phase_psi_ED=phase_psi_ED-phase_psi_ED[ind]
-phase_psi_ED_J2_0=phase_psi_ED_J2_0-phase_psi_ED_J2_0[ind]
+a=phase_psi[ind]
+b=phase_psi_ED[ind]
+c=phase_psi_ED_J2_0[ind]
+
+phase_psi=phase_psi-a
+phase_psi_ED=phase_psi_ED-b
+phase_psi_ED_J2_0=phase_psi_ED_J2_0-c
 
 inds=np.where(np.cos(phase_psi_ED_J2_0-phase_psi_ED)<0.0)[0]
 
@@ -224,11 +247,43 @@ print_str+='DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}\n'.format(phase_his
 print_str+='DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}\n'.format(phase_hist_J2_0[1],phase_hist_J2_0[0])
 print_str+='full sample\n'
 print_str+='DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}\n'.format(phase_hist_all[1]     ,phase_hist_all[0])
-print_str+='DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}\n'.format(phase_hist_J2_0_all[1],phase_hist_J2_0_all[0])
+print_str+='DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}\n\n\n'.format(phase_hist_J2_0_all[1],phase_hist_J2_0_all[0])
+
+
+
+
+#######
+# bras
+
+
+phase_psi_bra=phase_psi_bra-a
+phase_psi_bra_ED=phase_psi_bra_ED-b
+phase_psi_bra_ED_J2_0=phase_psi_bra_ED_J2_0-c
+
+inds=np.where(np.cos(phase_psi_bra_ED_J2_0-phase_psi_bra_ED)<0.0)[0]
+
+phase_hist_bra_ED, _ = np.histogram(np.cos(phase_psi_bra_ED_J2_0-phase_psi_bra_ED) ,bins=2,range=(-1.0,1.0), density=False, )
+phase_hist_bra, _ = np.histogram(np.cos(phase_psi_bra_ED[inds]-phase_psi_bra[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
+phase_hist_bra_J2_0, _ = np.histogram(np.cos(phase_psi_bra_ED_J2_0[inds]-phase_psi_bra[inds]) ,bins=2,range=(-1.0,1.0), density=False, )
+
+
+phase_hist_bra_all, _ = np.histogram(np.cos(phase_psi_bra_ED-phase_psi_bra) ,bins=2,range=(-1.0,1.0), density=False, )
+phase_hist_bra_J2_0_all, _ = np.histogram(np.cos(phase_psi_bra_ED_J2_0-phase_psi_bra) ,bins=2,range=(-1.0,1.0), density=False, )
+
+
+
+print_str+='ED(J2=0.5)  vs  ED(J2=0)     T:F  :  {0:d}:{1:d}\n'.format(phase_hist_bra_ED[1]  ,phase_hist_bra_ED[0])
+print_str+='mismatch sample\n'
+print_str+='DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}\n'.format(phase_hist_bra[1]     ,phase_hist_bra[0])
+print_str+='DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}\n'.format(phase_hist_bra_J2_0[1],phase_hist_bra_J2_0[0])
+print_str+='full sample\n'
+print_str+='DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}\n'.format(phase_hist_bra_all[1]     ,phase_hist_bra_all[0])
+print_str+='DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}\n'.format(phase_hist_bra_J2_0_all[1],phase_hist_bra_J2_0_all[0])
 
 
 
 print(print_str)
+exit()
 
 
 if save:

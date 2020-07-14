@@ -162,6 +162,7 @@ class optimizer(object):
 				def grad_log(NN_params,batch,):
 
 					dlog_s   = vmap(partial(jit(grad(loss_log)),   NN_params))(batch, )
+					#dlog_s   = vmap(jit(grad(loss_log)), in_axes=(None, 0))(NN_params, batch)
 					
 					dlog = []
 					for dlog_W in self.NN_Tree.flatten(dlog_s):

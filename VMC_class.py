@@ -1,4 +1,12 @@
 import sys,os,warnings
+
+if sys.platform == "linux" or sys.platform == "linux2": # linux
+    path_to_data="../ED_data/"
+
+elif sys.platform == "darwin": # OS X
+	path_to_data=os.path.expanduser('~') + '/Google_Drive/frustration_from_RBM/ED_data/'
+
+
 from mpi4py import MPI
 
 # python variable scripts
@@ -58,7 +66,7 @@ import datetime
 import time
 np.set_printoptions(threshold=np.inf)
 
-# from cpx_test_weights import *
+# from cpx_test_weights import *		
 
 
 class VMC(object):
@@ -89,6 +97,7 @@ class VMC(object):
 		self.sign = params_dict['sign'] # -1: Marshal rule is on; +1 Marshal rule is off
 
 		self.mode=params_dict['mode'] # exact or MC simulation
+		self.semi_exact=list(int(j) for j in read_str(params_dict['semi_exact'])[0])
 		
 		self.opt=read_str(params_dict['opt'])[0]
 
@@ -187,6 +196,15 @@ class VMC(object):
 		self._create_energy_estimator()
 		self._create_MC_sampler()
 		self._create_optimizer()
+
+
+
+		# load exact data
+		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
+		self.load_file=path_to_data+ED_data_file
+		if np.sum(self.semi_exact)>0:
+			self.load_exact_data()
+
 
 
 		# create log file and directory
@@ -359,6 +377,33 @@ class VMC(object):
 			assert(int(it_MC)==int(it_E))
 
 
+	def load_exact_data(self,):
+
+		from pandas import read_csv
+
+		ints_ket_exact=read_csv(self.load_file, header=None, dtype=self.E_estimator.basis_type, delimiter=' ',usecols=[0,]).to_numpy().squeeze()
+		log_psi_exact =read_csv(self.load_file, header=None, dtype=np.float64, delimiter=' ',usecols=[1,]).to_numpy().squeeze()
+
+		if self.sign>0:
+			phase_psi_exact=read_csv(self.load_file, header=None, dtype=np.float64, delimiter=' ',usecols=[4,]).to_numpy().squeeze()
+		else:
+			phase_psi_exact=read_csv(self.load_file, header=None, dtype=np.float64, delimiter=' ',usecols=[3,]).to_numpy().squeeze() 
+		phase_psi_exact=np.pi*(1.0-phase_psi_exact)/2.0
+
+
+		if self.NN_dtype=='real':
+			if self.semi_exact[0]:
+				self.DNN_log.load_exact_data(ints_ket_exact,log_psi_exact=log_psi_exact,phase_psi_exact=None)
+			if self.semi_exact[1]:
+				self.DNN_phase.load_exact_data(ints_ket_exact,log_psi_exact=None,phase_psi_exact=phase_psi_exact)
+		else:
+			if self.semi_exact[0]:
+				self.DNN.load_exact_data(ints_ket_exact,log_psi_exact=log_psi_exact,phase_psi_exact=phase_psi_exact)
+
+
+		# clear memory
+		del ints_ket_exact, log_psi_exact, phase_psi_exact
+
 
 
 	def _create_NN(self, load_data=False):
@@ -476,19 +521,19 @@ class VMC(object):
 
 		if self.mode=='ED':
 			if self.NN_dtype=='real':
-				self.E_estimator    =Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator	=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			else:
-				self.E_estimator    =Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator	=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			
 		else:
 			if self.NN_dtype=='real':
-				self.E_estimator    =Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator	=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			else:
-				self.E_estimator    =Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size) # contains all of the physics
+				self.E_estimator	=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			
 
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
@@ -580,9 +625,9 @@ class VMC(object):
 		# sys_data=''
 		
 		# if self.comm.Get_rank()==0:
-		# 	sys_time=datetime.datetime.now()
-		# 	sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}_".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
-		# 	#sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
+		#	 sys_time=datetime.datetime.now()
+		#	 sys_data="{0:d}-{1:02d}-{2:02d}_{3:02d}:{4:02d}:{5:02d}_".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
+		#	 #sys_data="{0:d}-{1:02d}-{2:02d}_".format(sys_time.year,sys_time.month,sys_time.day,)
 
 		# # broadcast sys_data
 		# sys_data = self.comm.bcast(sys_data, root=0)
@@ -600,16 +645,16 @@ class VMC(object):
 		if self.comm.Get_rank()==0:
 
 			if not os.path.exists(logfile_dir):
-			    os.makedirs(logfile_dir)
+				os.makedirs(logfile_dir)
 
 			if not os.path.exists(self.savefile_dir):
-			    os.makedirs(self.savefile_dir)
+				os.makedirs(self.savefile_dir)
 
 			if not os.path.exists(self.savefile_dir_NN):
-			    os.makedirs(self.savefile_dir_NN)
+				os.makedirs(self.savefile_dir_NN)
 
 			if not os.path.exists(self.savefile_dir_debug):
-			    os.makedirs(self.savefile_dir_debug)
+				os.makedirs(self.savefile_dir_debug)
 
 		# wait for process 0 to check if directories exist
 		self.comm.Barrier()
@@ -648,15 +693,15 @@ class VMC(object):
 			#pass
 		
 		if self.NN_dtype=='real':
-			self.debug_file_SF_log       =self.savefile_dir_debug + 'debug-SF_data_log'            #+'--' + self.file_name
-			self.debug_file_SF_phase     =self.savefile_dir_debug + 'debug-SF_data_phase'
+			self.debug_file_SF_log	   =self.savefile_dir_debug + 'debug-SF_data_log'			#+'--' + self.file_name
+			self.debug_file_SF_phase	 =self.savefile_dir_debug + 'debug-SF_data_phase'
 		else:
-			self.debug_file_SF       =self.savefile_dir_debug + 'debug-SF_data' 
+			self.debug_file_SF	   =self.savefile_dir_debug + 'debug-SF_data' 
 		
-		self.debug_file_logpsi       =self.savefile_dir_debug + 'debug-logpsi_data'        #+'--' + self.file_name
-		self.debug_file_phasepsi     =self.savefile_dir_debug + 'debug-phasepsi_data'      #+'--' + self.file_name
-		self.debug_file_intkets      =self.savefile_dir_debug + 'debug-intkets_data'       #+'--' + self.file_name
-		self.debug_file_Eloc         =self.savefile_dir_debug + 'debug-Eloc_data'          #+'--' + self.file_name
+		self.debug_file_logpsi	   =self.savefile_dir_debug + 'debug-logpsi_data'		#+'--' + self.file_name
+		self.debug_file_phasepsi	 =self.savefile_dir_debug + 'debug-phasepsi_data'	  #+'--' + self.file_name
+		self.debug_file_intkets	  =self.savefile_dir_debug + 'debug-intkets_data'	   #+'--' + self.file_name
+		self.debug_file_Eloc		 =self.savefile_dir_debug + 'debug-Eloc_data'		  #+'--' + self.file_name
 		self.debug_file_params_update=self.savefile_dir_debug + 'debug-params_update_data' #+'--' + self.file_name
 		
 
@@ -817,7 +862,7 @@ class VMC(object):
 
 
 			##### store simulation data
-			if self.mode=='exact':		
+			if self.mode in ['ED','exact']:		
 				phase_hist = self._compute_phase_hist(self.MC_tool.phase_kets,self.Eloc_params_dict_log['abs_psi_2'])
 			else:
 				mod_psi_2=np.exp(2.0*(self.MC_tool.log_mod_kets-self.MC_tool.log_psi_shift))
@@ -982,8 +1027,8 @@ class VMC(object):
 	def train(self, start_iter=0):
 
 
-		#print("remove norm from real net")
-		#exit()
+		# print("remove norm from real net")
+		# exit()
 
 		# set timer
 		t_start=time.time()
@@ -1001,10 +1046,10 @@ class VMC(object):
 
 		elif self.mode=='ED':
 			
-			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features)
+			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features, self.load_file)
 	
 			# required to train independent real nets with RK
-			self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features)
+			self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file)
 	
 		
 		iteration=start_iter

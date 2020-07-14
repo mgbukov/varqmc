@@ -68,7 +68,7 @@ def data_stream(data,minibatch_size,sample_size,N_minibatches):
 
 class Energy_estimator():
 
-	def __init__(self,comm,DNN_log,DNN_phase,mode,J2,N_MC_points,N_batch,L,N_symm,sign,minibatch_size):
+	def __init__(self,comm,DNN_log,DNN_phase,mode,J2,N_MC_points,N_batch,L,N_symm,sign,minibatch_size,semi_exact):
 
 		# MPI commuicator
 		self.comm=comm
@@ -87,6 +87,10 @@ class Energy_estimator():
 		self.mode=mode
 
 		self.minibatch_size=minibatch_size
+
+		self.semi_exact_log=semi_exact[0]
+		self.semi_exact_phase=semi_exact[1]
+
 
 
 
@@ -250,37 +254,37 @@ class Energy_estimator():
 
 
 
-	def load_exact_basis(self,NN_type,MC_tool,N_features):
+	def load_exact_basis(self,NN_type,MC_tool,N_features,load_file):
 
 
 		self.MC_tool=MC_tool
 		self.N_features=N_features
 
-		#assert(self.L==4)
-
-		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
-		path_to_data=os.path.expanduser('~') + '/Google_Drive/frustration_from_RBM/ED_data/'
 	
-		skiprows=self.N_MC_points//self.comm.Get_size()*self.comm.Get_rank()
-		if self.comm.Get_rank() == self.comm.Get_size()-1 and self.comm.Get_size()>1:
-		 	skiprows+=1
+		skiprows=(self.N_MC_points//self.comm.Get_size() + 1)*self.comm.Get_rank()
+		#if self.comm.Get_size()>0 and self.comm.Get_rank()>0: # == self.comm.Get_size()-1:
+		# 	skiprows+=self.comm.Get_rank()
 
-		#print(self.comm.Get_rank(), skiprows, self.N_batch)
+		# print(self.comm.Get_rank(), skiprows)
+		# exit()
 
-		ref_states=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=self.basis_type, delimiter=' ',usecols=[0,]) 
-		self.count=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.uint16, delimiter=' ',usecols=[6,]).to_numpy().squeeze() 
+		ref_states=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=self.basis_type, delimiter=' ',usecols=[0,]) 
+		self.count=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.uint16, delimiter=' ',usecols=[6,]).to_numpy().squeeze() 
 		
+		#print(ref_states)
+		#exit()
+
 		self.MC_tool.ints_ket=ref_states.to_numpy().squeeze()
 		self.MC_tool.count=self.count
 
 		### compute exact GS
 		
 		# load data
-		log_psi_GS =read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[1,]) 
+		log_psi_GS =read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[1,]) 
 		if self.sign>0:
-			sign_psi_GS=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[4,]) 
+			sign_psi_GS=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[4,]) 
 		else:
-			sign_psi_GS=read_csv(path_to_data+ED_data_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[3,]) 
+			sign_psi_GS=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.float64, delimiter=' ',usecols=[3,]) 
 		
 		# build psi
 		self.psi_GS_exact = sign_psi_GS.to_numpy().squeeze() * np.exp(log_psi_GS.to_numpy().squeeze())
@@ -389,7 +393,7 @@ class Energy_estimator():
 			self.comm.Allgatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[:], MPI.DOUBLE], )
 			phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
 		else:
-			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,)
+			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,semi_exact=self.semi_exact_phase,)
 
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
@@ -431,8 +435,8 @@ class Energy_estimator():
 				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
 
 			else:
-				log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)	
-				phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,)
+				log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,semi_exact=self.semi_exact_log,)	
+				phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,semi_exact=self.semi_exact_phase,)
 
 		else:
 			if self.mode=='ED':
@@ -440,7 +444,7 @@ class Energy_estimator():
 				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
 
 			else:
-				log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,)
+				log_psi_bras, phase_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,semi_exact=self.semi_exact_log,)
 		
 		log_psi_bras-=log_psi_shift
 		
@@ -520,7 +524,7 @@ class Energy_estimator():
 
 	
 
-	def evaluate_s_primes(self,evaluate_NN,NN_params,input_shape,):
+	def evaluate_s_primes(self,evaluate_NN,NN_params,input_shape,semi_exact=False):
 
 		### evaluate network using minibatches
 
@@ -529,26 +533,41 @@ class Energy_estimator():
 			num_complete_batches, leftover = divmod(self.nn_uq, self.minibatch_size)
 			N_minibatches = num_complete_batches + bool(leftover)
 
-			data=np.zeros((N_minibatches*self.minibatch_size,)+self._spinstates_bra.shape[1:],dtype=self._spinstates_bra.dtype)
-			data[:self.nn_uq,...]=self._spinstates_bra[:self.nn][self.index]
-		
+			if semi_exact:
+				data=np.zeros((N_minibatches*self.minibatch_size,),dtype=self.ints_bra_uq.dtype)
+				data[:self.nn_uq,...]=self.ints_bra_uq
+			else:
+				data=np.zeros((N_minibatches*self.minibatch_size,)+self._spinstates_bra.shape[1:],dtype=self._spinstates_bra.dtype)
+				data[:self.nn_uq,...]=self._spinstates_bra[:self.nn][self.index]
+				
+
+
+			
 			# preallocate data
 			prediction_bras=np.zeros(N_minibatches*self.minibatch_size,dtype=np.float64)
 			if self.NN_dtype=='cpx':
 				prediction_bras_2=np.zeros_like(prediction_bras)
-			
+
+
 			ti=time.time()
 			for j in range(N_minibatches):
 				#ti=time.time()
 
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
-				batch=data[batch_idx].reshape(input_shape)
+				batch=data[batch_idx]
 
 				if self.NN_dtype=='real':
-					prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,)
+					if semi_exact:
+						prediction_bras[batch_idx] = evaluate_NN(NN_params, batch,)
+					else:
+						prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),)
 				else:
-					prediction_bras[batch_idx], prediction_bras_2[batch_idx] = evaluate_NN(NN_params, batch,)
+					if self.semi_exact:
+						prediction_bras[batch_idx], prediction_bras_2[batch_idx] = evaluate_NN(NN_params, batch,)
+					else:
+						prediction_bras[batch_idx], prediction_bras_2[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),)
 				
+
 				# with disable_jit():
 				# 	log, phase = evaluate_NN(DNN.params, batch.reshape(batch.shape[0],self.N_symm,self.N_sites), DNN.apply_fun_args )
 			
@@ -558,7 +577,7 @@ class Energy_estimator():
 			prediction_bras=prediction_bras[:self.nn_uq]
 			if self.NN_dtype=='cpx':
 				prediction_bras_2=prediction_bras_2[:self.nn_uq]
-			
+
 			print("network evaluation on {0:d} configs took {1:0.6} secs.".format(data.shape[0], time.time()-ti) )
 	
 
@@ -614,6 +633,9 @@ class Energy_estimator():
 
 
 		Eloc=self.Eloc_real+1j*self.Eloc_imag
+
+		#print(Eloc)
+		#exit()
 		
 		Eloc_mean_g=np.zeros(1, dtype=np.complex128)
 		Eloc_var_g=np.zeros(1, dtype=np.float64)
@@ -632,7 +654,7 @@ class Energy_estimator():
 			Eloc_var_g-=np.abs(Eloc_mean_g)**2
 
 			Eloc_mean_g=Eloc_mean_g[0]
-			Eloc_var_g=Eloc_var_g[0]
+			Eloc_var_g=np.abs(Eloc_var_g[0])
 
 
 		elif self.mode=='exact':
