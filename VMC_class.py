@@ -1,7 +1,7 @@
 import sys,os,warnings
 
 if sys.platform == "linux" or sys.platform == "linux2": # linux
-    path_to_data="../ED_data/"
+    path_to_data="../../ED_data/"
 
 elif sys.platform == "darwin": # OS X
 	path_to_data=os.path.expanduser('~') + '/Google_Drive/frustration_from_RBM/ED_data/'
@@ -190,21 +190,21 @@ class VMC(object):
 
 		
 		self.n_iter=10 # define number of iterations to store for debugging purposes
-		
 		self._create_file_name(model_params)
-		self._create_NN(load_data=self.load_data)
+		self._create_NN(load_data=self.load_data)	
 		self._create_energy_estimator()
 		self._create_MC_sampler()
 		self._create_optimizer()
 
+		
 
 
 		# load exact data
 		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
 		self.load_file=path_to_data+ED_data_file
-		if np.sum(self.semi_exact)>0:
+		if np.sum(self.semi_exact)>1E-6:
+			print('\nloading data\n')
 			self.load_exact_data()
-
 
 
 		# create log file and directory
@@ -479,7 +479,6 @@ class VMC(object):
 			self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_log.N_varl_params, self.n_iter)
 			self.opt_log.define_grad_func(NN_evaluate=self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
 			self.opt_log.init_opt_state(self.DNN_log.params)
-			
 			# phase net
 			self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.NN_dtype, self.DNN_phase.NN_Tree, label='PHASE', step_size=self.step_sizes[1], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 			self.opt_phase.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_phase.N_varl_params, self.n_iter)
@@ -538,6 +537,7 @@ class VMC(object):
 
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
 		self.E_estimator_log.init_global_params(self.N_MC_points,self.n_iter)
+		
 
 		
 	def _create_MC_sampler(self, ):
@@ -1032,8 +1032,7 @@ class VMC(object):
 
 		# set timer
 		t_start=time.time()
-
-
+		
 		if self.mode=='exact':
 			assert(self.N_MC_points==107) # 107 states in the symmetry reduced sector for L=4
 
@@ -1045,13 +1044,18 @@ class VMC(object):
 			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
 		elif self.mode=='ED':
+
+			print('start loading data')	
 			
 			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features, self.load_file)
 	
 			# required to train independent real nets with RK
 			self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file)
 	
-		
+		print('loaded data')		
+		exit()
+
+
 		iteration=start_iter
 		while iteration < start_iter+self.N_iterations:
 	
@@ -1062,7 +1066,7 @@ class VMC(object):
 			if self.comm.Get_rank()==0:
 				print(init_iter_str)
 
-
+			exit()
 
 			##### evaluate model
 			self.get_training_data(iteration,)
@@ -1073,7 +1077,7 @@ class VMC(object):
 				if self.comm.Get_rank()==0:
 					print(olap_str)
 
-			#exit()
+			exit()
 		
 			#### check energy variance, undo update and restart sampling back 10 iterations
 			repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1,load_data=True)
