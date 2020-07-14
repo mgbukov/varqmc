@@ -17,8 +17,8 @@ N_MC_chains: 1
 MC_thermal: true
 MC_prop_threshold: 1.0
 minibatch_size: 200
-N_MC_points: 32768 # 100000
-mode: MC # exact #   
+N_MC_points: 32768 # 15804956
+mode: MC # ED  
 batchnorm: false
 adaptive_SR_cutoff: false
 semi_exact: (0,0) # (log, phase)

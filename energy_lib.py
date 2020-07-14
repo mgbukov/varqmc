@@ -180,7 +180,6 @@ class Energy_estimator():
 			self.basis_type=np.uint64
 			self.MPI_basis_dtype=MPI.LONG
 
-		
 
 	def get_exact_kets(self):
 
@@ -301,7 +300,7 @@ class Energy_estimator():
 		# 	self.psi_GS_exact=np.array([None])
 		# self.comm.Gatherv([psi_GS,   MPI.DOUBLE], [self.psi_GS_exact[:],   MPI.DOUBLE], root=0)
 
-
+		
 		# compute spin s-configs
 		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=NN_type)
 

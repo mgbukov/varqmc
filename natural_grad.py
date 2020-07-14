@@ -112,9 +112,8 @@ class natural_gradient():
 		self.SNR_gauss=np.zeros_like(self.F_vector)
 
 		self.Q_expt=np.zeros(self.N_varl_params,dtype=dtype)
-		self.QQ_expt=np.zeros_like(self.dlog_psi)
-
-
+		self.QQ_expt=np.zeros([self.N_batch,self.N_varl_params],dtype=np.float64)
+		
 		
 
 		self.S_norm=0.0 # S-matrix norm
@@ -123,6 +122,7 @@ class natural_gradient():
 		self.Flog_norm=0.0
 		self.Fphase_norm=0.0
 
+			
 		
 		if self.mode=='MC':
 
