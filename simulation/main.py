@@ -1,7 +1,5 @@
 import os,sys
 
-from make_data_file import create_params_file
-
 sys.path.append("..")
 
 from VMC_class import VMC

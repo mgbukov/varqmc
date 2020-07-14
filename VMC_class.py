@@ -154,16 +154,18 @@ class VMC(object):
 			if self.comm.Get_size()>1:
 				print('only one MPI process allowed for "exact" simulation.')
 				exit()
+
 		elif self.mode=='MC':
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
 				self.N_batch+=1
+				
 		elif self.mode=='ED':
 
 			if self.L==4:
 				self.N_MC_points=107
 			elif self.L==6:
-				self.N_MC_points=16000000
+				self.N_MC_points=15804956
 			else:
 				raise ValueError('wrong N_MC_points input.')
 
