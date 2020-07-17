@@ -1,6 +1,6 @@
 import sys, os
 
-from cpp_code import update_offdiag_ME, update_diag_ME, c_offdiag_sum
+from cpp_code import update_offdiag_ME_exact, update_offdiag_ME, update_diag_ME, c_offdiag_sum
 
 from mpi4py import MPI
 import numpy as np
@@ -42,15 +42,6 @@ def _consolidate_static(static_list):
 	return static_list
 
 
-def compute_outliers(data):
-
-	q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
-	iqr = q75 - q25
-	# calculate the outlier cutoff
-	cut_off = iqr * 1.5
-	lower, upper = q25 - cut_off, q75 + cut_off
-	
-	return (lower, upper), (q25, q75, iqr)
 
 
 
@@ -310,9 +301,10 @@ class Energy_estimator():
 		self.comm.Allgatherv([self.MC_tool.ints_ket,    self.MC_tool.MPI_basis_dtype], [self.MC_tool.ints_ket_g[:],   self.MC_tool.MPI_basis_dtype], )
 		#self.comm.Gatherv([self.MC_tool.count,   MPI.SHORT], [self.MC_tool.count_g[:],   MPI.SHORT], root=0)
 		
+		#exut()
 
 		### compute s'
-		self.compute_s_primes(self.MC_tool.ints_ket,NN_type)
+		self.precompute_s_primes(self.MC_tool.ints_ket,NN_type)
 
 		
 		# find indices of s primes
@@ -327,12 +319,51 @@ class Energy_estimator():
 
 
 
+	def precompute_s_primes(self,ints_ket,NN_type):
 
+		# preallocate variables
+		self._reset_locenergy_params()
+
+
+		# diag matrix elements, only real part
+		for opstr,indx,J in self._static_list_diag:
+
+			indx=np.asarray(indx,dtype=np.int32)
+			update_diag_ME(ints_ket,self.Eloc_diag,opstr,indx,J) 
+
+
+		# off-diag matrix elements
+		nn=0
+		for j,(opstr,indx,J) in enumerate(self._static_list_offdiag):
+			
+			self._ints_ket_ind_holder[:]=-np.ones((self.N_batch,),dtype=np.int32)
+
+			indx=np.asarray(indx,dtype=np.int32)
+			n = update_offdiag_ME_exact(ints_ket,self._ints_bra_rep_holder,self._ints_ket_ind_holder,self._MEs_holder,opstr,indx,J)
+			
+			self._MEs[nn:nn+n]=self._MEs_holder[self._ints_ket_ind_holder[:n]]
+			self._ints_bra_rep[nn:nn+n]=self._ints_bra_rep_holder[self._ints_ket_ind_holder[:n]]
+			self._ints_ket_ind[nn:nn+n]=self._ints_ket_ind_holder[:n]
+
+			
+			self._n_per_term[j]=n
+			nn+=n
+
+		# evaluate network on unique representatives only
+
+		# if self.L==4:
+		self.ints_bra_uq, index, inv_index, =np.unique(self._ints_bra_rep[:nn], return_index=True, return_inverse=True, )
+		nn_uq=self.ints_bra_uq.shape[0]
+		
+
+		self.nn=nn
+		self.nn_uq=nn_uq
+		self.index=index
+		self.inv_index=inv_index
 
 
 	def init_global_params(self,N_MC_points,n_iter,SdotS=False):
 
-		self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 		self._ints_bra_rep_holder=np.zeros((self.N_batch,),dtype=self.basis_type)
 		self._MEs_holder=np.zeros((self.N_batch,),dtype=np.float64)
 		self._ints_ket_ind_holder=-np.ones((self.N_batch,),dtype=np.int32)
@@ -345,6 +376,10 @@ class Energy_estimator():
 			else:
 				self.Eloc_real_g=np.array([[None],[None]])
 				self.Eloc_imag_g=np.array([[None],[None]])
+		
+		elif self.mode=='exact':
+			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
+		
 
 		#self.SdotS_real_tot=np.zeros(N_MC_points,dtype=np.float64)
 		#self.SdotS_imag_tot=np.zeros_like(self.SdotS_real_tot)
@@ -366,12 +401,15 @@ class Energy_estimator():
 
 		#######
 		self._MEs=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.float64)
-		self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.int8)
 		self._ints_bra_rep=np.zeros((self.N_batch*self._n_offdiag_terms,),dtype=self.basis_type)
 		self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 		self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
 
 		self.Eloc_diag=np.zeros(self.N_batch, dtype=np.float64)	
+
+		if not self.mode=='ED':
+			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.int8)
+		
 
 
 	def _reset_Eloc_vars(self,):
@@ -685,4 +723,15 @@ class Energy_estimator():
 		return Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag
 
 
+
+
+def compute_outliers(data):
+
+	q25, q75 = np.percentile(data, 25), np.percentile(data, 75)
+	iqr = q75 - q25
+	# calculate the outlier cutoff
+	cut_off = iqr * 1.5
+	lower, upper = q25 - cut_off, q75 + cut_off
+	
+	return (lower, upper), (q25, q75, iqr)
 

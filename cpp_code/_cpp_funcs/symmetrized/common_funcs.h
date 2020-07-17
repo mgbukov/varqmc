@@ -368,6 +368,68 @@ void int_to_spinstate_conv(const int N,I s,J out[])
 ////////////////////////////////////////////////////////////////////////////////////
 
 
+template<class I>
+int update_offdiag_exact(const int n_op,
+				  const char opstr[],
+				  const int indx[],
+				  const double A,
+				  const int Ns,
+				  const	I ket[], // col
+				  		I bra_rep[],
+				  		npy_int32 ket_index[],
+				  		double M[]
+				  )
+{	
+	int N=_L*_L;
+	
+	#pragma omp parallel
+	{		
+
+		int a=Ns/(100*omp_get_num_threads());
+		int b=1;
+
+		//cout << omp_get_num_threads() << " , " << omp_get_max_threads() << endl;
+
+		const npy_intp chunk = (a < b) ? b : a; // std::max(Ns/(100*omp_get_num_threads()),(npy_intp)1);
+		#pragma omp for schedule(dynamic,chunk) 
+		for(int j=0;j<Ns;j++){		
+
+			double m = A;
+			I r = ket[j];
+
+			op(r,m,n_op,opstr,indx,N);
+			//bool pcon_bool = (count_bits(r)==N/2);
+
+			//cout << pcon_bool << " , " << m << endl;
+
+			if(m!=0.0){ // r state in same particle-number sector
+	
+				bra_rep[j] = ref_state(r);
+				M[j] = m;
+				ket_index[j]=j;
+
+			}
+		}
+	}
+
+
+	int l=0;
+	for(int j=0;j<Ns;j++){
+
+		if(ket_index[j]>=0){
+
+			ket_index[l]=j;
+
+			l++;
+		}
+	}
+
+
+
+	return l;
+}
+
+
 
 template<class I>
 int update_offdiag(const int n_op,

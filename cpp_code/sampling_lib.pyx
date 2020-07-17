@@ -44,10 +44,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -97,8 +97,9 @@ cdef extern from "sample.h":
     T swap_bits[T](const T, int, int) nogil
     T magnetized_int[T](int, int, T) nogil
 
-    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.int8_t [], np.int32_t[], double[], I (*)(const int,I,np.int8_t*) ) nogil  
+    int update_offdiag_exact[I](const int, const char[], const int[], const double, const int, const I[], I[], np.int32_t[], double[] ) nogil  
     
+    int update_offdiag[I](const int, const char[], const int[], const double, const int, const int, const I[], I[], np.int8_t [], np.int32_t[], double[], I (*)(const int,I,np.int8_t*) ) nogil  
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
     void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[],const double[]) nogil
@@ -166,14 +167,18 @@ def integer_cyclicity(basis_type[:] states,np.npy_uint32[::1] cycl):
 
 
 @cython.boundscheck(False)
-def update_diag_ME(np.ndarray ket,double[::1] M,object opstr,int[::1] indx,double J):
+def update_offdiag_ME_exact(np.ndarray ket, basis_type[:] bra, np.int32_t[:] ket_indx,double[::1] M,object opstr,int[::1] indx,double J, ):
     cdef char[::1] c_opstr = bytearray(opstr,"utf-8")
     cdef int n_op = indx.shape[0]
     cdef int Ns = ket.shape[0]
+    cdef int l
+    
     cdef void * ket_ptr = np.PyArray_GETPTR1(ket,0)
 
     with nogil:
-        update_diag(n_op,&c_opstr[0],&indx[0],J,Ns,<basis_type*>ket_ptr,&M[0])
+        l=update_offdiag_exact(n_op, &c_opstr[0], &indx[0], J, Ns, <basis_type*>ket_ptr, &bra[0] ,&ket_indx[0] ,&M[0])
+
+    return l
 
 
 @cython.boundscheck(False)
@@ -198,6 +203,16 @@ def update_offdiag_ME(np.ndarray ket, basis_type[:] bra, np.int8_t[:,:] spin_bra
         l=update_offdiag(n_op,&c_opstr[0],&indx[0],J,Ns,N_symm,<basis_type*>ket_ptr,&bra[0],&spin_bra[0,0],&ket_indx[0],&M[0],rep_spin_config)
 
     return l
+
+@cython.boundscheck(False)
+def update_diag_ME(np.ndarray ket,double[::1] M,object opstr,int[::1] indx,double J):
+    cdef char[::1] c_opstr = bytearray(opstr,"utf-8")
+    cdef int n_op = indx.shape[0]
+    cdef int Ns = ket.shape[0]
+    cdef void * ket_ptr = np.PyArray_GETPTR1(ket,0)
+
+    with nogil:
+        update_diag(n_op,&c_opstr[0],&indx[0],J,Ns,<basis_type*>ket_ptr,&M[0])
 
 
 

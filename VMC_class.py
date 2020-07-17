@@ -159,7 +159,7 @@ class VMC(object):
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
 				self.N_batch+=1
-				
+
 		elif self.mode=='ED':
 
 			if self.L==4:
@@ -1054,8 +1054,8 @@ class VMC(object):
 			# required to train independent real nets with RK
 			self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file)
 	
-		print('loaded data')		
-		exit()
+			print('loaded data')		
+		#exit()
 
 
 		iteration=start_iter
@@ -1068,8 +1068,7 @@ class VMC(object):
 			if self.comm.Get_rank()==0:
 				print(init_iter_str)
 
-			exit()
-
+			
 			##### evaluate model
 			self.get_training_data(iteration,)
 
@@ -1079,7 +1078,7 @@ class VMC(object):
 				if self.comm.Get_rank()==0:
 					print(olap_str)
 
-			exit()
+			#exit()
 		
 			#### check energy variance, undo update and restart sampling back 10 iterations
 			repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1,load_data=True)

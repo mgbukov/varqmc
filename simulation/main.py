@@ -1,5 +1,12 @@
 import os,sys
 
+if sys.platform == "linux" or sys.platform == "linux2": # linux
+    from make_data_file_linux import create_params_file
+
+elif sys.platform == "darwin": # OS X
+	from make_data_file import create_params_file
+
+
 sys.path.append("..")
 
 from VMC_class import VMC

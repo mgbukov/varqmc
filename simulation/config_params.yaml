@@ -1,6 +1,6 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 6
+L: 4
 N_iterations: 2 # 1000
 # NN_dtype: cpx # 
 # NN_shape_str: (6x6-12--1x1-8,6x6-16--1x1-12) # (6x6-8--3x3-4--1x1-2,6x6-16--1x1-12--1x1-8)  
@@ -9,16 +9,17 @@ NN_dtype: real #
 NN_type: CNN # DNN # 
 
 # NN_shape_str: (6x6-10--3x3-8--2x2-6--1x1-4--1x1-2,6x6-20--1x1-16--1x1-12) # (1325,1260)
-NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8) # (857,884)
+#NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8) # (857,884)
 # NN_shape_str: (6x6-7--3x3-5--2x2-3--1x1-2--1x1-2,6x6-14--1x1-10--1x1-6) # (650,720)
 # NN_shape_str: (6x6-6--3x3-4--2x2-4--1x1-2--1x1-2,6x6-12--1x1-8--1x1-4) # (521,572)
+NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
 
 N_MC_chains: 1
 MC_thermal: true
 MC_prop_threshold: 1.0
 minibatch_size: 200
-N_MC_points: 100000 # 15804956 # 32768
-mode: MC # ED  
+N_MC_points: 107 # 15804956 # 32768
+mode: ED # MC #  
 batchnorm: false
 adaptive_SR_cutoff: false
 semi_exact: (0,0) # (log, phase)
