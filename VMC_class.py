@@ -1,5 +1,6 @@
 import sys,os,warnings
-sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
+#sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
+sys.stdout.reconfigure(encoding='utf-8')
 
 if sys.platform == "linux" or sys.platform == "linux2": # linux
     path_to_data="../../ED_data/"
@@ -699,8 +700,10 @@ class VMC(object):
 			sys.stdout = self.logfile
 			sys.stderr = self.logfile
 			print('logfiles overwritten')
+		
+		#print('DONE')
+		#exit()
 
-			#pass
 		
 		if self.NN_dtype=='real':
 			self.debug_file_SF_log	   =self.savefile_dir_debug + 'debug-SF_data_log'			#+'--' + self.file_name
