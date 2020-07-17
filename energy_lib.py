@@ -244,28 +244,29 @@ class Energy_estimator():
 
 
 
-	def load_exact_basis(self,NN_type,MC_tool,N_features,load_file):
+	def load_exact_basis(self,NN_type,MC_tool,N_features,load_file,skiprows):
 
 
 		self.MC_tool=MC_tool
 		self.N_features=N_features
 
-	
-		skiprows=(self.N_MC_points//self.comm.Get_size() + 1)*self.comm.Get_rank()
-		#if self.comm.Get_size()>0 and self.comm.Get_rank()>0: # == self.comm.Get_size()-1:
-		# 	skiprows+=self.comm.Get_rank()
 
-		# print(self.comm.Get_rank(), skiprows)
-		# exit()
-
+		
+		# load data
 		ref_states=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=self.basis_type, delimiter=' ',usecols=[0,]) 
 		self.count=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.uint16, delimiter=' ',usecols=[6,]).to_numpy().squeeze() 
 		
-		#print(ref_states)
+		#print(self.comm.Get_rank(),ref_states.to_numpy().squeeze() )
 		#exit()
 
 		self.MC_tool.ints_ket=ref_states.to_numpy().squeeze()
 		self.MC_tool.count=self.count
+
+		if self.count.shape[0]!=self.N_batch:
+			print("\n\nHERE\n\n")
+
+		# print(self.comm.Get_rank(), self.count.shape[0]!=self.N_batch, self.count.shape[0],self.N_batch,self.MC_tool.log_mod_kets.shape[0], skiprows)
+		# exit()
 
 		### compute exact GS
 		
@@ -291,17 +292,20 @@ class Energy_estimator():
 		# 	self.psi_GS_exact=np.array([None])
 		# self.comm.Gatherv([psi_GS,   MPI.DOUBLE], [self.psi_GS_exact[:],   MPI.DOUBLE], root=0)
 
-		
+		print('staring int_to-state')
+		#exit()
 		# compute spin s-configs
 		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=NN_type)
 
+		print('\nfisnihed loading data.\n')
+		#exit()
 		
 		# gather s data
 		self.comm.Barrier()
 		self.comm.Allgatherv([self.MC_tool.ints_ket,    self.MC_tool.MPI_basis_dtype], [self.MC_tool.ints_ket_g[:],   self.MC_tool.MPI_basis_dtype], )
 		#self.comm.Gatherv([self.MC_tool.count,   MPI.SHORT], [self.MC_tool.count_g[:],   MPI.SHORT], root=0)
 		
-		#exut()
+		#exit()
 
 		### compute s'
 		self.precompute_s_primes(self.MC_tool.ints_ket,NN_type)

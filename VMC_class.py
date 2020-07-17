@@ -1,4 +1,5 @@
 import sys,os,warnings
+sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
 
 if sys.platform == "linux" or sys.platform == "linux2": # linux
     path_to_data="../../ED_data/"
@@ -172,6 +173,11 @@ class VMC(object):
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
 				self.N_batch+=1
+		
+			# compute index in data file of process
+			self.N_batches=np.zeros(self.comm.Get_size(),dtype=np.int)
+			self.comm.Allgather([np.array(self.N_batch),  MPI.INT], [self.N_batches, MPI.INT], )
+			self.prss_index=np.insert(np.cumsum(self.N_batches),0,0)[self.comm.Get_rank()]
 
 
 		else:
@@ -689,8 +695,10 @@ class VMC(object):
 		# redirect std out
 		if not self.print:
 			warnings.showwarning = customwarn
+			print('start overwriting logfiles')
 			sys.stdout = self.logfile
 			sys.stderr = self.logfile
+			print('logfiles overwritten')
 
 			#pass
 		
@@ -1049,10 +1057,10 @@ class VMC(object):
 
 			print('start loading data')	
 			
-			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features, self.load_file)
+			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features, self.load_file, self.prss_index)
 	
 			# required to train independent real nets with RK
-			self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file)
+			self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file, self.prss_index)
 	
 			print('loaded data')		
 		#exit()
