@@ -111,8 +111,9 @@ class natural_gradient():
 		self.SNR_exact=np.zeros_like(self.F_vector)
 		self.SNR_gauss=np.zeros_like(self.F_vector)
 
-		self.Q_expt=np.zeros(self.N_varl_params,dtype=dtype)
-		self.QQ_expt=np.zeros([self.N_batch,self.N_varl_params],dtype=np.float64)
+		if self.adaptive_SR_cutoff:
+			self.Q_expt=np.zeros(self.N_varl_params,dtype=dtype)
+			self.QQ_expt=np.zeros([self.N_batch,self.N_varl_params],dtype=np.float64)
 		
 		
 
@@ -125,7 +126,6 @@ class natural_gradient():
 			
 		
 		if self.mode=='MC':
-
 			if self.comm.Get_rank()==0:
 				self.S_lastiters=np.zeros([n_iter,self.N_varl_params,self.N_varl_params],dtype=dtype) # array to store last S-matrices
 				self.F_lastiters=np.zeros([n_iter,self.N_varl_params,],dtype=dtype) # array to store last F-vectors
@@ -434,7 +434,7 @@ class natural_gradient():
 			self.S_eigvals[:]=lmbda
 			self.VF_overlap[:]= jnp.dot(V.T, F)
 
-			if self.NN_dtype=='real':
+			if self.NN_dtype=='real' and self.adaptive_SR_cutoff:
 				SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
 
 		

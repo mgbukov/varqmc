@@ -262,8 +262,6 @@ class Energy_estimator():
 		self.MC_tool.ints_ket=ref_states.to_numpy().squeeze()
 		self.MC_tool.count=self.count
 
-		if self.count.shape[0]!=self.N_batch:
-			print("\n\nHERE\n\n")
 
 		# print(self.comm.Get_rank(), self.count.shape[0]!=self.N_batch, self.count.shape[0],self.N_batch,self.MC_tool.log_mod_kets.shape[0], skiprows)
 		# exit()

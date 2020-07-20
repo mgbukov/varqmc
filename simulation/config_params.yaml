@@ -1,6 +1,6 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 4
+L: 6
 N_iterations: 2 # 1000
 # NN_dtype: cpx # 
 # NN_shape_str: (6x6-12--1x1-8,6x6-16--1x1-12) # (6x6-8--3x3-4--1x1-2,6x6-16--1x1-12--1x1-8)  

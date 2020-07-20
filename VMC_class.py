@@ -1,6 +1,5 @@
 import sys,os,warnings
-#sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
-sys.stdout.reconfigure(encoding='utf-8')
+#sys.stdout.reconfigure(encoding='utf-8')
 
 if sys.platform == "linux" or sys.platform == "linux2": # linux
     path_to_data="../../ED_data/"
@@ -1081,6 +1080,8 @@ class VMC(object):
 
 			
 			##### evaluate model
+			if self.logfile is not None:
+				self.logfile.flush()
 			self.get_training_data(iteration,)
 
 
@@ -1088,6 +1089,8 @@ class VMC(object):
 				olap_str='overlap = {0:0.10f}.\n'.format(self.Eloc_params_dict_log['overlap'])
 				if self.comm.Get_rank()==0:
 					print(olap_str)
+			if self.logfile is not None:
+				self.logfile.flush()
 
 			#exit()
 		
@@ -1285,7 +1288,8 @@ class VMC(object):
 			if iteration==0:
 				self.MC_tool.thermal=self.thermal # set MC sampler to re-use initial state
 		
-
+		if self.logfile is not None:
+			self.logfile.flush()
 		print("LOCAL ENERGY:")
 
 		# get log_psi statistics

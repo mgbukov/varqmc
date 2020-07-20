@@ -97,6 +97,7 @@ class MC_sampler():
 
 			self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+			self.psi=np.zeros((N_batch,),dtype=np.complex128)
 			
 	
 		self._reset_global_vars()
@@ -138,7 +139,7 @@ class MC_sampler():
 		norm_2=np.zeros(1, dtype=np.float64)
 		self.comm.Allreduce(np.sum(self.count*mod_psi**2), norm_2,  op=MPI.SUM)
 		
-		self.psi = mod_psi*np.exp(+1j*self.phase_kets)/np.sqrt(norm_2[0])
+		self.psi[:] = mod_psi*np.exp(+1j*self.phase_kets)/np.sqrt(norm_2[0])
 
 	
 	def _reset_global_vars(self):
