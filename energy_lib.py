@@ -254,13 +254,13 @@ class Energy_estimator():
 		
 		# load data
 		ref_states=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=self.basis_type, delimiter=' ',usecols=[0,]) 
-		self.count=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.uint16, delimiter=' ',usecols=[6,]).to_numpy().squeeze() 
+		self.MC_tool.count=read_csv(load_file, skiprows=skiprows, nrows=self.N_batch, header=None, dtype=np.uint16, delimiter=' ',usecols=[6,]).to_numpy().squeeze() 
 		
 		#print(self.comm.Get_rank(),ref_states.to_numpy().squeeze() )
 		#exit()
 
 		self.MC_tool.ints_ket=ref_states.to_numpy().squeeze()
-		self.MC_tool.count=self.count
+		#self.MC_tool.count=self.count
 
 
 		# print(self.comm.Get_rank(), self.count.shape[0]!=self.N_batch, self.count.shape[0],self.N_batch,self.MC_tool.log_mod_kets.shape[0], skiprows)
@@ -312,6 +312,13 @@ class Energy_estimator():
 		# find indices of s primes
 		self.s_prime_inds=np.searchsorted(self.MC_tool.ints_ket_g,self.ints_bra_uq,)
 		
+
+		# free up memory
+		self.MC_tool.ints_ket_g=None
+		self.MC_tool.ints_ket=None
+		self.ints_bra_uq=None
+		
+
 
 
 

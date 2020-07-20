@@ -93,8 +93,7 @@ class MC_sampler():
 		else:
 
 			self.ints_ket_g=np.zeros((N_MC_points,),dtype=self.basis_type)
-			#self.count_g=np.zeros((N_MC_points,),dtype=np.uint16)
-
+			
 			self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			self.psi=np.zeros((N_batch,),dtype=np.complex128)
