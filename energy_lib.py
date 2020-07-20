@@ -317,6 +317,7 @@ class Energy_estimator():
 		self.MC_tool.ints_ket_g=None
 		self.MC_tool.ints_ket=None
 		self.ints_bra_uq=None
+		del log_psi_GS, sign_psi_GS
 		
 
 
@@ -385,6 +386,9 @@ class Energy_estimator():
 			else:
 				self.Eloc_real_g=np.array([[None],[None]])
 				self.Eloc_imag_g=np.array([[None],[None]])
+
+			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
+		
 		
 		elif self.mode=='exact':
 			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)

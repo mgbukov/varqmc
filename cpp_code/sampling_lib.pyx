@@ -298,6 +298,7 @@ cdef class Log_Net:
 
     cdef bool semi_exact
     cdef object evaluate, evaluate_log, evaluate_phase, evaluate_sampling
+    cdef object spin_config_inds
 
     cdef object NN_Tree
     cdef int N_varl_params
@@ -372,7 +373,7 @@ cdef class Log_Net:
 
 
     def load_exact_data(self,ints_ket_exact,log_psi_exact=None,phase_psi_exact=None):
-        self.ints_ket_exact=ints_ket_exact
+        #self.ints_ket_exact=ints_ket_exact
         self.log_psi_exact=log_psi_exact
         self.phase_psi_exact=phase_psi_exact
         
@@ -385,6 +386,13 @@ cdef class Log_Net:
             self.evaluate=self._evaluate_cpx_exact
             self.evaluate_phase = self._evaluate_phase_exact
             self.evaluate_log=self._evaluate_log_exact
+
+
+        # construct dictionary-table
+        self.spin_config_inds=dict()
+        self.spin_config_inds[0]=0
+        for i, s in enumerate(ints_ket_exact):
+            self.spin_config_inds[s]=i
 
         self.semi_exact=True
 
@@ -669,17 +677,20 @@ cdef class Log_Net:
 
     @cython.boundscheck(False)
     cpdef object _evaluate_log_exact(self, object params, object batch):
-        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        #s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        s_inds=[self.spin_config_inds[s] for s in batch]
         return self.log_psi_exact[s_inds]
 
     @cython.boundscheck(False)
     cpdef object _evaluate_phase_exact(self, object params, object batch):
-        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        #s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        s_inds=[self.spin_config_inds[s] for s in batch]
         return self.phase_psi_exact[s_inds]
 
     @cython.boundscheck(False)
     cpdef object _evaluate_cpx_exact(self, object params, object batch):
-        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        #s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        s_inds=[self.spin_config_inds[s] for s in batch]
         return self.log_psi_exact[s_inds], self.phase_psi_exact[s_inds]
 
 
@@ -951,6 +962,7 @@ cdef class Phase_Net:
     cdef bool semi_exact
 
     cdef object evaluate
+    cdef object spin_config_inds
 
     cdef object NN_Tree
     cdef int N_varl_params
@@ -998,10 +1010,15 @@ cdef class Phase_Net:
         
 
     def load_exact_data(self,ints_ket_exact,log_psi_exact=None,phase_psi_exact=None):
-        self.ints_ket_exact=ints_ket_exact
+        #self.ints_ket_exact=ints_ket_exact
         self.phase_psi_exact=phase_psi_exact
         
         self.evaluate=self._evaluate_phase_exact
+
+        self.spin_config_inds=dict()
+        self.spin_config_inds[0]=0
+        for i, s in enumerate(ints_ket_exact):
+            self.spin_config_inds[s]=i
         
         self.semi_exact=True
 
@@ -1173,7 +1190,8 @@ cdef class Phase_Net:
 
     @cython.boundscheck(False)
     cpdef object _evaluate_phase_exact(self, object params, object batch):
-        s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        #s_inds=np.searchsorted(self.ints_ket_exact,batch,)
+        s_inds=[self.spin_config_inds[s] for s in batch]
         return self.phase_psi_exact[s_inds]
 
 

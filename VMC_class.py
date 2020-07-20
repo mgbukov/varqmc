@@ -211,7 +211,7 @@ class VMC(object):
 		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
 		self.load_file=path_to_data+ED_data_file
 		if np.sum(self.semi_exact)>1E-6:
-			print('\nloading data\n')
+			print('\nstart loading exact data')
 			self.load_exact_data()
 
 
@@ -411,6 +411,9 @@ class VMC(object):
 
 		# clear memory
 		del ints_ket_exact, log_psi_exact, phase_psi_exact
+
+		print('finished loading exact data\n')
+		#exit()
 
 
 
@@ -1122,6 +1125,11 @@ class VMC(object):
 
 			iteration+=1
 			self.comm.Barrier()
+
+
+			if self.semi_exact[0] and self.semi_exact[1]:
+				print('\n\n\nSemi-exact check complete!\nexiting simulation...\n')
+				exit()
 
 
 		iteration-=1

@@ -11,6 +11,8 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 from jax import jit
 
+from cpp_code import representative
+
 from mpi4py import MPI
 import numpy as np
 import jax.numpy as jnp
@@ -154,17 +156,18 @@ class MC_sampler():
 												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
 
-		
 		if compute_phases:
 			if DNN_phase is not None: # real nets
 				if DNN_phase.semi_exact==False:
 					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), )
-				else:
+				else: # exact phases
+					representative(self.ints_ket,self.ints_ket,)
 					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.ints_ket, )
-			else:
+			else: # cpx nets
 				if DNN_log.semi_exact==False:
 					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.spinstates_ket.reshape(DNN_log.input_shape), )
-				else:
+				else: # exact phases
+					representative(self.ints_ket,self.ints_ket,)
 					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.ints_ket, )
 
 
