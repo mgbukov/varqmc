@@ -436,7 +436,13 @@ class Energy_estimator():
 
 	def reestimate_local_energy_phase(self, iteration, NN_params_phase, batch, params_dict):
 
-		phase_kets = self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape))
+
+		# if self.DNN_phase.semi_exact==False:
+		# 	phase_kets=self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), )
+		# else: # exact phases
+		# 	phase_kets=self.DNN_phase.evaluate(NN_params_phase, self.MC_tool.ints_ket, )
+
+		phase_kets=self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), )
 
 		if self.mode=='ED':
 			self.MC_tool.phase_kets[:]=phase_kets

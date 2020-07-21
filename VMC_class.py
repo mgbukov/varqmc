@@ -99,7 +99,8 @@ class VMC(object):
 
 		self.mode=params_dict['mode'] # exact or MC simulation
 		self.semi_exact=list(int(j) for j in read_str(params_dict['semi_exact'])[0])
-		
+
+
 		self.opt=read_str(params_dict['opt'])[0]
 
 		step_size_str=read_str(params_dict['step_size'])[0]
@@ -388,6 +389,13 @@ class VMC(object):
 	def load_exact_data(self,):
 
 		from pandas import read_csv
+
+
+		if self.semi_exact[0]==1 and self.semi_exact[1]==0:
+			assert(self.grad_update_mode=='phase')
+		elif self.semi_exact[0]==0 and self.semi_exact[1]==1:
+			assert(self.grad_update_mode=='log_mod')
+
 
 		ints_ket_exact=read_csv(self.load_file, header=None, dtype=self.E_estimator.basis_type, delimiter=' ',usecols=[0,]).to_numpy().squeeze()
 		log_psi_exact =read_csv(self.load_file, header=None, dtype=np.float64, delimiter=' ',usecols=[1,]).to_numpy().squeeze()
