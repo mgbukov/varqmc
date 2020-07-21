@@ -10,10 +10,11 @@ fi
 echo "#!/bin/bash -login" > submission.sh
 
 #echo "#SBATCH --account = <NERSC Repository>" >> submission.sh
-#echo "#SBATCH --qos=debug" >> submission.sh
-echo "#SBATCH --qos=regular" >> submission.sh 
+echo "#SBATCH --qos=debug" >> submission.sh
+#echo "#SBATCH --qos=regular" >> submission.sh 
 #echo "#SBATCH --qos=premium" >> submission.sh
-echo "#SBATCH --time=48:00:00" >> submission.sh
+echo "#SBATCH --time=00:30:00" >> submission.sh
+#echo "#SBATCH --time=48:00:00" >> submission.sh
 
 echo "#SBATCH --constraint=haswell" >> submission.sh # haswell: 2 sockets x 16 cores per node and 2 threads per core
 #echo "#SBATCH --constraint=knl" >> submission.sh # knl: 68 cores per node and 4 threads per core

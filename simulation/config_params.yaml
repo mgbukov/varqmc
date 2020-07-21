@@ -15,15 +15,15 @@ N_MC_chains: 1
 MC_thermal: true
 MC_prop_threshold: 1.0
 minibatch_size: 200
-N_MC_points: 1000 # 32768 # 15804956 # 
+N_MC_points: 32768 # 15804956 # 
 mode: MC # ED #  
 batchnorm: false
 adaptive_SR_cutoff: false
-semi_exact: (1,0) # (log, phase)
-grad_update_mode: normal # log_mod # phase #  alternating # 
+semi_exact: (0,1) # (log, phase)
+grad_update_mode: log_mod # phase # normal # alternating # 
 alt_iter: 20 # of iterations to keep each alternating update for  
 TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
-opt: (sgd,sgd) # adam, sgd, RK
+opt: (RK,RK) # adam, sgd, RK
 adaptive_step: true # adaptive step size for 2nd order RK
 step_size: (1E-2,1E-2) # initial step sizes
 cost: (SR,SR) # SR, energy
