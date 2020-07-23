@@ -295,7 +295,7 @@ class Energy_estimator():
 
 		#(N_configs, N_symm, L, L) --> (N_configs*N_symm*L*L, )
 		# compute spin s-configs
-		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=NN_type)
+		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket[:self.MC_tool.N_batch*self.MC_tool.N_features], self.N_features, NN_type=NN_type)
 
 		#print(self.MC_tool.spinstates_ket)
 		#exit()
@@ -450,7 +450,7 @@ class Energy_estimator():
 		phase_kets=np.asarray(self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), ))
 
 		if self.mode=='ED':
-			self.MC_tool.phase_kets[:]=phase_kets
+			self.MC_tool.phase_kets=phase_kets
 			self.comm.Allgatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[:], MPI.DOUBLE], )
 			phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
 		else:

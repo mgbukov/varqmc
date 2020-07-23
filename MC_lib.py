@@ -19,7 +19,36 @@ import jax.numpy as jnp
 import time
 
 
+# A function to print all prime factors of  
+# a given number n 
+def primeFactors(n): 
+	  
+	primes=[]
 
+	# Print the number of two's that divide n 
+	while n % 2 == 0: 
+		primes.append(2) 
+		n = n / 2
+		  
+	# n must be odd at this point 
+	# so a skip of 2 ( i = i + 2) can be used 
+	for i in range(3,int(np.sqrt(n))+1,2): 
+		  
+		# while i divides n , print i ad divide n 
+		while n % i== 0: 
+			primes.append(i) 
+			n = n / i 
+			  
+	# Condition if n is a prime 
+	# number greater than 2 
+	if n > 2: 
+		primes.append(n)
+
+	return primes 
+
+
+def closest(lst, K): 
+	return lst[min(range(len(lst)), key = lambda i: abs(lst[i]-K))]
 
 
 
@@ -59,22 +88,26 @@ class MC_sampler():
 	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,NN_type,basis_type,MPI_basis_dtype,n_iter,mode):
 
 		self.N_batch=N_batch
+		
+
 		self.N_sites=L**2
 		self.N_symm=N_symm
 		self.N_features=self.N_symm*self.N_sites
+		
 		self.basis_type=basis_type
 		self.MPI_basis_dtype=MPI_basis_dtype
 
 		self.thermalization_time=10*self.N_sites
-		#self.auto_correlation_time=self.N_sites  # min(0.05, 0.4/acc_ratio * N_site_
-
+		
 		self.NN_type=NN_type
 
 
+		#######
+
 	
 		self.ints_ket=np.zeros((N_batch,),dtype=self.basis_type)
-		#self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
-		#self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
+		self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
+		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 
 		if mode=='MC':
@@ -93,17 +126,34 @@ class MC_sampler():
 			self.s0_g=np.zeros(self.comm.Get_size()*self.N_MC_chains,dtype=self.basis_type)
 			self.sf_g=np.zeros_like(self.s0_g)
 
+
+			self.minibatch_size=self.N_batch
+
 		else:
+
+			#primes=primeFactors(self.N_batch)
 
 			self.ints_ket_g=np.zeros((N_MC_points,),dtype=self.basis_type)
 			
 			self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			
-
 			self.psi=np.zeros((N_batch,),dtype=np.complex128)
 			
-	
+
+			self.N_minibatches=4
+			self.minibatch_size=self.N_symm*np.int(np.ceil(self.N_batch/self.N_minibatches))
+
+
+		self.psi_batch_size = np.int(self.minibatch_size/self.N_symm*self.N_minibatches)
+
+
+		self.log_mod_kets_aux=np.zeros((self.psi_batch_size,),dtype=np.float64)
+		self.phase_kets_aux=np.zeros((self.psi_batch_size,),dtype=np.float64)
+
+		#print(self.N_minibatches*self.minibatch_size, self.N_batch*self.N_symm)
+		#exit()
+
 		self._reset_global_vars()
 		
 
@@ -121,8 +171,8 @@ class MC_sampler():
 		self.comm.Barrier()
 
 		# collect data from multiple processes to root
-		self.comm.Gatherv([self.ints_ket,    self.MPI_basis_dtype], [self.ints_ket_g[-1,:],   self.MPI_basis_dtype], root=0)
-		self.comm.Gatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
+		self.comm.Gatherv([self.ints_ket,	self.MPI_basis_dtype], [self.ints_ket_g[-1,:],   self.MPI_basis_dtype], root=0)
+		self.comm.Gatherv([self.log_mod_kets,	MPI.DOUBLE], [self.log_mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
 		self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[-1,:], MPI.DOUBLE], root=0)
 
 
@@ -132,9 +182,9 @@ class MC_sampler():
 		self.comm.Barrier()
 
 		# collect data from multiple processes to root
-		# self.comm.Gatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], root=0)
+		# self.comm.Gatherv([self.log_mod_kets,	MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], root=0)
 		# self.comm.Gatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[:], MPI.DOUBLE], root=0)
-		self.comm.Allgatherv([self.log_mod_kets,    MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], )
+		self.comm.Allgatherv([self.log_mod_kets,	MPI.DOUBLE], [self.log_mod_kets_g[:],   MPI.DOUBLE], )
 		self.comm.Allgatherv([self.phase_kets,  MPI.DOUBLE], [self.phase_kets_g[:], MPI.DOUBLE], )
 
 
@@ -147,7 +197,7 @@ class MC_sampler():
 
 	
 	def _reset_global_vars(self):
-		self.spinstates_ket=np.zeros((self.N_batch*self.N_features,),dtype=np.int8)
+		self.spinstates_ket=np.zeros((self.N_minibatches*self.minibatch_size*self.N_sites,),dtype=np.int8)
 		
 
 
@@ -221,7 +271,7 @@ class MC_sampler():
 
 
 
-	def exact(self, DNN_log, DNN_phase, logfile):
+	def exact(self, DNN_log, DNN_phase, logfile=None):
 
 
 		'''
@@ -229,15 +279,36 @@ class MC_sampler():
 		2. decrease size of NNs
 		'''
 
+
+		print('prepping phase evaluation')
+		if logfile is not None:
+			logfile.flush()
+
+
 		if DNN_phase is not None: # real nets
 			if DNN_phase.semi_exact==False:
 
-				print('prepping phase evaluation')
-				if logfile is not None:
-					logfile.flush()
 
+				ti=time.time()
+				for j in range(self.N_minibatches):
+
+					batch_idx=np.arange(j*self.minibatch_size*self.N_sites, (j+1)*self.minibatch_size*self.N_sites)	
+					array_idx=np.arange(j*self.minibatch_size//self.N_symm, (j+1)*self.minibatch_size//self.N_symm)
+					
+					batch=self.spinstates_ket[batch_idx]
+					#print(batch_idx.shape, array_idx.shape, self.phase_kets_aux.shape)
+					
+					self.phase_kets_aux[array_idx] = DNN_phase.evaluate(DNN_phase.params,batch.reshape(DNN_log.input_shape),  )
+			
+				self.phase_kets[:]=self.phase_kets_aux[:self.N_batch]
+
+				print("phase network evaluation on {0:d} configs took {1:0.6} secs.".format(self.psi_batch_size, time.time()-ti) )
+	
+
+				#print(A.flags['OWNDATA'], B.flags['OWNDATA'], np.shares_memory(A,B))
+				
 				#self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
-				self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
+				#self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
 			
 
 				print('completing phase evaluation')
@@ -255,7 +326,22 @@ class MC_sampler():
 					logfile.flush()
 
 
-				self.log_mod_kets = np.asarray(DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
+				ti=time.time()
+				for j in range(self.N_minibatches):
+
+					batch_idx=np.arange(j*self.minibatch_size*self.N_sites, (j+1)*self.minibatch_size*self.N_sites)	
+					array_idx=np.arange(j*self.minibatch_size//self.N_symm, (j+1)*self.minibatch_size//self.N_symm)
+					
+					batch=self.spinstates_ket[batch_idx]
+					
+					self.log_mod_kets_aux[array_idx] = DNN_log.evaluate(DNN_log.params,batch.reshape(DNN_log.input_shape),  )
+			
+				self.log_mod_kets[:]=self.log_mod_kets_aux[:self.N_batch]
+
+				print("log network evaluation on {0:d} configs took {1:0.6} secs.".format(self.psi_batch_size, time.time()-ti) )
+	
+				
+				#self.log_mod_kets = np.asarray(DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
 			
 				print('completing log evaluation')
 				if logfile is not None:
@@ -264,7 +350,7 @@ class MC_sampler():
 			else:
 				self.log_mod_kets = np.asarray(DNN_log.evaluate(DNN_phase.params, self.ints_ket, ))
 
-		else:
+		else: # cpx nets
 			if DNN_log.semi_exact==False:
 				self.log_mod_kets, self.phase_kets = np.asarray( DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ) )
 			else:
@@ -275,7 +361,7 @@ class MC_sampler():
 		print('completing all_gather')
 		if logfile is not None:
 			logfile.flush()
-		exit()
+		#exit()
 
 
 		self.log_psi_shift=0.0 

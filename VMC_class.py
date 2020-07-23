@@ -162,6 +162,7 @@ class VMC(object):
 			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
 				self.N_batch+=1
 
+
 		elif self.mode=='ED':
 
 			if self.L==4:
@@ -496,7 +497,7 @@ class VMC(object):
 			# log net
 			self.opt_log   = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.NN_dtype, self.DNN_log.NN_Tree, label='LOG',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 			self.opt_log.init_global_variables(self.N_MC_points, self.N_batch, self.DNN_log.N_varl_params, self.n_iter)
-			self.opt_log.define_grad_func(NN_evaluate=self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
+			self.opt_log.define_grad_func(NN_evaluate=self.DNN_log.evaluate, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy ) # reestimate_local_energy_log
 			self.opt_log.init_opt_state(self.DNN_log.params)
 			# phase net
 			self.opt_phase = optimizer(self.comm, self.opt[1], self.cost[1], self.mode, self.NN_dtype, self.DNN_phase.NN_Tree, label='PHASE', step_size=self.step_sizes[1], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
@@ -519,7 +520,7 @@ class VMC(object):
 
 			self.opt = optimizer(self.comm, self.opt[0], self.cost[0], self.mode, self.NN_dtype, self.DNN.NN_Tree, label='CPX',  step_size=self.step_sizes[0], adaptive_step=self.adaptive_step, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
 			self.opt.init_global_variables(self.N_MC_points, self.N_batch, self.DNN.N_varl_params, self.n_iter)
-			self.opt.define_grad_func(NN_evaluate=self.DNN.evaluate, NN_evaluate_log=self.DNN.evaluate_log, NN_evaluate_phase=self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy_log )
+			self.opt.define_grad_func(NN_evaluate=self.DNN.evaluate, NN_evaluate_log=self.DNN.evaluate_log, NN_evaluate_phase=self.DNN.evaluate_phase, TDVP_opt=self.TDVP_opt[0], reestimate_local_energy=self.reestimate_local_energy ) #reestimate_local_energy_log
 			self.opt.init_opt_state(self.DNN.params)
 
 
@@ -540,22 +541,22 @@ class VMC(object):
 		if self.mode=='ED':
 			if self.NN_dtype=='real':
 				self.E_estimator	=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				#self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			else:
 				self.E_estimator	=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				#self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			
 		else:
 			if self.NN_dtype=='real':
 				self.E_estimator	=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				#self.E_estimator_log=Energy_estimator(self.comm,self.DNN_log,self.DNN_phase,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			else:
 				self.E_estimator	=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
-				self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
+				#self.E_estimator_log=Energy_estimator(self.comm,self.DNN,None,self.mode,self.J2,self.N_MC_points,self.N_batch,self.L,self.N_symm,self.sign, self.minibatch_size, self.semi_exact) # contains all of the physics
 			
 
 		self.E_estimator.init_global_params(self.N_MC_points,self.n_iter)
-		self.E_estimator_log.init_global_params(self.N_MC_points,self.n_iter)
+		#self.E_estimator_log.init_global_params(self.N_MC_points,self.n_iter)
 		
 
 		
@@ -572,8 +573,9 @@ class VMC(object):
 			else:
 				self.input_shape=(-1,1,self.L,self.L)
 
-		self.MC_tool_log=MC_sampler(self.comm,self.N_MC_chains)
-		self.MC_tool_log.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.N_symm,self.NN_type,self.E_estimator_log.basis_type,self.E_estimator_log.MPI_basis_dtype,self.n_iter,self.mode)
+		
+		#self.MC_tool_log=MC_sampler(self.comm,self.N_MC_chains)
+		#self.MC_tool_log.init_global_vars(self.L,self.N_MC_points,self.N_batch,self.N_symm,self.NN_type,self.E_estimator_log.basis_type,self.E_estimator_log.MPI_basis_dtype,self.n_iter,self.mode)
 		
 
 
@@ -693,7 +695,7 @@ class VMC(object):
 			self.logfile = None
 		
 		self.E_estimator.logfile=self.logfile
-		self.E_estimator_log.logfile=self.logfile
+		#self.E_estimator_log.logfile=self.logfile
 			
 		if self.NN_dtype=='real':
 			self.opt_log.logfile=self.logfile
@@ -1059,8 +1061,8 @@ class VMC(object):
 			integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
 			# required to train independent real nets with RK
-			self.MC_tool_log.ints_ket, self.index, self.inv_index, self.MC_tool_log.count=self.E_estimator_log.get_exact_kets()
-			integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.N_features, NN_type=self.NN_type)
+			#self.MC_tool_log.ints_ket, self.index, self.inv_index, self.MC_tool_log.count=self.E_estimator_log.get_exact_kets()
+			#integer_to_spinstate(self.MC_tool_log.ints_ket, self.MC_tool_log.spinstates_ket, self.N_features, NN_type=self.NN_type)
 
 		elif self.mode=='ED':
 
@@ -1069,7 +1071,7 @@ class VMC(object):
 			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features, self.load_file, self.prss_index)
 	
 			# required to train independent real nets with RK
-			self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file, self.prss_index)
+			#self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file, self.prss_index)
 	
 			print('loaded data')		
 		#exit()
@@ -1268,10 +1270,113 @@ class VMC(object):
 		
 			
 		##### total batch
-		batch=self.MC_tool_log.spinstates_ket.reshape(self.input_shape)
+		batch=self.MC_tool_log.spinstates_ket.reshape(self.input_shape)[:self.N_batch]
 
 		return params_dict, batch
 	
+
+	def reestimate_local_energy(self, iteration, NN_params, batch, params_dict,):
+
+		max_attemps=10
+
+		if self.NN_dtype=='real':
+			self.DNN_log.params=NN_params
+		else:
+			self.DNN.params=NN_params
+
+		repeat=True
+		counter=0
+		while repeat and counter<max_attemps:
+
+			##### get spin configs #####
+			if self.mode=='exact' or self.mode=='ED':
+				if self.NN_dtype=='real':
+					self.MC_tool.exact(self.DNN_log, self.DNN_phase, )
+				else:
+					self.MC_tool.exact(self.DNN, None, )
+
+			elif self.mode=='MC':
+				ti=time.time()
+				# sample
+				if self.NN_dtype=='real':
+					acceptance_ratio_g = self.MC_tool.sample(self.DNN_log, self.DNN_phase, )
+				else:
+					acceptance_ratio_g = self.MC_tool.sample(self.DNN, None, )
+
+				MC_str="MC with acceptance ratio={0:.4f} took {1:.4f} secs.\n".format(acceptance_ratio_g[0],time.time()-ti)
+				if self.comm.Get_rank()==0:
+					print(MC_str)
+				
+
+			##### compute local energies #####
+			if self.NN_dtype=='real':
+				self.E_estimator.compute_local_energy(NN_params, self.DNN_phase.params, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift, verbose=False,)
+			else:
+				self.E_estimator.compute_local_energy(NN_params, None, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift, verbose=False,)
+			
+
+			if self.mode=='exact':
+				mod_kets=np.exp(self.MC_tool.log_mod_kets)
+				self.MC_tool.psi = mod_kets*np.exp(+1j*self.MC_tool.phase_kets)/np.linalg.norm(mod_kets[self.inv_index])
+				abs_psi_2=self.MC_tool.count*np.abs(self.MC_tool_log.psi)**2
+				
+				params_dict=dict(abs_psi_2=abs_psi_2,)
+				overlap=np.abs(self.MC_tool.psi[self.inv_index].conj().dot(self.E_estimator.psi_GS_exact))**2
+				params_dict['overlap']=overlap
+
+			elif self.mode=='ED':
+				abs_psi_2=self.MC_tool.count*np.abs(self.MC_tool.psi)**2
+				params_dict=dict(abs_psi_2=abs_psi_2,)
+
+				# local overlap
+				overlap_loc=np.sum(self.MC_tool.count * self.MC_tool.psi.conj()*self.E_estimator.psi_GS_exact) 
+				
+				# sum up MPI processes
+				overlap=np.zeros(1, dtype=np.complex128)
+				self.comm.Allreduce(overlap_loc, overlap,  op=MPI.SUM)
+				
+				params_dict['overlap']=np.abs(overlap[0])**2
+
+			
+
+			Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(params_dict)
+			Eloc_std_g=np.sqrt(Eloc_var_g)
+			E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
+
+		
+			# check quality of sample
+			repeat, iteration = self.repeat_iteration(iteration,Eloc_mean_g,E_MC_std_g,go_back_iters=0, load_data=False)
+			
+			print("{0:d}. log-net sampling: Eloc = {1:14f}; repeat {2:d}".format(counter, Eloc_mean_g, repeat) )
+			
+			# increment counter
+			counter+=1
+
+			if repeat and counter==max_attemps:
+				mssg="Failed to draw a good MC sample in {0:d} attempts. Exiting!".format(max_attemps)
+				print(mssg)
+				exit()
+				#self.logfile.write(mssg)
+
+			
+
+		print("accepted log-net sample after {0:d} attempts.".format(counter))
+
+		if self.NN_dtype=='real':
+			params_dict['E_diff']=E_diff_real
+		else:
+			params_dict['E_diff']=E_diff_real+1j*E_diff_imag
+		params_dict['Eloc_mean']=Eloc_mean_g
+		params_dict['Eloc_var']=Eloc_var_g
+		#params_dict['Eloc_mean_part']=Eloc_mean_g.real 
+		
+			
+		##### total batch
+		batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)[:self.N_batch]
+
+		return params_dict, batch
+	
+
 
 	def get_training_data(self,iteration,):
 
@@ -1380,8 +1485,8 @@ class VMC(object):
 			self.Eloc_params_dict_log=Eloc_params_dict.copy()
 			self.Eloc_params_dict_log['E_diff']=E_diff_real+1j*E_diff_imag
 		
-		##### total batch
-		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)
+		##### total batch	
+		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)[:self.N_batch]
 
 
 		#####
