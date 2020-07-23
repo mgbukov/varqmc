@@ -123,14 +123,13 @@ inline T magnetized_int(int m, int N, T ordinal)
 
 
 template<class T, class J>
-inline void _int_to_spinstate(const int N,T state,J out[])
+inline void _int_to_spinstate(const int N,T state,J *out)
 {	
-	//npy_float64 n;
 	T one=1;
 	for(int i=0;i<N;i++){
-		//n=(state / (one<<(N-i-1)) ) % 2;
-		//out[i] = 2 * ( (n + 2) % 2 ) - 1; // [-1,+1] state representation
-
+		
+		//cout << i << " , " << N-i-1 << " , " << one<<(N-i-1) << endl;
+		
 		out[i] = (state & (one<<(N-i-1) )) ? 1 : -1; // [-1,+1] state representation
 
 	}
@@ -315,7 +314,6 @@ I rep_int_to_spinstate_conv(const int N,I s,J out[])
 					}
 					p = inv_spin(p);
 				}
-				
 				_int_to_spinstate(N,t,&out[counter*N]);
 				t = flip_x(t);
 				counter++;
@@ -335,18 +333,19 @@ I rep_int_to_spinstate_conv(const int N,I s,J out[])
 
 
 template<class I, class J>
-void int_to_spinstate_conv(const int N,I s,J out[])
+void int_to_spinstate_conv(const int N,I s,J out)
 {	
 	
 	I t = s;
 
-	npy_uint16 counter=0;
+	int counter=0;
 
 	
 	for(int i=0;i<2;i++){
 		for(int j=0;j<2;j++){
 			for(int k=0;k<2;k++){
 				
+				//cout << counter << " , " << N << " , " << counter*N << endl;
 				_int_to_spinstate(N,t,&out[counter*N]);
 				t = flip_x(t);
 				counter++;												
@@ -361,6 +360,63 @@ void int_to_spinstate_conv(const int N,I s,J out[])
 }
 
 
+
+template<class T, class J>
+inline void _int_to_spinstate2(const int N,T state,J *out, const int m, const int n)
+{	
+	T one=1;
+	for(int i=0;i<N;i++){
+		//cout << m << " , " << n << " , " << m+n+i << endl;		
+		out[m+n+i] = (state & (one<<(N-i-1) )) ? 1 : -1; // [-1,+1] state representation
+
+	}
+}
+
+
+template<class I, class J>
+void int_to_spinstate_conv2(const int N,I s,J *out,const int m)
+{	
+	
+	I t = s;
+	I one=1;
+
+	int counter=0;
+
+
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+				
+				for(int ii=0;ii<N;ii++){
+
+					//cout << m+counter*N+ii << endl;
+
+					out[m+counter*N+ii] = one; 
+
+				}
+				counter++;														
+			}
+		}
+	}
+
+	
+	// for(int i=0;i<2;i++){
+	// 	for(int j=0;j<2;j++){
+	// 		for(int k=0;k<2;k++){
+				
+	// 			//cout << counter << " , " << N << " , " << counter*N << endl;
+	// 			_int_to_spinstate2(N,t,out,m,counter*N);
+	// 			t = flip_x(t);
+	// 			counter++;												
+					
+	// 		}
+	// 		t = flip_y(t);
+	// 	}
+	// 	t = flip_d(t);
+	// }
+
+	
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////

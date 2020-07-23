@@ -44,10 +44,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -107,6 +107,8 @@ cdef extern from "sample.h":
     void int_to_spinstate[T,J](const int,T ,J []) nogil
     void int_to_spinstate_conv[T,J](const int,T ,J []) nogil
 
+    void int_to_spinstate_conv2[T,J](const int,T ,J [], const int) nogil
+
     T cyclicity[T](const int,T) nogil
 
     T rep_int_to_spinstate[T,J](const int,T ,J []) nogil
@@ -127,10 +129,13 @@ def swap_spins(basis_type s, int i, int j):
 
 
 @cython.boundscheck(False)
-def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features, object NN_type='DNN'):
+def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features, object NN_type='DNN'): 
+#def integer_to_spinstate(basis_type[:] states,np.ndarray out, int N_features, object NN_type='DNN'): 
     cdef int i;
     cdef int Ns=states.shape[0]
     cdef int Nsites=N_sites
+
+#    cdef np.npy_int8 * out_ptr = <np.npy_int8*> np.PyArray_GETPTR1(out,0)
 
     cdef func_type spin_config
 
@@ -142,9 +147,21 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
         raise ValueError("unsupported string for variable NN_type.")
 
 
+    # with nogil:
+    #     for i in range (Ns):
+    #         int_to_spinstate_conv2(Nsites, states[i], out_ptr, i*N_features)
+
+
+
+    # with nogil:
+    #     for i in range (Ns*N_features):
+    #         #out[i]=1
+    #         out_ptr[i]=1
+
     with nogil:
         for i in range (Ns):
             spin_config(Nsites,states[i],&out[i*N_features])
+
 
 
 @cython.boundscheck(False)
@@ -1070,7 +1087,7 @@ cdef class Phase_Net:
             output_shape = (-1,shape_last_layer[1],)
 
             # define variance of uniform distr for weights and biases
-            scale=1.0
+            scale=1.0 # 4.0
 
             # define CNN
             NN_arch = NN_phase_arch('CNN_mixed_3', shapes, input_shape, reduce_shape, output_shape, scale)   

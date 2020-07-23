@@ -290,10 +290,15 @@ class Energy_estimator():
 		# 	self.psi_GS_exact=np.array([None])
 		# self.comm.Gatherv([psi_GS,   MPI.DOUBLE], [self.psi_GS_exact[:],   MPI.DOUBLE], root=0)
 
-		print('staring int_to-state')
+		print('starting int_to-state', self.MC_tool.spinstates_ket.shape)
 		#exit()
+
+		#(N_configs, N_symm, L, L) --> (N_configs*N_symm*L*L, )
 		# compute spin s-configs
 		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket, self.N_features, NN_type=NN_type)
+
+		#print(self.MC_tool.spinstates_ket)
+		#exit()
 
 		print('\nfisnihed loading data.\n')
 		#exit()
@@ -442,7 +447,7 @@ class Energy_estimator():
 		# else: # exact phases
 		# 	phase_kets=self.DNN_phase.evaluate(NN_params_phase, self.MC_tool.ints_ket, )
 
-		phase_kets=self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), )
+		phase_kets=np.asarray(self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), ))
 
 		if self.mode=='ED':
 			self.MC_tool.phase_kets[:]=phase_kets
@@ -641,9 +646,9 @@ class Energy_estimator():
 
 			### evaluate network on entire sample
 			if self.NN_dtype=='real':
-				prediction_bras = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  )._value
+				prediction_bras = np.asarray(evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  ) )
 			else:	
-				prediction_bras, prediction_bras_2 = evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  )._value
+				prediction_bras, prediction_bras_2 = np.asarray( evaluate_NN(NN_params,self._spinstates_bra[:self.nn][self.index].reshape(input_shape),  ) )
 			
 
 		if self.NN_dtype=='real':

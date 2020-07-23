@@ -706,13 +706,9 @@ class VMC(object):
 		# redirect std out
 		if not self.print:
 			warnings.showwarning = customwarn
-			print('start overwriting logfiles')
 			sys.stdout = self.logfile
 			sys.stderr = self.logfile
-			print('logfiles overwritten')
-		
-		#print('DONE')
-		#exit()
+			
 
 		
 		if self.NN_dtype=='real':
@@ -1282,7 +1278,7 @@ class VMC(object):
 		##### get spin configs #####
 		if self.mode=='exact' or self.mode=='ED':
 			if self.NN_dtype=='real':
-				self.MC_tool.exact(self.DNN_log, self.DNN_phase, )
+				self.MC_tool.exact(self.DNN_log, self.DNN_phase, self.logfile )
 			else:
 				self.MC_tool.exact(self.DNN, None, )
 			

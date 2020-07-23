@@ -143,7 +143,7 @@ class optimizer(object):
 				grads_MPI=self.NN_Tree.ravel( grad_func(NN_params,batch,params_dict,) )
 				# sum up MPI processes
 				grads=np.zeros_like(grads_MPI)
-				self.comm.Allreduce(grads_MPI._value, grads,  op=MPI.SUM)
+				self.comm.Allreduce(np.asarray(grads_MPI), grads,  op=MPI.SUM)
 				return grads
 
 			self.compute_grad=compute_grad

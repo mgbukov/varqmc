@@ -102,7 +102,8 @@ def store_loss(iteration,r2,grads_max,file_loss,opt):
 	if opt.cost=='SR':
 		data_tuple+= (opt.NG.dE, opt.NG.curvature, opt.NG.F_norm, opt.NG.S_norm, opt.NG.S_logcond, opt.NG.Flog_norm, opt.NG.Fphase_norm, )
 	else:
-		data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0)
+		data_tuple+= (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
 	file_loss.write("{0:d} : {1:0.14f} : {2:0.14f} : {3:0.14f} : {4:0.14f} : {5:0.14f} : {6:0.10f} : {7:0.10f} : {8:0.10f} : {9:0.10f}\n".format(*data_tuple).encode('utf8'))
 	
 

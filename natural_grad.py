@@ -169,34 +169,34 @@ class natural_gradient():
 		elif self.mode=='ED':
 			abs_psi_2=Eloc_params_dict['abs_psi_2']
 
-			self.comm.Allreduce(jnp.dot(abs_psi_2,self.dlog_psi).block_until_ready()._value, self.O_expt[:], op=MPI.SUM) 
-				
+			self.comm.Allreduce(np.asarray(jnp.dot(abs_psi_2,self.dlog_psi).block_until_ready() ), self.O_expt[:], op=MPI.SUM) 
+			
 			# expand dimension
 			abs_psi_2=np.tile(abs_psi_2,[self.N_varl_params,1],)
 
 			
 			if self.NN_dtype=='real':
-				self.comm.Allreduce(( jnp.dot(self.dlog_psi.T*abs_psi_2, self.dlog_psi).block_until_ready()  )._value, self.OO_expt[:], op=MPI.SUM )
+				self.comm.Allreduce(( np.asarray(jnp.dot(self.dlog_psi.T*abs_psi_2, self.dlog_psi).block_until_ready()  ) ), self.OO_expt[:], op=MPI.SUM )
 			else:
-				self.comm.Allreduce(	(  jnp.dot(self.dlog_psi.real.T*abs_psi_2, self.dlog_psi.real).block_until_ready() \
-				                	  	  +jnp.dot(self.dlog_psi.imag.T*abs_psi_2, self.dlog_psi.imag).block_until_ready()    )._value, \
+				self.comm.Allreduce(  np.asarray(   jnp.dot(self.dlog_psi.real.T*abs_psi_2, self.dlog_psi.real).block_until_ready() \
+				                	  	  			+jnp.dot(self.dlog_psi.imag.T*abs_psi_2, self.dlog_psi.imag).block_until_ready()    ), \
 									self.OO_expt[:], op=MPI.SUM
 									)
 
 
 		elif self.mode=='MC':
 
-			self.comm.Allreduce(jnp.sum(self.dlog_psi,axis=0).block_until_ready()._value, self.O_expt[:], op=MPI.SUM)
+			self.comm.Allreduce(np.asarray(jnp.sum(self.dlog_psi,axis=0).block_until_ready() ), self.O_expt[:], op=MPI.SUM)
 			#self.comm.Allreduce(np.sum(self.dlog_psi,axis=0), self.O_expt[:], op=MPI.SUM)
 			
 			self.O_expt/=self.N_MC_points
 
 			if self.NN_dtype=='real':
-				self.comm.Allreduce(( jnp.dot(self.dlog_psi.T, self.dlog_psi).block_until_ready()  )._value, self.OO_expt[:], op=MPI.SUM )
+				self.comm.Allreduce( np.asarray( jnp.dot(self.dlog_psi.T, self.dlog_psi).block_until_ready()  ), self.OO_expt[:], op=MPI.SUM )
 				#self.comm.Allreduce( np.dot(self.dlog_psi.T, self.dlog_psi), self.OO_expt[:], op=MPI.SUM )
 			else:
-				self.comm.Allreduce(	(  jnp.dot(self.dlog_psi.real.T, self.dlog_psi.real).block_until_ready() \
-				                	  	  +jnp.dot(self.dlog_psi.imag.T, self.dlog_psi.imag).block_until_ready()    )._value, \
+				self.comm.Allreduce(	np.asarray(  jnp.dot(self.dlog_psi.real.T, self.dlog_psi.real).block_until_ready() \
+				                	  	  			 +jnp.dot(self.dlog_psi.imag.T, self.dlog_psi.imag).block_until_ready()    ), \
 									self.OO_expt[:], op=MPI.SUM
 									)
 
@@ -235,16 +235,16 @@ class natural_gradient():
 			self.E_diff_weighted*=Eloc_params_dict['abs_psi_2']
 
 			if self.NN_dtype=='real':
-				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
+				self.comm.Allreduce(np.asarray(  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() ), self.F_vector[:], op=MPI.SUM)
 				
 				
 			else:
 				
-				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
+				self.comm.Allreduce(	np.asarray( jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() ), \
 									self.F_vector_log[:], op=MPI.SUM
 									)
 		
-				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
+				self.comm.Allreduce(	np.asarray( jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() ), \
 									self.F_vector_phase[:], op=MPI.SUM
 									)
 		
@@ -255,20 +255,20 @@ class natural_gradient():
 		
 			if self.NN_dtype=='real':
 				
-				self.comm.Allreduce((  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() )._value, self.F_vector[:], op=MPI.SUM)
+				self.comm.Allreduce(np.asarray(  jnp.dot(self.E_diff_weighted, self.dlog_psi).block_until_ready() ), self.F_vector[:], op=MPI.SUM)
 				#self.comm.Allreduce(np.dot(self.E_diff_weighted, self.dlog_psi), self.F_vector[:], op=MPI.SUM)
 			
 				self.F_vector/=self.N_MC_points
 
 			else:
-				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() )._value, \
+				self.comm.Allreduce(	np.asarray( jnp.dot(self.E_diff_weighted.real,self.dlog_psi.real).block_until_ready() ), \
 									self.F_vector_log[:], op=MPI.SUM
 									)
 				self.F_vector_log/=self.N_MC_points
 
 
 
-				self.comm.Allreduce(	(jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() )._value, \
+				self.comm.Allreduce(	np.asarray( jnp.dot(self.E_diff_weighted.imag,self.dlog_psi.imag).block_until_ready() ), \
 									self.F_vector_phase[:], op=MPI.SUM
 									)
 				self.F_vector_phase/=self.N_MC_points
@@ -291,8 +291,8 @@ class natural_gradient():
 			E_diff*=np.sqrt( Eloc_params_dict['abs_psi_2'] )
 
 
-		self.QQ_expt[:]=(jnp.dot(self.dlog_psi-np.tile(self.O_expt,[self.N_batch,1],), V).block_until_ready() )._value 
-		self.comm.Allreduce( ((  jnp.dot(E_diff**2, self.QQ_expt**2).block_until_ready() )._value ), self.Q_expt[:], op=MPI.SUM)
+		self.QQ_expt[:]=np.asarray(jnp.dot(self.dlog_psi-np.tile(self.O_expt,[self.N_batch,1],), V).block_until_ready() ) 
+		self.comm.Allreduce( (np.asarray(  jnp.dot(E_diff**2, self.QQ_expt**2).block_until_ready() ) ), self.Q_expt[:], op=MPI.SUM)
 					
 		self.Q_expt/=self.N_MC_points
 
@@ -416,7 +416,7 @@ class natural_gradient():
 			self.nat_grad[:], info = cg(S,F,x0=nat_grad_guess,maxiter=self.cg_maxiter,atol=self.tol,tol=self.tol) # 
 		
 		elif self.TDVP_opt == 'inv':
-			self.nat_grad[:]=jnp.dot(jnp.linalg.inv(S), F).block_until_ready()._value
+			self.nat_grad[:]=np.asarray(jnp.dot(jnp.linalg.inv(S), F).block_until_ready())
 		
 		elif self.TDVP_opt == 'svd':
 			lmbda, V = jnp.linalg.eigh(S/self.S_norm,)

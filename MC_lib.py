@@ -61,7 +61,7 @@ class MC_sampler():
 		self.N_batch=N_batch
 		self.N_sites=L**2
 		self.N_symm=N_symm
-		self.N_features=self.N_symm*self.N_sites	
+		self.N_features=self.N_symm*self.N_sites
 		self.basis_type=basis_type
 		self.MPI_basis_dtype=MPI_basis_dtype
 
@@ -73,11 +73,12 @@ class MC_sampler():
 
 	
 		self.ints_ket=np.zeros((N_batch,),dtype=self.basis_type)
-		self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
-		self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
+		#self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
+		#self.phase_kets=np.zeros((N_batch,),dtype=np.float64)
 
 
 		if mode=='MC':
+			self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
 			self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
 			if self.comm.Get_rank()==0:
 				self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
@@ -98,6 +99,8 @@ class MC_sampler():
 			
 			self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+			
+
 			self.psi=np.zeros((N_batch,),dtype=np.complex128)
 			
 	
@@ -159,16 +162,16 @@ class MC_sampler():
 		if compute_phases:
 			if DNN_phase is not None: # real nets
 				if DNN_phase.semi_exact==False:
-					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), )
+					self.phase_kets=np.asarray(DNN_phase.evaluate(DNN_phase.params, self.spinstates_ket.reshape(DNN_phase.input_shape), ))
 				else: # exact phases
 					representative(self.ints_ket,self.ints_ket,)
-					self.phase_kets[:]=DNN_phase.evaluate(DNN_phase.params, self.ints_ket, )
+					self.phase_kets=np.asarray(DNN_phase.evaluate(DNN_phase.params, self.ints_ket, ))
 			else: # cpx nets
 				if DNN_log.semi_exact==False:
-					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.spinstates_ket.reshape(DNN_log.input_shape), )
+					self.phase_kets=np.asarray(DNN_log.evaluate_phase(DNN_log.params, self.spinstates_ket.reshape(DNN_log.input_shape), ))
 				else: # exact phases
 					representative(self.ints_ket,self.ints_ket,)
-					self.phase_kets[:]=DNN_log.evaluate_phase(DNN_log.params, self.ints_ket, )
+					self.phase_kets=np.asarray(DNN_log.evaluate_phase(DNN_log.params, self.ints_ket, ))
 
 
 		#print(DNN_log.N_varl_params, DNN_phase.N_varl_params)
@@ -218,31 +221,65 @@ class MC_sampler():
 
 
 
-	def exact(self, DNN_log, DNN_phase):
+	def exact(self, DNN_log, DNN_phase, logfile):
+
+
+		'''
+		1. give fewer spin_configs
+		2. decrease size of NNs
+		'''
 
 		if DNN_phase is not None: # real nets
 			if DNN_phase.semi_exact==False:
-				self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+
+				print('prepping phase evaluation')
+				if logfile is not None:
+					logfile.flush()
+
+				#self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+				self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
+			
+
+				print('completing phase evaluation')
+				if logfile is not None:
+					logfile.flush()
+
 			else:
-				self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params, self.ints_ket, )
+				self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params, self.ints_ket, ))
 
 			if DNN_log.semi_exact==False:
-				self.log_mod_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+
+
+				print('prepping logs evaluation')
+				if logfile is not None:
+					logfile.flush()
+
+
+				self.log_mod_kets = np.asarray(DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
+			
+				print('completing log evaluation')
+				if logfile is not None:
+					logfile.flush()
+
 			else:
-				self.log_mod_kets[:] = DNN_log.evaluate(DNN_phase.params, self.ints_ket, )
+				self.log_mod_kets = np.asarray(DNN_log.evaluate(DNN_phase.params, self.ints_ket, ))
 
 		else:
 			if DNN_log.semi_exact==False:
-				self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
+				self.log_mod_kets, self.phase_kets = np.asarray( DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ) )
 			else:
-				self.log_mod_kets[:], self.phase_kets[:] = DNN_log.evaluate(DNN_phase.params, self.ints_ket, )
+				self.log_mod_kets, self.phase_kets = np.asarray( DNN_log.evaluate(DNN_phase.params, self.ints_ket, ) )
 
 		self.all_gather()
 
+		print('completing all_gather')
+		if logfile is not None:
+			logfile.flush()
+		exit()
 
-		self.log_psi_shift=0.0 # np.max(self.log_mod_kets[:])
-		self.log_mod_kets[:] -= self.log_psi_shift 
 
+		self.log_psi_shift=0.0 
+		
 
 		# for s, ph in zip(self.ints_ket, self.phase_kets):
 		# 	print(s,ph%(2*np.pi))

@@ -1,6 +1,6 @@
 J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
-L: 6
+L: 4
 
 N_iterations: 2 # 500
 
@@ -14,8 +14,8 @@ NN_dtype: real #
 #NN_shape_str: (6x6-6--3x3-4--2x2-4--1x1-2--1x1-2,6x6-12--1x1-8--1x1-4) # (521,572)
 
 #NN_shape_str: (8x8-8--3x3-6--2x2-4--1x1-4--1x1-2,8x8-16--1x1-12--1x1-8)  
-NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8)  
-#NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
+#NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8)  
+NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
 NN_type: CNN 
 
 
@@ -34,29 +34,29 @@ MC_thermal: true
 MC_prop_threshold: 1.0 # large values means local proposals
 minibatch_size: 200
 
-N_MC_points: 1000 #00
-mode: MC 
+# N_MC_points: 100 #1024 # 32768
+# mode: MC 
 
-# N_MC_points: 107 # 15804956 # 
-# mode: ED #
+N_MC_points: 107 # 15804956 # 
+mode: ED #
 #mode: exact
 
 
 batchnorm: false
 adaptive_SR_cutoff: false
 
-semi_exact: (1,0) # (log, phase)
-grad_update_mode: phase # log_mod # phase # normal #  alternating # 
+semi_exact: (0,0) # (log, phase)
+grad_update_mode: normal # log_mod # phase #  alternating # 
 alt_iter: 20 # of iterations to keep each alternating update for  
 
 TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
-opt: (RK,RK) # adam, sgd, RK
+opt: (sgd,sgd) # adam, sgd, RK
 adaptive_step: true # adaptive step size for 2nd order RK
 step_size: (1E-2,1E-2) #(1E-2,1E-2) # (5E-3,5E-3),
 
 cost: (SR,SR) # SR, energy
 
-print: true # false # 
+print: true # 
 save_data: true
 load_data: false
 start_iter: 0
