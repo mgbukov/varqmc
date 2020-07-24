@@ -62,7 +62,7 @@ class natural_gradient():
 		self.iteration=0
 		
 
-	def init_global_variables(self,N_MC_points,N_batch,N_varl_params_vec,n_iter):
+	def init_global_variables(self,N_MC_points,N_batch,N_varl_params_vec,n_iter,N_minibatches,):
 
 
 		self.N_batch=N_batch
@@ -70,6 +70,11 @@ class natural_gradient():
 		self.N_varl_params=np.sum(N_varl_params_vec)
 		self.N_varl_params_vec=N_varl_params_vec
 			
+		self.N_minibatches=N_minibatches
+		self.minibatch_size=np.int(np.ceil(self.N_batch/self.N_minibatches))
+
+		self.batch_size = np.int(self.minibatch_size*self.N_minibatches)
+		
 
 		######  preallocate memory
 		dtype=np.float64
@@ -77,6 +82,8 @@ class natural_gradient():
 		self.F_vector=np.zeros(self.N_varl_params,dtype=dtype)
 		
 		if self.NN_dtype=='real':
+			self.dlog_psi_aux=np.zeros((self.batch_size,self.N_varl_params),dtype=np.float64)
+
 			self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=np.float64)
 			self.O_expt=np.zeros(self.N_varl_params,dtype=np.float64)
 
@@ -86,6 +93,8 @@ class natural_gradient():
 			self.E_diff_weighted=np.zeros(self.N_batch,dtype=dtype)
 		
 		else:
+			self.dlog_psi_aux=np.zeros((self.batch_size,self.N_varl_params),dtype=np.complex128)
+
 			self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=np.complex128)
 			self.O_expt=np.zeros(self.N_varl_params,dtype=np.complex128)
 
@@ -447,10 +456,36 @@ class natural_gradient():
 		return info
 
 
-	def compute(self,NN_params,batch,Eloc_params_dict,):
+	def _compute_grads(self,NN_params,batch,):
+
+		if self.mode=='MC':
+			self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,)
 		
+		else: # ED
+
+			for j in range(self.N_minibatches):
+
+				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)	
+				#print(batch.shape, batch_idx.shape, self.dlog_psi_aux.shape)
+
+				self.dlog_psi_aux[batch_idx]=self.compute_grad_log_psi(NN_params,batch[batch_idx],)
+			
+			self.dlog_psi[:]=self.dlog_psi_aux[:self.N_batch]
+
+			#exit()
+
+
+	def compute(self,NN_params,batch,Eloc_params_dict,):
+
 		t0=time.time()
-		self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,)
+		#self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch[:self.N_batch],)
+		self._compute_grads(NN_params,batch,) # 
+		
+		#A=self.compute_grad_log_psi(NN_params,batch[:self.N_batch],)
+		#print('HEREEEEE', np.max(np.abs(self.dlog_psi - A) ))
+		#exit()	
+			
+
 		t1=time.time()
 		self.compute_F_vector(Eloc_params_dict=Eloc_params_dict,)
 		t2=time.time()
@@ -597,7 +632,7 @@ class Runge_Kutta_solver():
 		#params_norm=jnp.max(jnp.abs(params)).block_until_ready()
 		params_norm=jnp.linalg.norm(self.params).block_until_ready()
 		
-		
+
 		#initial_curvature=self.NG.curvature
 		if self.NG is not None:
 			self.NG.debug_mode=True

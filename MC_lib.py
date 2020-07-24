@@ -85,7 +85,7 @@ class MC_sampler():
 
 
 
-	def init_global_vars(self,L,N_MC_points,N_batch,N_symm,NN_type,basis_type,MPI_basis_dtype,n_iter,mode):
+	def init_global_vars(self,L,N_MC_points,N_batch,N_minibatches,N_symm,NN_type,basis_type,MPI_basis_dtype,n_iter,mode):
 
 		self.N_batch=N_batch
 		
@@ -141,7 +141,7 @@ class MC_sampler():
 			self.psi=np.zeros((N_batch,),dtype=np.complex128)
 			
 
-			self.N_minibatches=4
+			self.N_minibatches=N_minibatches
 			self.minibatch_size=self.N_symm*np.int(np.ceil(self.N_batch/self.N_minibatches))
 
 
@@ -298,7 +298,7 @@ class MC_sampler():
 					batch=self.spinstates_ket[batch_idx]
 					#print(batch_idx.shape, array_idx.shape, self.phase_kets_aux.shape)
 					
-					self.phase_kets_aux[array_idx] = DNN_phase.evaluate(DNN_phase.params,batch.reshape(DNN_log.input_shape),  )
+					self.phase_kets_aux[array_idx] = DNN_phase.evaluate(DNN_phase.params,batch.reshape(DNN_phase.input_shape),  )
 			
 				self.phase_kets[:]=self.phase_kets_aux[:self.N_batch]
 

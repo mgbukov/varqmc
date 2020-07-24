@@ -54,12 +54,13 @@ class optimizer(object):
 
 	
 
-	def init_global_variables(self, N_MC_points, N_batch, N_varl_params, n_iter):
+	def init_global_variables(self, N_MC_points, N_batch, N_varl_params, n_iter, N_minibatches):
 
 		self.N_batch=N_batch
 		self.N_MC_points=N_MC_points
 		self.N_varl_params=N_varl_params
 		self.n_iter=n_iter
+		self.N_minibatches=N_minibatches
 
 
 	def init_opt_state(self,NN_params):
@@ -166,7 +167,7 @@ class optimizer(object):
 					
 					dlog = []
 					for dlog_W in self.NN_Tree.flatten(dlog_s):
-						dlog.append( dlog_W.reshape(self.N_batch,-1) )
+						dlog.append( dlog_W.reshape(batch.shape[0],-1) )
 
 					return jnp.concatenate(dlog, axis=1)
 
@@ -215,7 +216,7 @@ class optimizer(object):
 					return jnp.concatenate(dlog, axis=1)
 
 			self.NG=natural_gradient(self.comm, grad_log, self.NN_dtype, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
-			self.NG.init_global_variables(self.N_MC_points,self.N_batch,self.N_varl_params,self.n_iter,)
+			self.NG.init_global_variables(self.N_MC_points,self.N_batch,self.N_varl_params,self.n_iter,self.N_minibatches,)
 			
 			self.compute_grad=self.NG.compute
 

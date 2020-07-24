@@ -447,15 +447,25 @@ class Energy_estimator():
 		# else: # exact phases
 		# 	phase_kets=self.DNN_phase.evaluate(NN_params_phase, self.MC_tool.ints_ket, )
 
-		phase_kets=np.asarray(self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), ))
 
 		if self.mode=='ED':
+			for j in range(self.MC_tool.N_minibatches):
+
+				batch_idx=np.arange(j*self.MC_tool.minibatch_size//self.N_symm, (j+1)*self.MC_tool.minibatch_size//self.N_symm)	
+				
+				self.MC_tool.phase_kets_aux[batch_idx] = self.DNN_phase.evaluate(self.DNN_phase.params,batch[batch_idx].reshape(self.DNN_phase.input_shape),  )
+		
+			phase_kets=self.MC_tool.phase_kets_aux[:self.N_batch]
+
 			self.MC_tool.phase_kets=phase_kets
 			self.comm.Allgatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[:], MPI.DOUBLE], )
 			phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+		
 		else:
+			phase_kets=np.asarray(self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), ))
 			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,semi_exact=self.semi_exact_phase,)
 
+		
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
 		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.process_local_energies(params_dict)
