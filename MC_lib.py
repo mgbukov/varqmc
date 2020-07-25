@@ -274,17 +274,6 @@ class MC_sampler():
 	def exact(self, DNN_log, DNN_phase, logfile=None):
 
 
-		'''
-		1. give fewer spin_configs
-		2. decrease size of NNs
-		'''
-
-
-		print('prepping phase evaluation')
-		if logfile is not None:
-			logfile.flush()
-
-
 		if DNN_phase is not None: # real nets
 			if DNN_phase.semi_exact==False:
 
@@ -296,7 +285,6 @@ class MC_sampler():
 					array_idx=np.arange(j*self.minibatch_size//self.N_symm, (j+1)*self.minibatch_size//self.N_symm)
 					
 					batch=self.spinstates_ket[batch_idx]
-					#print(batch_idx.shape, array_idx.shape, self.phase_kets_aux.shape)
 					
 					self.phase_kets_aux[array_idx] = DNN_phase.evaluate(DNN_phase.params,batch.reshape(DNN_phase.input_shape),  )
 			
@@ -310,21 +298,10 @@ class MC_sampler():
 				#self.phase_kets[:] = DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  )
 				#self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
 			
-
-				print('completing phase evaluation')
-				if logfile is not None:
-					logfile.flush()
-
 			else:
-				self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params, self.ints_ket, ))
+					self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params, self.ints_ket, ))
 
 			if DNN_log.semi_exact==False:
-
-
-				print('prepping logs evaluation')
-				if logfile is not None:
-					logfile.flush()
-
 
 				ti=time.time()
 				for j in range(self.N_minibatches):
@@ -342,10 +319,7 @@ class MC_sampler():
 	
 				
 				#self.log_mod_kets = np.asarray(DNN_log.evaluate(DNN_log.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
-			
-				print('completing log evaluation')
-				if logfile is not None:
-					logfile.flush()
+		
 
 			else:
 				self.log_mod_kets = np.asarray(DNN_log.evaluate(DNN_phase.params, self.ints_ket, ))
@@ -357,11 +331,6 @@ class MC_sampler():
 				self.log_mod_kets, self.phase_kets = np.asarray( DNN_log.evaluate(DNN_phase.params, self.ints_ket, ) )
 
 		self.all_gather()
-
-		print('completing all_gather')
-		if logfile is not None:
-			logfile.flush()
-		#exit()
 
 
 		self.log_psi_shift=0.0 

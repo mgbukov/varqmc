@@ -317,7 +317,6 @@ class Energy_estimator():
 		# find indices of s primes
 		self.s_prime_inds=np.searchsorted(self.MC_tool.ints_ket_g,self.ints_bra_uq,)
 		
-
 		# free up memory
 		self.MC_tool.ints_ket_g=None
 		self.MC_tool.ints_ket=None
@@ -502,6 +501,7 @@ class Energy_estimator():
 		if self.NN_dtype=='real':
 
 			if self.mode=='ED':
+
 				log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
 				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
 
@@ -530,7 +530,7 @@ class Energy_estimator():
 		if self.comm.Get_rank()==0 and verbose:
 			print(str_2)
 
-
+		
 		self.compute_Eloc(log_kets, phase_kets, log_psi_bras, phase_psi_bras,)
 
 		self.log_kets=log_kets
@@ -705,8 +705,10 @@ class Energy_estimator():
 
 		Eloc=self.Eloc_real+1j*self.Eloc_imag
 
-		#print(Eloc)
-		#exit()
+		# np.set_printoptions(threshold=np.inf,precision=16)
+		# #print(self.comm.Get_rank(), Eloc.real)
+		# print(self.comm.Get_rank(), Eloc_params_dict['abs_psi_2'])
+		# exit()
 		
 		Eloc_mean_g=np.zeros(1, dtype=np.complex128)
 		Eloc_var_g=np.zeros(1, dtype=np.float64)
@@ -737,10 +739,14 @@ class Energy_estimator():
 
 			abs_psi_2=Eloc_params_dict['abs_psi_2']
 			Eloc_mean=np.sum(abs_psi_2*Eloc)
-			self.comm.Allreduce(np.sum(Eloc_mean), Eloc_mean_g, op=MPI.SUM)
+			self.comm.Allreduce(Eloc_mean, Eloc_mean_g, op=MPI.SUM)
 			
 			self.comm.Allreduce(np.sum(abs_psi_2*np.abs(Eloc)**2), Eloc_var_g,  op=MPI.SUM)
 			Eloc_var_g-=np.abs(Eloc_mean_g)**2
+
+			#print('{0:0.15f}'.format(Eloc_var_g[0]))
+			# print('{0:0.15f}'.format(np.abs(Eloc_mean_g[0])**2))
+			# exit()
 
 			Eloc_mean_g=Eloc_mean_g[0]
 			Eloc_var_g=Eloc_var_g[0]

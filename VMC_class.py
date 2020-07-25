@@ -174,9 +174,9 @@ class VMC(object):
 				self.N_minibatches=4
 			elif self.L==6:
 				self.N_MC_points=15804956
-				self.N_minibatches=100
+				self.N_minibatches=2000
 			else:
-				raise ValueError('wrong N_MC_points input.')
+				raise ValueError('cannot do a full-basis simulation for L>6.')
 
 			self.N_batch=self.N_MC_points//self.comm.Get_size()
 			if self.comm.Get_rank() < self.N_MC_points%self.comm.Get_size():
@@ -1072,15 +1072,17 @@ class VMC(object):
 
 		elif self.mode=='ED':
 
-			print('start loading data')	
-			
 			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features, self.load_file, self.prss_index)
 	
 			# required to train independent real nets with RK
 			#self.E_estimator_log.load_exact_basis(self.NN_type,self.MC_tool_log,self.N_features, self.load_file, self.prss_index)
 	
-			print('loaded data')		
-		#exit()
+
+			data_str="loading data took {0:.4f} secs.\n".format(time.time()-t_start)
+			#self.logfile.write(MC_str)
+			if self.comm.Get_rank()==0:
+				print(data_str)
+
 
 
 		iteration=start_iter
@@ -1095,9 +1097,16 @@ class VMC(object):
 
 			
 			##### evaluate model
+
 			if self.logfile is not None:
 				self.logfile.flush()
 			self.get_training_data(iteration,)
+
+			E_str="total Eloc calcumation took {0:.4f} secs.\n".format(time.time()-ti)
+			#self.logfile.write(MC_str)
+			if self.comm.Get_rank()==0:
+				print(E_str)
+
 
 
 			if self.mode=='exact' or self.mode=='ED':
@@ -1107,8 +1116,7 @@ class VMC(object):
 			if self.logfile is not None:
 				self.logfile.flush()
 
-			#if iteration==1:
-			#	exit()
+			#exit()
 		
 			#### check energy variance, undo update and restart sampling back 10 iterations
 			repeat, iteration = self.repeat_iteration(iteration,self.Eloc_mean_g,self.E_MC_std_g,go_back_iters=1,load_data=True)
@@ -1389,10 +1397,17 @@ class VMC(object):
 
 		##### get spin configs #####
 		if self.mode=='exact' or self.mode=='ED':
+			ti=time.time()
+
 			if self.NN_dtype=='real':
 				self.MC_tool.exact(self.DNN_log, self.DNN_phase, self.logfile )
 			else:
 				self.MC_tool.exact(self.DNN, None, )
+
+			E_str="network evaluation took {0:.4f} secs.\n".format(time.time()-ti)
+			#self.logfile.write(MC_str)
+			if self.comm.Get_rank()==0:
+				print(E_str)
 			
 		elif self.mode=='MC':
 			ti=time.time()
@@ -1431,7 +1446,7 @@ class VMC(object):
 			self.E_estimator.compute_local_energy(self.DNN.params, None, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,)
 		
 
-		Eloc_str="total local energy calculation took {0:.4f} secs.".format(time.time()-ti)
+		Eloc_str="local energy calculation took {0:.4f} secs.".format(time.time()-ti)
 		#self.logfile.write(Eloc_str)
 		if self.comm.Get_rank()==0:
 			print(Eloc_str)
@@ -1541,9 +1556,9 @@ class VMC(object):
 		self.DNN_log.params,   self.DNN_log.params_update[:]   = log_params  , log_params_update
 
 
-		#print(np.linalg.norm(log_params_update), np.linalg.norm(phase_params_update))
-		#print(np.linalg.norm(self.DNN_log.NN_Tree.ravel(log_params)), np.linalg.norm(self.DNN_log.NN_Tree.ravel(phase_params)) )
-		#exit()
+		# print(np.linalg.norm(log_params_update), np.linalg.norm(phase_params_update))
+		# print(np.linalg.norm(self.DNN_log.NN_Tree.ravel(log_params)), np.linalg.norm(self.DNN_log.NN_Tree.ravel(phase_params)) )
+		# exit()
 
 		#print(self.opt_phase.Runge_Kutta.step_size, self.opt_phase.step_size)
 

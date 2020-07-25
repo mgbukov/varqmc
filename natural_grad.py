@@ -431,8 +431,9 @@ class natural_gradient():
 			lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
 			#lmbda, V = np.linalg.eigh(S/self.S_norm,)
 			#lmbda, V = eigh(S/self.S_norm,)
-			#lmbda, V = jnp.linalg.eigh(S/self.S_norm,)
 			lmbda*=self.S_norm
+
+		
 
 			# a1= jnp.dot(V ,  jnp.dot( np.diag(1.0/(lmbda+1E-14)), jnp.dot(V.T, F) ) ) #[-4:]
 			# a2 = inv(S/self.S_norm).dot(F)/self.S_norm #[-4:]
@@ -443,6 +444,14 @@ class natural_gradient():
 			self.S_eigvals[:]=lmbda
 			self.VF_overlap[:]= jnp.dot(V.T, F)
 
+
+			# print(self.S_norm)
+			# print(np.linalg.norm(self.VF_overlap))
+			# print(np.linalg.norm(V))
+			# print(np.linalg.norm(lmbda))
+			# #exit()
+
+
 			if self.NN_dtype=='real' and self.adaptive_SR_cutoff:
 				SNR_inds=self.signal_to_noise_ratio(lmbda,V,Eloc_params_dict)
 
@@ -450,9 +459,13 @@ class natural_gradient():
 			if self.adaptive_SR_cutoff and self.NN_dtype=='real':
 				self.nat_grad[:] = jnp.dot(V[:,SNR_inds] ,  jnp.dot( np.diag(1.0/lmbda[SNR_inds] ), self.VF_overlap[SNR_inds] ) )
 			else:
-				self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )
+				self.nat_grad[:] = jnp.dot(V ,  jnp.dot( jnp.diag(lmbda/(lmbda**2 + (self.tol)**2) ), self.VF_overlap ) )
 				#self.nat_grad[:] = jnp.dot(V ,  jnp.dot( np.diag( 2.0 / ( lmbda * (1.0 + np.exp(8.0*self.tol*lmbda[-1]/np.abs(lmbda)) )  )   ), self.VF_overlap ) )
 			
+
+			#print(np.linalg.norm(self.nat_grad))
+			#exit()
+
 		return info
 
 
