@@ -378,7 +378,9 @@ void int_to_spinstate_conv2(const int N,I s,J *out,const int m)
 {	
 	
 	I t = s;
-	I one=1;
+	J one=1;
+
+	cout << sizeof(int) << endl;
 
 	int counter=0;
 

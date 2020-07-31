@@ -83,6 +83,8 @@ def NN_phase_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scal
 									'pool': elementwise(uniform_pool, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]) ),
 
 									#'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),
+									
+									#'reg': PhaseNormalization(a=8.0),
 									}
 
 

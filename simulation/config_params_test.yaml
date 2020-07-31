@@ -2,7 +2,7 @@ J2: 0.5
 sign: 1 # -1: Marshal rule is on; +1 Marshal rule is off
 L: 4
 
-N_iterations: 500
+N_iterations: 2 # 50 #0
 
 NN_dtype: real # 
 #NN_dtype: cpx #
@@ -45,8 +45,8 @@ mode: ED #
 batchnorm: false
 adaptive_SR_cutoff: false
 
-semi_exact: (0,0) # (log, phase)
-grad_update_mode: normal # log_mod # phase #  alternating # 
+semi_exact: (1,0) # (log, phase)
+grad_update_mode: phase #normal # log_mod #  alternating # 
 alt_iter: 20 # of iterations to keep each alternating update for  
 
 TDVP_opt: (svd,svd) # 'inv', 'cg', 'svd'
@@ -56,7 +56,7 @@ step_size: (1E-2,1E-2) #(1E-2,1E-2) # (5E-3,5E-3),
 
 cost: (SR,SR) # SR, energy
 
-print: false # true # 
+print:  true # 
 save_data: true
 load_data: false
 start_iter: 0

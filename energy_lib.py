@@ -278,9 +278,6 @@ class Energy_estimator():
 		# build psi
 		self.psi_GS_exact = sign_psi_GS.to_numpy().squeeze() * np.exp(log_psi_GS.to_numpy().squeeze())
 
-		#print(np.sum(np.dot(psi_GS,self.count*psi_GS) ))
-		#print(np.sum(self.count*np.abs(psi_GS)**2 ))
-		#exit()
 		
 
 		# bcast psi
@@ -290,16 +287,14 @@ class Energy_estimator():
 		# 	self.psi_GS_exact=np.array([None])
 		# self.comm.Gatherv([psi_GS,   MPI.DOUBLE], [self.psi_GS_exact[:],   MPI.DOUBLE], root=0)
 
-		print('starting int_to-state', self.MC_tool.spinstates_ket.shape)
+		print('starting int_to-state', self.MC_tool.spinstates_ket.shape,)
 		#exit()
 
 		#(N_configs, N_symm, L, L) --> (N_configs*N_symm*L*L, )
 		# compute spin s-configs
 		integer_to_spinstate(self.MC_tool.ints_ket, self.MC_tool.spinstates_ket[:self.MC_tool.N_batch*self.MC_tool.N_features], self.N_features, NN_type=NN_type)
 
-		#print(self.MC_tool.spinstates_ket)
-		#exit()
-
+		
 		print('\nfisnihed loading data.\n')
 		#exit()
 		

@@ -98,7 +98,11 @@ class VMC(object):
 		self.sign = params_dict['sign'] # -1: Marshal rule is on; +1 Marshal rule is off
 
 		self.mode=params_dict['mode'] # exact or MC simulation
-		self.semi_exact=list(int(j) for j in read_str(params_dict['semi_exact'])[0])
+		
+		if 'semi_exact' in self.params_dict.keys():
+			self.semi_exact=list(int(j) for j in read_str(params_dict['semi_exact'])[0])
+		else:
+			self.semi_exact=[0,0]
 
 
 		self.opt=read_str(params_dict['opt'])[0]
@@ -213,8 +217,7 @@ class VMC(object):
 		self._create_optimizer()
 
 		
-
-
+	
 		# load exact data
 		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
 		self.load_file=path_to_data+ED_data_file
@@ -254,6 +257,7 @@ class VMC(object):
 			config_params_yaml.close()
 
 		# train net
+
 		if train:
 			self.train(self.start_iter)
 		
@@ -483,9 +487,8 @@ class VMC(object):
 
 			params_str="\ncpx-net params: {0:d}\n".format(self.DNN.N_varl_params)
 
-		# print(params_str)
-		# exit()
-
+		print(params_str)
+		
 
 
 		# print(self.DNN_log.params[2])
@@ -1072,6 +1075,7 @@ class VMC(object):
 
 		elif self.mode=='ED':
 
+
 			self.E_estimator.load_exact_basis(self.NN_type,self.MC_tool,self.N_features, self.load_file, self.prss_index)
 	
 			# required to train independent real nets with RK
@@ -1555,6 +1559,8 @@ class VMC(object):
 		self.DNN_phase.params, self.DNN_phase.params_update[:] = phase_params, phase_params_update
 		self.DNN_log.params,   self.DNN_log.params_update[:]   = log_params  , log_params_update
 
+		#print("HERE",phase_params_update[-1])
+		#exit()
 
 		# print(np.linalg.norm(log_params_update), np.linalg.norm(phase_params_update))
 		# print(np.linalg.norm(self.DNN_log.NN_Tree.ravel(log_params)), np.linalg.norm(self.DNN_log.NN_Tree.ravel(phase_params)) )

@@ -250,6 +250,25 @@ def Regularization(a=8.0,center=True, b_init=zeros, dtype=np.float64,):
     return init_fun, apply_fun
 
 
+
+def PhaseNormalization(a=8.0,center=True, b_init=zeros, dtype=np.float64,):
+    """Layer construction function for a batch normalization layer."""
+    _b_init = lambda rng, shape: b_init(rng, shape, dtype) if center else ()
+
+    def init_fun(rng, input_shape):
+        b_shape = (1,)
+        b = _b_init(rng, b_shape)
+        output_shape=(-1,)
+        return output_shape, (b,)
+
+    def apply_fun(params, x, **kwargs):
+        b,   = params
+        # regularize output
+        return x+b
+        
+    return init_fun, apply_fun
+
+
 ###############
 
 

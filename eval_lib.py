@@ -163,7 +163,8 @@ def MC_sample(load_dir,params_log,N_MC_points=10,reps=False):
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
 	params['N_MC_points']=N_MC_points
 	params['save_data']=False
-				
+	params['mode']='MC'
+
 
 	DNN_psi_MC=VMC(load_dir,params_dict=params,train=False)
 	DNN_psi_MC.DNN_log.params=params_log
@@ -193,6 +194,119 @@ def compute_reps(spin_configs_ints, L):
 	return rep_spin_configs_ints
 
 
+def evaluate_overlap(load_dir,params_log, params_phase, L, J2, N_batch=10000):
+
+	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
+	params['N_MC_points']=N_batch
+	params['save_data']=False
+
+	DNN_psi=VMC(load_dir,params_dict=params,train=False)
+	DNN_psi.DNN_log.params=params_log
+	DNN_psi.DNN_phase.params=params_phase
+
+
+	########
+
+
+	
+	
+	# ED data
+	ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(L,L,J2)
+	path_to_data=os.path.expanduser('~') + '/Google_Drive/frustration_from_RBM/ED_data/'
+	
+
+	if L==6:
+		N_data=15804956
+		basis_dtype=np.uint64 
+		
+	elif L==4:
+		N_data=107
+		basis_dtype=np.uint16
+	else:
+		print('exiting')
+		exit()
+
+
+	N_sweeps=N_data//N_batch+1
+
+
+	spin_int_states_it=read_csv(path_to_data+ED_data_file, chunksize=N_batch, header=None, dtype=basis_dtype,delimiter=' ',usecols=[0,]) 
+	log_psi_ED_it=read_csv(path_to_data+ED_data_file, chunksize=N_batch, header=None, dtype=np.float64,delimiter=' ',usecols=[1,]) 
+	sign_psi_ED_it=read_csv(path_to_data+ED_data_file, chunksize=N_batch, header=None, dtype=np.float64,delimiter=' ',usecols=[4,]) 
+	mult_ED_it=read_csv(path_to_data+ED_data_file, chunksize=N_batch, header=None, dtype=np.float64,delimiter=' ',usecols=[6,]) 
+
+
+	log_psi_DNN=np.zeros(N_data,)
+	phase_psi_DNN=np.zeros(N_data,)
+	mult_DNN=np.zeros(N_data,)
+	
+	log_psi_exact=np.zeros(N_data,)
+	sign_psi_exact=np.zeros(N_data,)
+	
+
+	spin_configs=np.zeros((N_batch*DNN_psi.MC_tool.N_features,),dtype=np.int8)
+
+	n=0
+	for j, (spin_ints_ED, log_psi_ED, sign_psi_ED, mult_ED,) in enumerate(zip(spin_int_states_it, log_psi_ED_it, sign_psi_ED_it, mult_ED_it,)):
+    
+		ind1=j*N_batch
+		if (j+1)*N_batch>N_data:
+			ind2=N_data
+			inds_end=N_data%N_batch
+		else:
+			ind2=(j+1)*N_batch
+			inds_end=N_batch
+
+		
+		#p_ED=mult_ED.to_numpy().squeeze()*np.exp(2.0*log_psi_ED).to_numpy().squeeze()
+		spin_ints_ED=spin_ints_ED.to_numpy().squeeze()
+
+
+		mult_DNN[ind1:ind2] = mult_ED.to_numpy().squeeze()
+		
+		log_psi_exact[ind1:ind2]  = log_psi_ED.to_numpy().squeeze()
+		sign_psi_exact[ind1:ind2] = sign_psi_ED.to_numpy().squeeze()
+
+		# evaluate NN
+
+		integer_to_spinstate(spin_ints_ED, spin_configs, DNN_psi.MC_tool.N_features, NN_type=DNN_psi.NN_type)
+
+
+		log_psi_DNN[ind1:ind2]   = DNN_psi.DNN_log  .evaluate(params_log,   spin_configs.reshape(DNN_psi.DNN_log  .input_shape), )[:inds_end]
+		phase_psi_DNN[ind1:ind2] = DNN_psi.DNN_phase.evaluate(params_phase, spin_configs.reshape(DNN_psi.DNN_phase.input_shape), )[:inds_end]
+		
+
+		n+=N_batch
+
+		print('finished sweep {0:d}/{1:d}; {2:d}/{3:d} states identified\n'.format(j+1,N_sweeps,n,N_data))
+
+		# if j==2: #N_data:
+		# 	break
+
+
+	# if n<N_data:
+	# 	print('not all states encountered!')
+	# 	exit()
+
+	
+	
+	norm_DNN=np.sqrt( np.sum( mult_DNN*np.exp(2.0*log_psi_DNN) ) )
+
+
+	psi_DNN  =np.exp(1j*phase_psi_DNN + log_psi_DNN)/norm_DNN
+	psi_exact=sign_psi_exact*np.exp(log_psi_exact)
+
+	norm_test_DNN  =np.sum(mult_DNN*np.abs(psi_DNN)**2  )
+	norm_test_exact=np.sum(mult_DNN*np.abs(psi_exact)**2)
+
+	print('test norms', norm_test_DNN,  norm_test_exact)
+
+	overlap=np.abs( np.sum( mult_DNN*psi_exact*psi_DNN ) )**2
+
+	print('overlap', overlap)
+	
+	return overlap
+	
 
 
 def evaluate_DNN(load_dir,params_log, params_phase, spin_configs_ints, log_psi_shift=0.0,):
@@ -200,6 +314,7 @@ def evaluate_DNN(load_dir,params_log, params_phase, spin_configs_ints, log_psi_s
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
 	params['N_MC_points']=spin_configs_ints.shape[0]
 	params['save_data']=False
+	params['mode']='MC'
 
 	DNN_psi=VMC(load_dir,params_dict=params,train=False)
 	DNN_psi.DNN_log.params=params_log
@@ -221,6 +336,7 @@ def evaluate_sample(load_dir,params_log, params_phase,ints_ket,log_psi,phase_psi
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
 	params['N_MC_points']=log_psi.shape[0]
 	params['save_data']=False
+	params['mode']='MC'
 
 
 	DNN_psi=VMC(load_dir,params_dict=params,train=False)

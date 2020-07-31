@@ -44,10 +44,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -135,7 +135,7 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
     cdef int Ns=states.shape[0]
     cdef int Nsites=N_sites
 
-#    cdef np.npy_int8 * out_ptr = <np.npy_int8*> np.PyArray_GETPTR1(out,0)
+    #cdef np.npy_int8 * out_ptr = <np.npy_int8*> np.PyArray_GETPTR1(out,0)
 
     cdef func_type spin_config
 
@@ -152,11 +152,10 @@ def integer_to_spinstate(basis_type[:] states,np.int8_t[::1] out, int N_features
     #         int_to_spinstate_conv2(Nsites, states[i], out_ptr, i*N_features)
 
 
-
     # with nogil:
     #     for i in range (Ns*N_features):
-    #         #out[i]=1
-    #         out_ptr[i]=1
+    #         out[i]=1
+    #         #out_ptr[i]=1
 
     with nogil:
         for i in range (Ns):

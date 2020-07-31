@@ -111,7 +111,7 @@ class MC_sampler():
 
 
 		if mode=='MC':
-			self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
+			#self.log_mod_kets=np.zeros((N_batch,),dtype=np.float64)
 			self.log_psi_shift_g=np.zeros((n_iter,),dtype=np.float64)
 			if self.comm.Get_rank()==0:
 				self.ints_ket_g=np.zeros((n_iter,N_MC_points,),dtype=self.basis_type)
@@ -127,7 +127,8 @@ class MC_sampler():
 			self.sf_g=np.zeros_like(self.s0_g)
 
 
-			self.minibatch_size=self.N_batch
+			self.minibatch_size=self.N_batch*self.N_symm
+			self.N_minibatches=1
 
 		else:
 
@@ -170,6 +171,7 @@ class MC_sampler():
 			
 		self.comm.Barrier()
 
+		
 		# collect data from multiple processes to root
 		self.comm.Gatherv([self.ints_ket,	self.MPI_basis_dtype], [self.ints_ket_g[-1,:],   self.MPI_basis_dtype], root=0)
 		self.comm.Gatherv([self.log_mod_kets,	MPI.DOUBLE], [self.log_mod_kets_g[-1,:],   MPI.DOUBLE], root=0)
@@ -208,6 +210,8 @@ class MC_sampler():
 		N_accepted, N_MC_proposals = DNN_log.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
 												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
+		print('\n\ncheck\n\n')
+
 
 		if compute_phases:
 			if DNN_phase is not None: # real nets
@@ -335,6 +339,7 @@ class MC_sampler():
 
 		self.log_psi_shift=0.0 
 		
+		#print('PHASES', np.min(self.phase_kets), np.max(self.phase_kets))
 
 		# for s, ph in zip(self.ints_ket, self.phase_kets):
 		# 	print(s,ph%(2*np.pi))

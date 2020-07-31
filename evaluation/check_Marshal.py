@@ -41,7 +41,7 @@ import yaml
 
 #########################
 
-save= True # False # 
+save= False # True # 
 
 iteration=1995 # 100 # 200 # 500 # 1000 # 1500 #
 J2=0.5
@@ -102,6 +102,9 @@ if L==4:
 
 ############
 
+
+overlap=evaluate_overlap(load_dir,params_log, params_phase, L, J2,)
+exit()
 
 N_MC_points=1000 # MC points
 
@@ -280,6 +283,8 @@ print_str+='full sample\n'
 print_str+='DNN         vs  ED(J2=0.5)   T:F  :  {0:d}:{1:d}\n'.format(phase_hist_bra_all[1]     ,phase_hist_bra_all[0])
 print_str+='DNN         vs  ED(J2=0)     T:F  :  {0:d}:{1:d}\n'.format(phase_hist_bra_J2_0_all[1],phase_hist_bra_J2_0_all[0])
 
+
+print_str+='\n\n overlap |<psi_NN|psi_GS>|^2 :  {0:0.6f}'.format(overlap)
 
 
 print(print_str)

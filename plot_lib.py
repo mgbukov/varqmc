@@ -157,13 +157,18 @@ def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iterations, N_MC_points
 		# sample points
 		MC_tool = MC_sample(load_dir, params_log, N_MC_points=N_MC_points, reps=True)
 
+
 		rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
+
 
 		log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )
 		sign_psi = np.exp(-1j*phase_psi)
 
 
 		log_psi, phase_psi,  phase_psi_bras, log_psi_bras = evaluate_sample(load_dir,params_log, params_phase, rep_spin_configs_ints, log_psi,phase_psi,log_psi_shift=0.0)
+
+		print('here3')
+
 
 		# wrap phases
 		phase_psi = (phase_psi+np.pi)%(2*np.pi) - np.pi
@@ -526,13 +531,13 @@ def plot_delta(load_dir, plotfile_dir, params_str,L,J2, save=True):
 def plot_loss(load_dir, plotfile_dir, params_str,L,J2, save=True):
 
 
-	N_variables=8
+	N_variables=10
 
 	file_name= load_dir + 'loss_log' + params_str + '.txt'
-	iter_step_log, r2_log, max_grad_log, dE_log, curv_log, F_norm_log, S_norm_log, S_logcond_log = _load_data(file_name,N_variables)
+	iter_step_log, r2_log, max_grad_log, dE_log, curv_log, F_norm_log, S_norm_log, S_logcond_log, _, _ = _load_data(file_name,N_variables)
 
 	file_name= load_dir + 'loss_phase' + params_str + '.txt'
-	iter_step_phase, r2_phase, max_grad_phase, dE_phase, curv_phase, F_norm_phase, S_norm_phase, S_logcond_phase = _load_data(file_name,N_variables)
+	iter_step_phase, r2_phase, max_grad_phase, dE_phase, curv_phase, F_norm_phase, S_norm_phase, S_logcond_phase, _, _ = _load_data(file_name,N_variables)
 
 
 	### plot r2

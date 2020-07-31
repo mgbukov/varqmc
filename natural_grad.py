@@ -497,13 +497,13 @@ class natural_gradient():
 		#A=self.compute_grad_log_psi(NN_params,batch[:self.N_batch],)
 		#print('HEREEEEE', np.max(np.abs(self.dlog_psi - A) ))
 		#exit()	
-			
 
 		t1=time.time()
 		self.compute_F_vector(Eloc_params_dict=Eloc_params_dict,)
 		t2=time.time()
 		self.compute_S_matrix(Eloc_params_dict=Eloc_params_dict,)
 		t3=time.time()
+		
 
 
 		print("evaluation took -- gradients: {0:0.6} secs; F_vector: {1:0.6} secs; S-matrix: {2:0.6} secs.".format(t1-t0, t2-t1, t3-t2) )
