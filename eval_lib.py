@@ -352,6 +352,8 @@ def evaluate_sample(load_dir,params_log, params_phase,ints_ket,log_psi,phase_psi
 
 	DNN_psi.E_estimator.compute_s_primes(ints_ket,DNN_psi.NN_type)
 
+	ints_bras_rep=DNN_psi.E_estimator.ints_bra_uq.copy()[DNN_psi.E_estimator.inv_index]
+	
 
 	log_psi_bras = DNN_psi.E_estimator.evaluate_s_primes(DNN_psi.DNN_log.evaluate,params_log,DNN_psi.DNN_log.input_shape)
 	log_psi_bras-=log_psi_shift
@@ -364,7 +366,7 @@ def evaluate_sample(load_dir,params_log, params_phase,ints_ket,log_psi,phase_psi
 	phase_psi_bras = DNN_psi.E_estimator.evaluate_s_primes(DNN_psi.DNN_phase.evaluate,params_phase,DNN_psi.DNN_phase.input_shape)
 
 
-	return log_psi, phase_psi,  phase_psi_bras, log_psi_bras
+	return log_psi, phase_psi, log_psi_bras, phase_psi_bras, ints_bras_rep
 
 
 
@@ -378,6 +380,7 @@ def compute_Eloc(load_dir,params_log, params_phase,ints_ket,log_psi,phase_psi,lo
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
 	params['N_MC_points']=log_psi.shape[0]
 	params['save_data']=False
+	params['mode']='MC'
 
 
 	DNN_psi=VMC(load_dir,params_dict=params,train=False)
@@ -405,6 +408,7 @@ def compute_Eloc_ED(load_dir,ints_ket,log_kets,phase_kets,L,J2,return_ED_data=Fa
 	params['N_MC_points']=N_batch
 	params['save_data']=False
 	#params['J2']=J2
+	params['mode']='MC'
 				
 
 	DNN_psi_MC=VMC(load_dir,params_dict=params,train=False)
@@ -532,6 +536,7 @@ def ED_results(load_dir,):
 	params = yaml.load(open(load_dir+'config_params.yaml'),Loader=yaml.FullLoader)
 	params['N_MC_points']=N_batch
 	params['save_data']=False
+	params['mode']='MC'
 
 	DNN_psi_MC=VMC(load_dir,params_dict=params,train=False)
 

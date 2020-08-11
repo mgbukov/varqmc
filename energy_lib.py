@@ -312,11 +312,12 @@ class Energy_estimator():
 		# find indices of s primes
 		self.s_prime_inds=np.searchsorted(self.MC_tool.ints_ket_g,self.ints_bra_uq,)
 		
+
 		# free up memory
-		self.MC_tool.ints_ket_g=None
-		self.MC_tool.ints_ket=None
-		self.ints_bra_uq=None
-		del log_psi_GS, sign_psi_GS
+		# self.MC_tool.ints_ket_g=None
+		# self.MC_tool.ints_ket=None
+		# self.ints_bra_uq=None
+		# del log_psi_GS, sign_psi_GS
 		
 
 
@@ -389,7 +390,7 @@ class Energy_estimator():
 			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 		
 		
-		elif self.mode=='exact':
+		elif self.mode=='exact' or (self.mode=='ED' and (self.semi_exact_log or self.semi_exact_phase)):
 			self._spinstates_bra_holder=np.zeros((self.N_batch,self.N_sites*self.N_symm),dtype=np.int8)
 		
 
@@ -419,7 +420,8 @@ class Energy_estimator():
 
 		self.Eloc_diag=np.zeros(self.N_batch, dtype=np.float64)	
 
-		if not self.mode=='ED':
+
+		if (not self.mode=='ED') or (self.semi_exact_log or self.semi_exact_phase):
 			self._spinstates_bra=np.zeros((self.N_batch*self._n_offdiag_terms,self.N_sites*self.N_symm),dtype=np.int8)
 		
 
@@ -446,20 +448,29 @@ class Energy_estimator():
 			for j in range(self.MC_tool.N_minibatches):
 
 				batch_idx=np.arange(j*self.MC_tool.minibatch_size//self.N_symm, (j+1)*self.MC_tool.minibatch_size//self.N_symm)	
-				
-				self.MC_tool.phase_kets_aux[batch_idx] = self.DNN_phase.evaluate(self.DNN_phase.params,batch[batch_idx].reshape(self.DNN_phase.input_shape),  )
+				self.MC_tool.phase_kets_aux[batch_idx] = self.DNN_phase.evaluate(NN_params_phase,batch[batch_idx].reshape(self.DNN_phase.input_shape),  )
 		
 			phase_kets=self.MC_tool.phase_kets_aux[:self.N_batch]
 
 			self.MC_tool.phase_kets=phase_kets
 			self.comm.Allgatherv([self.MC_tool.phase_kets,  MPI.DOUBLE], [self.MC_tool.phase_kets_g[:], MPI.DOUBLE], )
-			phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+			
+			if self.semi_exact_log==True and self.semi_exact_phase==False: # exact logs, optimize phases
+				phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,semi_exact=self.semi_exact_phase,)
+			else:
+				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+			
 		
 		else:
 			phase_kets=np.asarray(self.DNN_phase.evaluate(NN_params_phase, batch.reshape(self.DNN_phase.input_shape), ))
 			phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,NN_params_phase,self.DNN_phase.input_shape,semi_exact=self.semi_exact_phase,)
 
 		
+		# print(phase_kets)
+		# print(phase_psi_bras)
+		# #print(self.MC_tool.phase_kets)
+		# exit()
+
 		self.compute_Eloc(self.log_kets, phase_kets, self.log_psi_bras, phase_psi_bras, debug_mode=False,)
 
 		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.process_local_energies(params_dict)
@@ -477,7 +488,7 @@ class Energy_estimator():
 	def compute_local_energy(self,params_log,params_phase,ints_ket,log_kets,phase_kets,log_psi_shift, verbose=True, ):
 		
 		ti=time.time()
-		if not self.mode=='ED':
+		if (not self.mode=='ED') or (self.semi_exact_log or self.semi_exact_phase) :
 			self.compute_s_primes(ints_ket,self.DNN_log.NN_type)
 
 
@@ -497,8 +508,20 @@ class Energy_estimator():
 
 			if self.mode=='ED':
 
-				log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
-				phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+
+				if self.semi_exact_log==False and self.semi_exact_phase==True: # exact phases, optimize the logs
+					log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,semi_exact=self.semi_exact_log,)	
+				else:
+					log_psi_bras = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
+
+				
+				if self.semi_exact_log==True and self.semi_exact_phase==False: # exact logs, optimize phases
+					phase_psi_bras = self.evaluate_s_primes(self.DNN_phase.evaluate,params_phase,self.DNN_phase.input_shape,semi_exact=self.semi_exact_phase,)
+				else:
+					phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)	
+
+					
+
 
 			else:
 				log_psi_bras = self.evaluate_s_primes(self.DNN_log.evaluate, params_log, self.DNN_log.input_shape,semi_exact=self.semi_exact_log,)	
@@ -524,6 +547,7 @@ class Energy_estimator():
 		str_2="evaluating s_primes took {0:.4f} secs.".format(time.time()-ti)
 		if self.comm.Get_rank()==0 and verbose:
 			print(str_2)
+
 
 		
 		self.compute_Eloc(log_kets, phase_kets, log_psi_bras, phase_psi_bras,)
@@ -628,7 +652,7 @@ class Energy_estimator():
 					else:
 						prediction_bras[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),)
 				else:
-					if self.semi_exact:
+					if semi_exact:
 						prediction_bras[batch_idx], prediction_bras_2[batch_idx] = evaluate_NN(NN_params, batch,)
 					else:
 						prediction_bras[batch_idx], prediction_bras_2[batch_idx] = evaluate_NN(NN_params, batch.reshape(input_shape),)
@@ -665,6 +689,7 @@ class Energy_estimator():
 
 
 	def compute_Eloc(self, log_kets, phase_kets, log_psi_bras,phase_psi_bras, debug_mode=True):
+
 
 		self._reset_Eloc_vars()
 		

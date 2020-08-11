@@ -72,9 +72,11 @@ def NN_phase_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scal
 			NN_archs['CNN_mixed_3']= {
 									'layer_1': GeneralConvPeriodic(dim_nums, shapes['layer_1'][1], shapes['layer_1'][0], dense_output=True, ignore_b=True, init_value_W=scale, ), 
 									'nonlin_1': elementwise(logcosh),
+							#		'nonlin_1': elementwise(identity),
 
 									'layer_2': GeneralDense(shapes['layer_1'][1], shapes['layer_2'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
 									'nonlin_2': elementwise(xtanh),
+							#		'nonlin_2': elementwise(identity),
 
 									'layer_3': GeneralDense(shapes['layer_2'][1], shapes['layer_3'][1], 1, ignore_b=False, init_value_W=scale, init_value_b=scale ),  # 1E-1
 									'nonlin_3': elementwise(xtanh),
@@ -85,6 +87,7 @@ def NN_phase_arch(net_str, shapes, input_shape, reduce_shape, output_shape, scal
 									#'pool': elementwise(symmetric_pool, reduce_shape=reduce_shape, output_shape=output_shape, norm=jnp.sqrt(output_shape[1]*(reduce_shape[1]+reduce_shape[3])) ),
 									
 									#'reg': PhaseNormalization(a=8.0),
+							#		'reg': Regularization(a=16.0),
 									}
 
 

@@ -149,6 +149,10 @@ def xtanh(x):
     #return 2.0*x-jnp.tanh(x)
 
 
+@jit
+def identity(x):
+    return x
+    
 ##########################
 
 
@@ -169,7 +173,6 @@ def symmetrize(x, reduce_shape, norm, ):
 def uniform_pool(x, output_shape, norm,):
     # sum over hidden neurons
     x = jnp.sum(x.reshape(output_shape), axis=[1,])
-    #x = jnp.sum(x.reshape(output_shape),axis=[1,])
     return x/norm
 
 

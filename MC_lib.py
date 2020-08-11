@@ -210,8 +210,6 @@ class MC_sampler():
 		N_accepted, N_MC_proposals = DNN_log.sample(self.N_batch,self.thermalization_time,self.acceptance_ratio_g,
 												self.spinstates_ket,self.ints_ket,self.log_mod_kets, self.thermal,
 												)
-		print('\n\ncheck\n\n')
-
 
 		if compute_phases:
 			if DNN_phase is not None: # real nets
@@ -281,7 +279,6 @@ class MC_sampler():
 		if DNN_phase is not None: # real nets
 			if DNN_phase.semi_exact==False:
 
-
 				ti=time.time()
 				for j in range(self.N_minibatches):
 
@@ -295,7 +292,6 @@ class MC_sampler():
 				self.phase_kets[:]=self.phase_kets_aux[:self.N_batch]
 
 				print("phase network evaluation on {0:d} configs took {1:0.6} secs.".format(self.psi_batch_size, time.time()-ti) )
-	
 
 				#print(A.flags['OWNDATA'], B.flags['OWNDATA'], np.shares_memory(A,B))
 				
@@ -303,7 +299,8 @@ class MC_sampler():
 				#self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params,self.spinstates_ket.reshape(DNN_log.input_shape),  ))
 			
 			else:
-					self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params, self.ints_ket, ))
+				self.phase_kets = np.asarray(DNN_phase.evaluate(DNN_phase.params, self.ints_ket, ))
+
 
 			if DNN_log.semi_exact==False:
 
@@ -338,8 +335,10 @@ class MC_sampler():
 
 
 		self.log_psi_shift=0.0 
+
 		
-		#print('PHASES', np.min(self.phase_kets), np.max(self.phase_kets))
+		# print('PHASES', np.min(self.phase_kets), np.max(self.phase_kets))
+		# exit()
 
 		# for s, ph in zip(self.ints_ket, self.phase_kets):
 		# 	print(s,ph%(2*np.pi))

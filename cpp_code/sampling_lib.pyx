@@ -44,10 +44,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=4
+DEF _L=6
 cdef extern from *:
     """
-    #define _L 4
+    #define _L 6
     """
     pass
 
@@ -1086,7 +1086,8 @@ cdef class Phase_Net:
             output_shape = (-1,shape_last_layer[1],)
 
             # define variance of uniform distr for weights and biases
-            scale=1.0 # 4.0
+            #scale=1.0 # MC, exact
+            scale=4.0 # semi-exact
 
             # define CNN
             NN_arch = NN_phase_arch('CNN_mixed_3', shapes, input_shape, reduce_shape, output_shape, scale)   

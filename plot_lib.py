@@ -165,11 +165,9 @@ def plot_sample(load_dir, plotfile_dir, params_str,L,J2, iterations, N_MC_points
 		sign_psi = np.exp(-1j*phase_psi)
 
 
-		log_psi, phase_psi,  phase_psi_bras, log_psi_bras = evaluate_sample(load_dir,params_log, params_phase, rep_spin_configs_ints, log_psi,phase_psi,log_psi_shift=0.0)
-
-		print('here3')
-
-
+		#log_psi, phase_psi,  phase_psi_bras, log_psi_bras = evaluate_sample(load_dir,params_log, params_phase, rep_spin_configs_ints, log_psi,phase_psi,log_psi_shift=0.0)
+		log_psi, phase_psi, log_psi_bras, phase_psi_bras, ints_bras_rep = evaluate_sample(load_dir,params_log, params_phase, rep_spin_configs_ints, log_psi,phase_psi,log_psi_shift=0.0)
+	
 		# wrap phases
 		phase_psi = (phase_psi+np.pi)%(2*np.pi) - np.pi
 		phase_psi_bras = (phase_psi_bras+np.pi)%(2*np.pi) - np.pi

@@ -41,16 +41,24 @@ import yaml
 
 #########################
 
-save= False # True # 
+save= True # False # 
 
-iteration=1995 # 100 # 200 # 500 # 1000 # 1500 #
+# iteration=1995 # 100 # 200 # 500 # 1000 # 1500 #
+# J2=0.5
+# L=6
+# opt='RK_RK' # 'sgd_sgd' # 'sgd_sgd' #  
+# cost='SR_SR' # 'SR_SR' #
+# mode='MC' # 'exact' #
+# sys_time='2020_06_13-09_51_06' # '2020_06_05-21_55_27' # 
+
+iteration=600 #100,150,200,250,300,350,500,600,
 J2=0.5
 L=6
-opt='RK_RK' # 'sgd_sgd' # 'sgd_sgd' #  
+opt='CNNreal-RK_RK' # 'sgd_sgd' # 'sgd_sgd' #  
 cost='SR_SR' # 'SR_SR' #
-mode='MC' # 'exact' #
-sys_time='2020_06_13-09_51_06' # '2020_06_05-21_55_27' # 
-
+mode='ED' # 'MC' # 'exact' #
+NN_type='CNNreal'
+sys_time='2020_07_24-18_57_48' 
 
 
 
@@ -60,7 +68,8 @@ sys_time='2020_06_13-09_51_06' # '2020_06_05-21_55_27' #
 data_name = sys_time + '--{0:s}-{1:s}-L_{2:d}-{3:s}/'.format(opt,cost,L,mode)
 #load_dir='data/' + data_name 
 #load_dir='data/paper_data/seeds/' + data_name 
-load_dir='data/paper_data/MC_samples/' + data_name 
+#load_dir='data/paper_data/MC_samples/' + data_name
+load_dir='data/paper_data/exact/' + data_name  
 
 #data_params=(NN_dtype,mode,L,J2,opt,NN_shape_str,N_MC_points,N_prss,NMCchains,)
 #params_str='--model_DNN{0:s}-mode_{1:s}-L_{2:d}-J2_{3:0.1f}-opt_{4:s}-NNstrct_{5:s}-MCpts_{6:d}-Nprss_{7:d}-NMCchains_{8:d}'.format(*data_params)
@@ -103,8 +112,9 @@ if L==4:
 ############
 
 
-overlap=evaluate_overlap(load_dir,params_log, params_phase, L, J2,)
-exit()
+#overlap=evaluate_overlap(load_dir,params_log, params_phase, L, J2,)
+overlap=-1.0
+#exit()
 
 N_MC_points=1000 # MC points
 
@@ -126,13 +136,14 @@ rep_spin_configs_ints=compute_reps(MC_tool.ints_ket,L)
 log_psi, phase_psi = evaluate_DNN(load_dir, params_log, params_phase, rep_spin_configs_ints, )
 sign_psi = np.exp(-1j*phase_psi)
 
-log_psi, phase_psi,  phase_psi_bra, log_psi_bra = evaluate_sample(load_dir,params_log, params_phase,rep_spin_configs_ints,log_psi,phase_psi,)
+log_psi, phase_psi, log_psi_bra, phase_psi_bra, rep_spin_configs_bra_ints = evaluate_sample(load_dir,params_log, params_phase,rep_spin_configs_ints,log_psi,phase_psi,)
 
 Eloc_Re, Eloc_Im=compute_Eloc(load_dir,params_log, params_phase,rep_spin_configs_ints,log_psi,phase_psi,)
 
 # local E for exact states
 print('DNN:', Eloc_Re.mean(), Eloc_Im.mean())
 
+#exit()
 
 ################
 
@@ -160,7 +171,8 @@ if save:
 	save_file_name='phase_data_'+data_name[:-1]+'_iter={0:d}'.format(iteration)
 
 	with open(save_file_name+'.pkl', 'wb') as handle:
-						pickle.dump([log_psi, phase_psi,  phase_psi_bra, log_psi_bra, ], 
+						pickle.dump([log_psi, phase_psi,  rep_spin_configs_ints, 
+									 log_psi_bra, phase_psi_bra, rep_spin_configs_bra_ints ], 
 										handle, protocol=pickle.HIGHEST_PROTOCOL
 									)
 
@@ -288,7 +300,7 @@ print_str+='\n\n overlap |<psi_NN|psi_GS>|^2 :  {0:0.6f}'.format(overlap)
 
 
 print(print_str)
-exit()
+#exit()
 
 
 if save:

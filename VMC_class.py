@@ -1120,6 +1120,8 @@ class VMC(object):
 			if self.logfile is not None:
 				self.logfile.flush()
 
+			print(self.E_estimator.Eloc_real.shape)
+
 			#exit()
 		
 			#### check energy variance, undo update and restart sampling back 10 iterations
@@ -1193,6 +1195,7 @@ class VMC(object):
 	
 	def reestimate_local_energy_log(self, iteration, NN_params, batch, params_dict,):
 
+	
 		max_attemps=10
 
 		if self.NN_dtype=='real':
@@ -1299,7 +1302,7 @@ class VMC(object):
 		max_attemps=10
 
 		if self.NN_dtype=='real':
-			self.DNN_log.params=NN_params
+			self.DNN_log.params=NN_params # overwritten before iteration is over once gradients are updates
 		else:
 			self.DNN.params=NN_params
 
