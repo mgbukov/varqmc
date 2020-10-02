@@ -1606,7 +1606,18 @@ class VMC(object):
 
 		E = np.linalg.eigvalsh(Hessian)
 
-		print(E)
+
+
+		file_hessian = self.savefile_dir + 'hessian_evalues_iter={0:d}'.format(iteration)
+
+		
+		if self.comm.Get_rank()==0:
+			store_hessian_evalues(iteration,file_hessian, E)
+
+
+			# with open(file_hessian+'.pkl', 'rb') as handle:
+			# 	E2 = pickle.load(handle)
+
 
 		exit()
 

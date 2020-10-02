@@ -133,4 +133,13 @@ def store_debug_helper_data(debug_file_SF,opt,):
 
 	
 
+def store_hessian_evalues(iteration,file_hessian, evalues):
+
+	with open(file_hessian+'.pkl', 'wb') as handle:
+		pickle.dump([evalues, ], 
+						handle, protocol=pickle.HIGHEST_PROTOCOL
+					)
+
+
+
 
