@@ -652,7 +652,39 @@ void offdiag_sum(int Ns,
 
 
 
+void offdiag_sum(int Ns,
+				int n_per_term[], 
+				double Eloc_cos[],
+				double Eloc_sin[],
+				npy_uint32 ket_ind[],
+				double MEs[],
+				const double log_psi_bras[],
+				const double phase_psi_bras[],
+				const double log_psi_kets[],
+				const double dlog_psi_kets[]
+	)
+{
+	int n_cum=0;
+	double aux=0.0;
 
+	for(int l=0;l<Ns;l++){
 
+		int n=n_per_term[l];
+
+		for(int i=0;i<n;i++){
+
+			int j=n_cum+i;
+			
+			//cout << l << " , "<< i << " , "<< n << " , "<<j<< " , " << Eloc_cos[ket_ind[j]] << " , " << ket_ind[j] << " , " << psi_bras[j] << " , " << std::cos(phase_psi_bras[j]) << endl;
+			
+			aux=MEs[j] * std::exp(log_psi_bras[j]-log_psi_kets[ket_ind[j]]) * dlog_psi_kets[j];
+
+			Eloc_cos[ket_ind[j]] += aux * std::cos(phase_psi_bras[j]);
+			Eloc_sin[ket_ind[j]] += aux * std::sin(phase_psi_bras[j]);
+		}
+
+		n_cum+=n;
+	}
+}
 
 

@@ -1,6 +1,6 @@
 import sys, os
 
-from cpp_code import update_offdiag_ME_exact, update_offdiag_ME, update_diag_ME, c_offdiag_sum
+from cpp_code import update_offdiag_ME_exact, update_offdiag_ME, update_diag_ME, c_offdiag_sum, c_offdiag_sum_H
 
 from mpi4py import MPI
 import numpy as np
@@ -418,7 +418,8 @@ class Energy_estimator():
 		self._ints_ket_ind=np.zeros(self.N_batch*self._n_offdiag_terms,dtype=np.uint32)
 		self._n_per_term=np.zeros(self._n_offdiag_terms,dtype=np.int32)
 
-		self.Eloc_diag=np.zeros(self.N_batch, dtype=np.float64)	
+		self.Eloc_diag=np.zeros(self.N_batch, dtype=np.float64)
+		self.Eloc_diag_H=np.zeros(self.N_batch, dtype=np.float64)		
 
 
 		if (not self.mode=='ED') or (self.semi_exact_log or self.semi_exact_phase):
@@ -482,6 +483,29 @@ class Energy_estimator():
 		
 
 		return params_dict, batch
+
+
+	def ED_compute_local_energy_hessian(self,params_log,params_phase,ints_ket, log_kets,phase_kets,log_psi_shift, dlog_kets, dphase_kets, verbose=True, ):
+
+		log_psi_bras   = self.lookup_s_primes(self.MC_tool.log_mod_kets_g)
+		phase_psi_bras = self.lookup_s_primes(self.MC_tool.phase_kets_g)
+
+
+		log_psi_bras-=log_psi_shift
+		
+		HO_log   =    self.compute_Eloc_H(log_kets, phase_kets, log_psi_bras, phase_psi_bras, dlog_kets)
+		HO_phase = 1j*self.compute_Eloc_H(log_kets, phase_kets, log_psi_bras, phase_psi_bras, dphase_kets)
+		
+		# compute_Eloc must come after compute_Eloc_H
+		self.compute_Eloc(log_kets, phase_kets, log_psi_bras, phase_psi_bras,)
+		Eloc=self.Eloc_real+1j*self.Eloc_imag
+
+
+		self.log_kets=log_kets
+		self.log_psi_bras=log_psi_bras
+
+		return Eloc, HO_log, HO_phase
+
 
 
 
@@ -718,6 +742,56 @@ class Energy_estimator():
 
 		return self.Eloc_real+1j*self.Eloc_imag
 
+		
+
+	def compute_Eloc_H(self, log_kets, phase_kets, log_psi_bras,phase_psi_bras, dpsi_kets,):
+
+		
+		HO = np.zeros(dpsi_kets.shape, dtype=np.complex128)
+		N_varl_params=dpsi_kets.shape[1]
+
+		_n_per_term=self._n_per_term[self._n_per_term>0]
+
+		
+
+		# loop over NN parameters
+		for i in range(N_varl_params):
+
+
+			# Allgather data
+			self.comm.Allgatherv([np.ascontiguousarray(dpsi_kets[:,i]),  MPI.DOUBLE], [self.MC_tool.dpsi_kets_g[:], MPI.DOUBLE], )
+
+			# find s' contributions
+			dpsi_bras   = self.lookup_s_primes(self.MC_tool.dpsi_kets_g)
+
+		
+			
+			self._reset_Eloc_vars()
+			
+			# compute real and imaginary part of local energy
+			c_offdiag_sum_H(self._Eloc_cos, self._Eloc_sin, _n_per_term,self._ints_ket_ind[:self.nn],self._MEs[:self.nn],log_psi_bras, phase_psi_bras, log_kets, dpsi_bras)
+			
+		
+			cos_phase_kets=np.cos(phase_kets)
+			sin_phase_kets=np.sin(phase_kets)
+
+
+			Eloc_real = self._Eloc_cos*cos_phase_kets + self._Eloc_sin*sin_phase_kets
+			Eloc_imag = self._Eloc_sin*cos_phase_kets - self._Eloc_cos*sin_phase_kets
+
+			# add diagonal contribution
+			Eloc_real+=self.Eloc_diag*dpsi_kets[:,i]
+
+			
+			HO[:,i]=Eloc_real+1j*Eloc_imag
+
+
+		return HO
+
+
+
+
+		return self.Eloc_real+1j*self.Eloc_imag
 
 
 	def process_local_energies(self,Eloc_params_dict,):

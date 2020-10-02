@@ -17,7 +17,7 @@ import pickle, time
 
 class natural_gradient():
 
-	def __init__(self,comm,compute_grad_log_psi, NN_dtype, NN_Tree, TDVP_opt, mode='MC', RK=False, adaptive_SR_cutoff=False):
+	def __init__(self,comm,compute_grad_log_psi, NN_dtype, NN_Tree, TDVP_opt, mode='MC', RK=False, adaptive_SR_cutoff=False, hessian=None):
 				 
 		self.comm=comm
 		self.logfile=None
@@ -30,6 +30,7 @@ class natural_gradient():
 
 	
 		self.compute_grad_log_psi=compute_grad_log_psi
+		self.hessian=hessian
 
 
 		self.TDVP_opt = TDVP_opt # 'svd' # 'inv' # 'cg' #
@@ -83,8 +84,13 @@ class natural_gradient():
 		
 		if self.NN_dtype=='real':
 			self.dlog_psi_aux=np.zeros((self.batch_size,self.N_varl_params),dtype=np.float64)
+			self.ddlog_psi_aux=np.zeros((self.batch_size,self.N_varl_params,self.N_varl_params),dtype=np.float64)
+
 
 			self.dlog_psi=np.zeros([self.N_batch,self.N_varl_params],dtype=np.float64)
+			self.ddlog_psi=np.zeros([self.N_batch,self.N_varl_params,self.N_varl_params],dtype=np.float64)
+
+
 			self.O_expt=np.zeros(self.N_varl_params,dtype=np.float64)
 
 			self.F_vector_log=None
@@ -287,6 +293,7 @@ class natural_gradient():
 				self.F_vector[:]=self.F_vector_log+self.F_vector_phase
 
 
+
 	def signal_to_noise_ratio(self,lmbda,V,Eloc_params_dict):
 
 		# re-set variables
@@ -472,6 +479,7 @@ class natural_gradient():
 	def _compute_grads(self,NN_params,batch,):
 
 		if self.mode=='MC':
+		
 			self.dlog_psi[:]=self.compute_grad_log_psi(NN_params,batch,)
 		
 		else: # ED
@@ -482,10 +490,16 @@ class natural_gradient():
 				#print(batch.shape, batch_idx.shape, self.dlog_psi_aux.shape)
 
 				self.dlog_psi_aux[batch_idx]=self.compute_grad_log_psi(NN_params,batch[batch_idx],)
+
+				self.ddlog_psi_aux[batch_idx,...]=self.hessian(NN_params,batch[batch_idx],)
+				
+				#self.dlog_psi_aux[batch_idx]=self.compute_grad_log_psi(NN_params,batch[batch_idx].reshape(-1,1,4,4),)
+
 			
 			self.dlog_psi[:]=self.dlog_psi_aux[:self.N_batch]
+			self.ddlog_psi[:]=self.ddlog_psi_aux[:self.N_batch,...]
 
-			#exit()
+
 
 
 	def compute(self,NN_params,batch,Eloc_params_dict,):

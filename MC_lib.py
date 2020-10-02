@@ -138,6 +138,8 @@ class MC_sampler():
 			
 			self.log_mod_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			self.phase_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
+
+			self.dpsi_kets_g=np.zeros((N_MC_points,),dtype=np.float64)
 			
 			self.psi=np.zeros((N_batch,),dtype=np.complex128)
 			

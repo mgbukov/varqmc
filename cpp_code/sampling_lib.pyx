@@ -44,10 +44,10 @@ from functools import partial
 ##############################################
 # linear square lattice dimension
 
-DEF _L=6
+DEF _L=4
 cdef extern from *:
     """
-    #define _L 6
+    #define _L 4
     """
     pass
 
@@ -103,6 +103,7 @@ cdef extern from "sample.h":
     void update_diag[I](const int, const char[], const int[], const double, const int, const I[], double[] ) nogil
     
     void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[],const double[]) nogil
+    void offdiag_sum(int,int[],double[],double[],np.uint32_t[],double[],const double[],const double[],const double[],const double[]) nogil
 
     void int_to_spinstate[T,J](const int,T ,J []) nogil
     void int_to_spinstate_conv[T,J](const int,T ,J []) nogil
@@ -251,6 +252,24 @@ def c_offdiag_sum(
         
 
 
+@cython.boundscheck(False)
+def c_offdiag_sum_H(
+                double[::1] Eloc_cos,
+                double[::1] Eloc_sin,
+                int[::1] n_per_term,
+                np.uint32_t[::1] ket_indx,
+                double[::1] MEs,
+                const double[::1] log_psi_bras,
+                const double[::1] phase_psi_bras,
+                const double[::1] log_psi_kets,
+                const double[::1] dlog_psi_kets
+                ):
+    
+    cdef int Ns = n_per_term.shape[0]
+    
+    with nogil:
+        offdiag_sum(Ns,&n_per_term[0],&Eloc_cos[0],&Eloc_sin[0],&ket_indx[0],&MEs[0],&log_psi_bras[0],&phase_psi_bras[0],&log_psi_kets[0],&dlog_psi_kets[0])
+        
 
 
 
@@ -419,7 +438,7 @@ cdef class Log_Net:
         self.NN_type=NN_type
         self.NN_dtype=NN_dtype
 
-        shape_last_layer = shapes['layer_5']
+        shape_last_layer = shapes['layer_2']
         
 
         if NN_type=='DNN':
@@ -466,8 +485,8 @@ cdef class Log_Net:
 
             # define CNN
             if self.NN_dtype=='real':
-                NN_arch = NN_log_arch('CNN_mixed_5', shapes, input_shape, reduce_shape, output_shape, scale)
-                #NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
+                #NN_arch = NN_log_arch('CNN_mixed_5', shapes, input_shape, reduce_shape, output_shape, scale)
+                NN_arch = NN_log_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
             elif self.NN_dtype=='cpx':   
                 NN_arch = NN_cpx_arch('CNN_as_dnn_2', shapes, input_shape, reduce_shape, output_shape, scale)
 
@@ -1046,7 +1065,7 @@ cdef class Phase_Net:
 
         #shapes=shapes[0]
         
-        shape_last_layer = shapes['layer_3']
+        shape_last_layer = shapes['layer_2']
         
 
         if NN_type=='DNN':
@@ -1090,7 +1109,8 @@ cdef class Phase_Net:
             scale=4.0 # semi-exact
 
             # define CNN
-            NN_arch = NN_phase_arch('CNN_mixed_3', shapes, input_shape, reduce_shape, output_shape, scale)   
+            NN_arch = NN_phase_arch('CNN_mixed_2', shapes, input_shape, reduce_shape, output_shape, scale)   
+            #NN_arch = NN_phase_arch('CNN_mixed_3', shapes, input_shape, reduce_shape, output_shape, scale)   
 
             
         else:

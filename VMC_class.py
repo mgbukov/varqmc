@@ -1104,6 +1104,10 @@ class VMC(object):
 
 			if self.logfile is not None:
 				self.logfile.flush()
+
+			self.get_Hessian(iteration,)
+			
+
 			self.get_training_data(iteration,)
 
 			E_str="total Eloc calcumation took {0:.4f} secs.\n".format(time.time()-ti)
@@ -1399,6 +1403,221 @@ class VMC(object):
 		return params_dict, batch
 	
 
+	def get_Hessian(self,iteration,):
+
+		##### get spin configs #####
+		ti=time.time()
+
+		if self.NN_dtype=='real':
+			self.MC_tool.exact(self.DNN_log, self.DNN_phase, self.logfile )
+		else:
+			self.MC_tool.exact(self.DNN, None, )
+
+		E_str="network evaluation took {0:.4f} secs.\n".format(time.time()-ti)
+		#self.logfile.write(MC_str)
+		if self.comm.Get_rank()==0:
+			print(E_str)
+			
+		
+
+		if self.logfile is not None:
+			self.logfile.flush()
+		print("LOCAL ENERGY:")
+
+		# get log_psi statistics
+		data_tuple=np.min(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.mean(self.MC_tool.log_mod_kets), np.std(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets)-np.min(self.MC_tool.log_mod_kets)
+		psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.".format(*data_tuple )
+		#self.logfile.write(psi_str)
+		print(psi_str)
+
+
+
+		##### total batch	
+		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)#[:self.N_batch]
+
+		
+		##### compute O
+		self.opt_log.NG._compute_grads(self.DNN_log.params,self.batch,)
+		self.opt_phase.NG._compute_grads(self.DNN_phase.params,self.batch,)
+
+		
+
+		# self.MC_tool.dlog_psi_g = np.zeros((self.N_MC_points,self.DNN_log.N_varl_params),  dtype=self.opt_log.NG.dlog_psi.dtype  )
+		# self.MC_tool.dphase_psi_g=np.zeros((self.N_MC_points,self.DNN_phase.N_varl_params),dtype=self.opt_phase.NG.dlog_psi.dtype)
+
+		
+
+		# sendcounts_log = np.zeros(self.comm.Get_size(),dtype=int)		
+		# self.comm.Allgather([np.prod(self.opt_log.NG.dlog_psi.shape),MPI.INT],[sendcounts_log, MPI.INT])
+		
+		# sendcounts_phase = np.zeros(self.comm.Get_size(),dtype=int)		
+		# self.comm.Allgather([np.prod(self.opt_phase.NG.dlog_psi.shape),MPI.INT],[sendcounts_phase, MPI.INT])
+		
+				
+		# n_batch = self.comm.bcast(self.MC_tool.N_batch, root=0)
+		# displacements_log=np.array([j*n_batch*self.DNN_log.N_varl_params for j in range(self.comm.Get_size())])
+		# displacements_phase=np.array([j*n_batch*self.DNN_phase.N_varl_params for j in range(self.comm.Get_size())])
+
+		
+		# self.comm.Allgatherv([self.opt_log.NG.dlog_psi,	  MPI.DOUBLE], [self.MC_tool.dlog_psi_g,   sendcounts_log,   displacements_log,  MPI.DOUBLE], )
+		# self.comm.Allgatherv([self.opt_phase.NG.dlog_psi, MPI.DOUBLE], [self.MC_tool.dphase_psi_g, sendcounts_phase, displacements_phase,  MPI.DOUBLE], )
+		
+		
+
+
+		##### compute local energies #####
+		N_params=self.DNN_log.N_varl_params+self.DNN_phase.N_varl_params
+		HO=np.zeros( (self.N_batch,N_params) , dtype=np.complex128)
+
+
+		ti=time.time()		
+		Eloc, HO[:,:self.DNN_log.N_varl_params], HO[:,self.DNN_log.N_varl_params:] = self.E_estimator.ED_compute_local_energy_hessian(self.DNN_log.params, self.DNN_phase.params, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.opt_log.NG.dlog_psi, self.opt_phase.NG.dlog_psi)
+		
+
+		Eloc_str="\nlocal energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
+		#self.logfile.write(Eloc_str)
+		if self.comm.Get_rank()==0:
+			print(Eloc_str)
+
+
+		#########
+		
+		dlog_kets  =np.zeros( (self.N_batch,N_params) , dtype=np.float64)
+		dphase_kets=np.zeros_like(dlog_kets)
+
+		ddlog_kets  =np.zeros( (self.N_batch,N_params,N_params) , dtype=np.float64)
+		ddphase_kets=np.zeros_like(ddlog_kets)
+
+		
+
+		dlog_kets[:,:self.DNN_log.N_varl_params]=self.opt_log.NG.dlog_psi
+		ddlog_kets[:,:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]=self.opt_log.NG.ddlog_psi
+		
+		dphase_kets[:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.dlog_psi
+		ddphase_kets[:,self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.ddlog_psi
+
+
+
+		##### compute measure
+		abs_psi_2=self.MC_tool.count*np.abs(self.MC_tool.psi)**2
+		Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
+		
+		# local overlap
+		overlap_loc=np.sum(self.MC_tool.count * self.MC_tool.psi.conj()*self.E_estimator.psi_GS_exact) 
+		# sum up MPI processes
+		overlap=np.zeros(1, dtype=np.complex128)
+		self.comm.Allreduce(overlap_loc, overlap,  op=MPI.SUM)
+		overlap2=np.abs(overlap[0])**2
+
+
+		olap_str="overlap^2 = {0:.4f} secs.\n".format(overlap2)
+		if self.comm.Get_rank()==0:
+			print(olap_str)
+			
+		
+	
+		
+		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(Eloc_params_dict)
+		Eloc_std_g=np.sqrt(Eloc_var_g)
+		E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
+		
+
+		##### compute Hessian
+		self.H_shape=(N_params,N_params)
+		Hessian=np.zeros(self.H_shape, dtype=np.float64)
+
+
+		def _compute_dOElocdiff(abs_psi_2, dO, E_diff, ):
+
+			# d_m O_n dEloc
+			H = np.zeros(self.H_shape,dtype=np.float64)
+			self.comm.Allreduce( np.einsum('s,smn,s->mn', abs_psi_2, dO, E_diff) , H[...], op=MPI.SUM)
+			return 2.0*(H+H.T)
+
+
+		Hessian+=_compute_dOElocdiff(abs_psi_2, ddlog_kets,   E_diff_real )
+		Hessian+=_compute_dOElocdiff(abs_psi_2, ddphase_kets, E_diff_imag )
+
+
+		def _compute_OHO(abs_psi_2, O, HO):
+			H = np.zeros(self.H_shape,dtype=np.float64)
+			self.comm.Allreduce( np.einsum('s,sn,sm->nm', abs_psi_2, O, HO) , H[...], op=MPI.SUM)
+			return 2.0*H
+
+
+		Hessian+=_compute_OHO(abs_psi_2, dlog_kets, HO.real)
+		Hessian+=_compute_OHO(abs_psi_2, dphase_kets, HO.imag)
+
+
+		def _compute_OOEdiff(abs_psi_2, OO, E_diff, symmetrize=False):
+			H = np.zeros(self.H_shape,dtype=np.float64)
+			self.comm.Allreduce( np.einsum('s,smn,s->mn', abs_psi_2, OO, E_diff) , H[...], op=MPI.SUM)
+			if symmetrize:
+				return 2.0*(H+H.T)
+			else:
+				return 2.0*H
+
+		# compute auxiliary variables
+		def _couple_OO(O1, O2):
+			return np.einsum('sm,sn->smn', O1, O2)
+
+
+		Olog_Olog    =_couple_OO(dlog_kets, dlog_kets)
+		Ophase_Ophase=_couple_OO(dphase_kets, dphase_kets)
+		Olog_Ophase  =_couple_OO(dlog_kets, dphase_kets)
+
+
+		Hessian+=_compute_OOEdiff(abs_psi_2, Olog_Olog, E_diff_real)
+		Hessian-=_compute_OOEdiff(abs_psi_2, Ophase_Ophase, E_diff_real)
+		Hessian+=_compute_OOEdiff(abs_psi_2, Olog_Ophase, E_diff_imag, symmetrize=True )
+
+
+		def _compute_OO(abs_psi_2, OO):
+			H = np.zeros(self.H_shape,dtype=np.float64)
+			self.comm.Allreduce( np.einsum('s,smn->mn', abs_psi_2, OO) , H[...], op=MPI.SUM)
+			return 2.0*(H+H.T)
+
+		Hessian+=_compute_OO(abs_psi_2, Olog_Ophase)*Eloc_mean_g.real
+
+
+		# compute last bit
+		def _compute_O_OEdiff(abs_psi_2, O1, O2, E_diff, ):
+			# d_m O_n dEloc
+			O_expt = np.zeros(self.H_shape[0],dtype=np.float64)
+			O_Ediff_Expt = np.zeros(self.H_shape[0],dtype=np.float64)
+
+			self.comm.Allreduce( np.einsum('s,sm->m', abs_psi_2, O1) , O_expt[...], op=MPI.SUM)
+			self.comm.Allreduce( np.einsum('s,sn,s->n', abs_psi_2, O2, E_diff) , O_Ediff_Expt[...], op=MPI.SUM)
+
+			H=np.outer(O_expt,O_Ediff_Expt)
+
+			return 4.0*(H+H.T)
+
+		Hessian-=_compute_O_OEdiff(abs_psi_2, dlog_kets, dlog_kets, E_diff_real, )
+		Hessian-=_compute_O_OEdiff(abs_psi_2, dlog_kets, dphase_kets, E_diff_imag, )
+
+
+
+		#######
+
+
+		check_herm=np.linalg.norm(Hessian - Hessian.T)
+		print('hermiticity check value: {0:.18f}'.format(check_herm))
+
+		E = np.linalg.eigvalsh(Hessian)
+
+		print(E)
+
+		exit()
+
+
+	
+
+
+
+	
+		
+
 
 	def get_training_data(self,iteration,):
 
@@ -1434,6 +1653,8 @@ class VMC(object):
 			if iteration==0:
 				self.MC_tool.thermal=self.thermal # set MC sampler to re-use initial state
 		
+
+
 		if self.logfile is not None:
 			self.logfile.flush()
 		print("LOCAL ENERGY:")
@@ -1514,9 +1735,7 @@ class VMC(object):
 			self.Eloc_params_dict_log=Eloc_params_dict.copy()
 			self.Eloc_params_dict_log['E_diff']=E_diff_real+1j*E_diff_imag
 		
-		##### total batch	
-		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)#[:self.N_batch]
-
+		
 		
 		#####
 		E_str=self.mode + ": E={0:0.14f}, E_var={1:0.14f}, E_std={2:0.14f}, E_imag={3:0.14f}.".format(self.Eloc_mean_g.real,self.Eloc_var_g, self.E_MC_std_g, self.Eloc_mean_g.imag, )
@@ -1526,6 +1745,10 @@ class VMC(object):
 		#self.logfile.write(E_str)
 
 
+		##### total batch	
+		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)#[:self.N_batch]
+
+	
 		#return self.batch, self.Eloc_params_dict
 		
 

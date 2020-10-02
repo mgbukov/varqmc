@@ -38,12 +38,12 @@ save=True #False #
 
 
 
-iterations=[200,500,1000,2000,2600,] #[50,100,150,200,250,300,350,500,600,] #[200,400,600,800,1000]
+iterations=[50,100,200,300,400,500,600]#[200,500,1000,2000,2600,] #[50,100,150,200,250,300,350,500,600,] #[200,400,600,800,1000]
 J2=0.5
 L=6
 opt='RK_RK' # 'sgd_sgd' # 'sgd_sgd' #  
 cost='SR_SR' # 'SR_SR' #
-mode='MC' # 'ED'  # 'exact' #
+mode='ED' # 'exact' #'MC' # 
 NN_type='CNNreal'
 
 
@@ -52,14 +52,14 @@ NN_type='CNNreal'
 
 #sys_time = '2020_06_13-09_50_43' # '2020_06_08-22_23_05' #  '2020_06_05-21_55_27', '2020_06_08-22_22_13', '2020_06_08-22_22_42'    
 
-for sys_time in ['2020_07_20-20_51_57','2020_07_20-20_52_26']: # ['2020_07_24-18_57_48']: #['2020_06_13-09_51_06', '2020_06_13-09_51_20', '2020_06_13-09_51_33', ]:
+for sys_time in ['2020_08_10-10_13_46']:#['2020_07_20-20_51_57','2020_07_20-20_52_26']: # ['2020_07_24-18_57_48']: #['2020_06_13-09_51_06', '2020_06_13-09_51_20', '2020_06_13-09_51_33', ]:
 
 	#### load debug data
 
 	data_name = sys_time + '--{0:s}-{1:s}-{2:s}-L_{3:d}-{4:s}/'.format(NN_type,opt,cost,L,mode)
 	#load_dir='data/' + data_name 
-	#load_dir='data/paper_data/exact/' + data_name 
-	load_dir='data/paper_data/semi_exact/' + data_name 
+	load_dir='data/paper_data/exact/' + data_name 
+	#load_dir='data/paper_data/semi_exact/' + data_name 
 	#load_dir='data/paper_data/MC_samples/' + data_name 
 	#load_dir='data/paper_data/local_sampling/' + data_name 
 
@@ -79,7 +79,7 @@ for sys_time in ['2020_07_20-20_51_57','2020_07_20-20_52_26']: # ['2020_07_24-18
 
 
 
-	#plot_sample(load_dir, plotfile_dir, params_str,L,J2, iterations, N_MC_points=1000, save=save)
+	plot_sample(load_dir, plotfile_dir, params_str,L,J2, iterations, N_MC_points=1000, save=save)
 	#exit()
 
 

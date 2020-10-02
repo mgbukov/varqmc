@@ -5,6 +5,7 @@ config.update("jax_enable_x64", True)
 from jax.experimental import optimizers
 #from optimizers import sgd, adam
 from jax import jit, grad, vmap, random, ops, partial, disable_jit
+from jax import jacfwd, jacrev
 
 import jax.numpy as jnp
 import numpy as np
@@ -97,6 +98,7 @@ class optimizer(object):
 	
 	def define_grad_func(self, NN_evaluate=None, NN_evaluate_log=None, NN_evaluate_phase=None, start_iter=0, TDVP_opt=None, reestimate_local_energy=None ):
 
+
 		if self.cost=='energy':
 
 			if self.mode=='MC':
@@ -127,7 +129,7 @@ class optimizer(object):
 						energy = 2.0*jnp.sum(params_dict['abs_psi_2']*(prediction*params_dict['E_diff']) )
 						return energy			
 
-				else:
+				else: # cpx
 
 					@jit
 					def loss(NN_params,batch,params_dict):
@@ -164,12 +166,31 @@ class optimizer(object):
 
 					dlog_s   = vmap(partial(jit(grad(loss_log)),   NN_params))(batch, )
 					#dlog_s   = vmap(jit(grad(loss_log)), in_axes=(None, 0))(NN_params, batch)
-					
+
 					dlog = []
 					for dlog_W in self.NN_Tree.flatten(dlog_s):
 						dlog.append( dlog_W.reshape(batch.shape[0],-1) )
 
 					return jnp.concatenate(dlog, axis=1)
+
+
+				@jit
+				def hessian(NN_params,batch,):
+
+					Hess = vmap( jacfwd( grad(loss_log) ), in_axes=(None, 0)) (NN_params, batch)
+
+					ddlog=[]
+					for m, dlog_W in enumerate(self.NN_Tree.flatten(Hess)): # loop over m Hessian axis
+						dlog=[]
+						for n, dlog_W2 in enumerate(self.NN_Tree.flatten(dlog_W)): # loop over n Hessian axis
+							dlog.append( dlog_W2.reshape(-1,self.NN_Tree.sizes[m], self.NN_Tree.sizes[n]) )
+						ddlog.append(jnp.concatenate(dlog, axis=2))
+
+					return jnp.concatenate(ddlog, axis=1)
+
+
+
+
 
 			else:
 
@@ -215,7 +236,7 @@ class optimizer(object):
 
 					return jnp.concatenate(dlog, axis=1)
 
-			self.NG=natural_gradient(self.comm, grad_log, self.NN_dtype, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff )
+			self.NG=natural_gradient(self.comm, grad_log, self.NN_dtype, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff, hessian=hessian )
 			self.NG.init_global_variables(self.N_MC_points,self.N_batch,self.N_varl_params,self.n_iter,self.N_minibatches,)
 			
 			self.compute_grad=self.NG.compute
