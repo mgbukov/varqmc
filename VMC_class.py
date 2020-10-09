@@ -1435,12 +1435,14 @@ class VMC(object):
 
 		##### total batch	
 		self.batch=self.MC_tool.spinstates_ket.reshape(self.input_shape)#[:self.N_batch]
+		self.MC_tool.spinstates_ket=None
 
 		
 		##### compute O
 		self.opt_log.NG._compute_grads(self.DNN_log.params,self.batch,)
 		self.opt_phase.NG._compute_grads(self.DNN_phase.params,self.batch,)
 
+		self.batch=None
 		
 
 		# self.MC_tool.dlog_psi_g = np.zeros((self.N_MC_points,self.DNN_log.N_varl_params),  dtype=self.opt_log.NG.dlog_psi.dtype  )
@@ -1534,11 +1536,14 @@ class VMC(object):
 		overlap=np.zeros(1, dtype=np.complex128)
 		self.comm.Allreduce(overlap_loc, overlap,  op=MPI.SUM)
 		overlap2=np.abs(overlap[0])**2
+		overlap_loc=None
 
 
 		olap_str="overlap^2 = {0:.4f} secs.\n".format(overlap2)
 		if self.comm.Get_rank()==0:
 			print(olap_str)
+		if self.logfile is not None:
+			self.logfile.flush()
 			
 		
 	
@@ -1547,6 +1552,11 @@ class VMC(object):
 		Eloc_std_g=np.sqrt(Eloc_var_g)
 		E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
 		
+
+		print('start hessian computation\n')
+		if self.logfile is not None:
+			self.logfile.flush()
+
 
 		##### compute Hessian
 		self.H_shape=(N_params,N_params)
@@ -1563,6 +1573,8 @@ class VMC(object):
 
 		Hessian+=_compute_dOElocdiff(abs_psi_2, ddlog_kets,   E_diff_real )
 		Hessian+=_compute_dOElocdiff(abs_psi_2, ddphase_kets, E_diff_imag )
+		ddlog_kets=None
+		ddphase_kets=None
 
 
 		def _compute_OHO(abs_psi_2, O, HO):
@@ -1573,6 +1585,8 @@ class VMC(object):
 
 		Hessian+=_compute_OHO(abs_psi_2, dlog_kets, HO.real)
 		Hessian+=_compute_OHO(abs_psi_2, dphase_kets, HO.imag)
+		HO=None
+
 
 
 		def _compute_OOEdiff(abs_psi_2, OO, E_diff, symmetrize=False):
