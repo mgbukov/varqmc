@@ -1570,6 +1570,9 @@ class VMC(object):
 		self.opt_log.NG=None
 
 		
+		print('computed ddpsi\n')
+		if self.logfile is not None:
+			self.logfile.flush()
 
 
 		def _compute_OHO(abs_psi_2, O, HO):
@@ -1582,7 +1585,9 @@ class VMC(object):
 		Hessian+=_compute_OHO(abs_psi_2, dphase_kets, HO.imag)
 		HO=None
 
-
+		print('computed HO\n')
+		if self.logfile is not None:
+			self.logfile.flush()
 
 		def _compute_OOEdiff(abs_psi_2, OO, E_diff, symmetrize=False):
 			H = np.zeros(self.H_shape,dtype=np.float64)
@@ -1601,10 +1606,19 @@ class VMC(object):
 		Ophase_Ophase=_couple_OO(dphase_kets, dphase_kets)
 		Olog_Ophase  =_couple_OO(dlog_kets, dphase_kets)
 
+		print('computed OO\n')
+		if self.logfile is not None:
+			self.logfile.flush()
+
 
 		Hessian+=_compute_OOEdiff(abs_psi_2, Olog_Olog, E_diff_real)
 		Hessian-=_compute_OOEdiff(abs_psi_2, Ophase_Ophase, E_diff_real)
 		Hessian+=_compute_OOEdiff(abs_psi_2, Olog_Ophase, E_diff_imag, symmetrize=True )
+
+
+		print('computed _compute_OOEdiff\n')
+		if self.logfile is not None:
+			self.logfile.flush()
 
 
 		def _compute_OO(abs_psi_2, OO):
