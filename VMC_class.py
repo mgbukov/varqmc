@@ -1485,49 +1485,6 @@ class VMC(object):
 			print(Eloc_str)
 
 
-		#########
-		
-		dlog_kets  =np.zeros( (self.N_batch,N_params) , dtype=np.float64)
-		dlog_kets[:,:self.DNN_log.N_varl_params]=self.opt_log.NG.dlog_psi
-		self.opt_log.NG.dlog_psi=None
-
-		print("finished preallocation of dlog_kets\n")
-		if self.logfile is not None:
-			self.logfile.flush()
-
-		dphase_kets=np.zeros_like(dlog_kets)
-		dphase_kets[:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.dlog_psi
-		self.opt_phase.NG.dlog_psi=None
-
-		print("finished preallocation of dphase_kets\n")
-		if self.logfile is not None:
-			self.logfile.flush()
-
-		ddlog_kets  =np.zeros( (self.N_batch,N_params,N_params) , dtype=np.float64)
-		ddlog_kets[:,:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]=self.opt_log.NG.ddlog_psi
-		self.opt_log.NG.ddlog_psi=None
-
-		print("finished preallocation of ddlog_kets\n")
-		if self.logfile is not None:
-			self.logfile.flush()
-
-		ddphase_kets=np.zeros_like(ddlog_kets)
-		ddphase_kets[:,self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.ddlog_psi
-		self.opt_phase.NG.ddlog_psi=None
-
-		print("finished preallocation of ddphase_kets\n")
-		if self.logfile is not None:
-			self.logfile.flush()
-
-
-
-		print("finished preallocation of all variables\n")
-		if self.logfile is not None:
-			self.logfile.flush()
-		
-
-
-
 		##### compute measure
 		abs_psi_2=self.MC_tool.count*np.abs(self.MC_tool.psi)**2
 		Eloc_params_dict=dict(abs_psi_2=abs_psi_2,)
@@ -1553,14 +1510,70 @@ class VMC(object):
 		Eloc_mean_g, Eloc_var_g, E_diff_real, E_diff_imag = self.E_estimator.process_local_energies(Eloc_params_dict)
 		Eloc_std_g=np.sqrt(Eloc_var_g)
 		E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
+
+
+		self.E_estimator=None
+		self.E_estimator_log=None
+		self.MC_tool=None
+		self.MC_tool_log=None
+
+
+		#########
 		
+		dlog_kets  =np.zeros( (self.N_batch,N_params) , dtype=np.float64)
+		dlog_kets[:,:self.DNN_log.N_varl_params]=self.opt_log.NG.dlog_psi
+		self.opt_log.NG.dlog_psi=None
+
+		print("finished preallocation of dlog_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+
+		dphase_kets=np.zeros( (self.N_batch,N_params) , dtype=np.float64)
+		dphase_kets[:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.dlog_psi
+		self.opt_phase.NG.dlog_psi=None
+
+		print("finished preallocation of dphase_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+
+		ddlog_kets  =np.zeros( (self.N_batch,N_params,N_params) , dtype=np.float64)
+		ddlog_kets[:,:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]=self.opt_log.NG.ddlog_psi
+		self.opt_log.NG.ddlog_psi=None
+
+		print("finished preallocation of ddlog_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+
+		ddphase_kets=np.zeros( (self.N_batch,N_params,N_params) , dtype=np.float64)
+		ddphase_kets[:,self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.ddlog_psi
+		self.opt_phase.NG.ddlog_psi=None
+
+
+		self.opt_phase.NG=None
+		self.opt_log.NG=None
+
+
+		print("finished preallocation of ddphase_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+
+
+
+		print("finished preallocation of all variables\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+		
+
+
+		
+
+
+		##### compute Hessian
 
 		print('start hessian computation\n')
 		if self.logfile is not None:
 			self.logfile.flush()
 
-
-		##### compute Hessian
 		self.H_shape=(N_params,N_params)
 		Hessian=np.zeros(self.H_shape, dtype=np.float64)
 
@@ -1660,6 +1673,7 @@ class VMC(object):
 			# with open(file_hessian+'.pkl', 'rb') as handle:
 			# 	E2 = pickle.load(handle)
 
+		print(E[-1])
 
 		exit()
 
