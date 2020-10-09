@@ -1589,44 +1589,44 @@ class VMC(object):
 		if self.logfile is not None:
 			self.logfile.flush()
 
-		def _compute_OOEdiff(abs_psi_2, OO, E_diff, symmetrize=False):
+		def _compute_OOEdiff(abs_psi_2, O1, O2, E_diff, symmetrize=False):
 			H = np.zeros(self.H_shape,dtype=np.float64)
-			self.comm.Allreduce( np.einsum('s,smn,s->mn', abs_psi_2, OO, E_diff) , H[...], op=MPI.SUM)
+			self.comm.Allreduce( np.einsum('s,sm,sn,s->mn', abs_psi_2, O1, O2, E_diff) , H[...], op=MPI.SUM)
 			if symmetrize:
 				return 2.0*(H+H.T)
 			else:
 				return 2.0*H
 
-		# compute auxiliary variables
-		def _couple_OO(O1, O2):
-			return np.einsum('sm,sn->smn', O1, O2)
+		# # compute auxiliary variables
+		# def _couple_OO(O1, O2):
+		# 	return np.einsum('sm,sn->smn', O1, O2)
 
 
-		Olog_Olog    =_couple_OO(dlog_kets, dlog_kets)
-		Ophase_Ophase=_couple_OO(dphase_kets, dphase_kets)
-		Olog_Ophase  =_couple_OO(dlog_kets, dphase_kets)
+		# Olog_Olog    =_couple_OO(dlog_kets, dlog_kets)
+		# Ophase_Ophase=_couple_OO(dphase_kets, dphase_kets)
+		# Olog_Ophase  =_couple_OO(dlog_kets, dphase_kets)
 
-		print('computed OO\n')
+		# print('computed OO\n')
+		# if self.logfile is not None:
+		# 	self.logfile.flush()
+
+
+		Hessian+=_compute_OOEdiff(abs_psi_2, dlog_kets, dlog_kets, E_diff_real)
+		Hessian-=_compute_OOEdiff(abs_psi_2, dphase_kets, dphase_kets, E_diff_real)
+		Hessian+=_compute_OOEdiff(abs_psi_2, dlog_kets, dphase_kets, E_diff_imag, symmetrize=True )
+
+
+		print('computed ddpsi\n')
 		if self.logfile is not None:
 			self.logfile.flush()
 
 
-		Hessian+=_compute_OOEdiff(abs_psi_2, Olog_Olog, E_diff_real)
-		Hessian-=_compute_OOEdiff(abs_psi_2, Ophase_Ophase, E_diff_real)
-		Hessian+=_compute_OOEdiff(abs_psi_2, Olog_Ophase, E_diff_imag, symmetrize=True )
-
-
-		print('computed _compute_OOEdiff\n')
-		if self.logfile is not None:
-			self.logfile.flush()
-
-
-		def _compute_OO(abs_psi_2, OO):
+		def _compute_OO(abs_psi_2, O1, O2,):
 			H = np.zeros(self.H_shape,dtype=np.float64)
-			self.comm.Allreduce( np.einsum('s,smn->mn', abs_psi_2, OO) , H[...], op=MPI.SUM)
+			self.comm.Allreduce( np.einsum('s,sm,sn->mn', abs_psi_2, O1, O2) , H[...], op=MPI.SUM)
 			return 2.0*(H+H.T)
 
-		Hessian+=_compute_OO(abs_psi_2, Olog_Ophase)*Eloc_mean_g.real
+		Hessian+=_compute_OO(abs_psi_2, dlog_kets, dphase_kets)*Eloc_mean_g.real
 
 
 		# compute last bit
