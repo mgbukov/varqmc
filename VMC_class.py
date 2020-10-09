@@ -1420,15 +1420,16 @@ class VMC(object):
 			
 		
 
-		if self.logfile is not None:
-			self.logfile.flush()
-		print("LOCAL ENERGY:")
-
 		# get log_psi statistics
 		data_tuple=np.min(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.mean(self.MC_tool.log_mod_kets), np.std(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets)-np.min(self.MC_tool.log_mod_kets)
 		psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.".format(*data_tuple )
 		#self.logfile.write(psi_str)
 		print(psi_str)
+
+
+		if self.logfile is not None:
+			self.logfile.flush()
+		print("LOCAL ENERGY:")
 
 
 
@@ -1483,18 +1484,43 @@ class VMC(object):
 		#########
 		
 		dlog_kets  =np.zeros( (self.N_batch,N_params) , dtype=np.float64)
+		dlog_kets[:,:self.DNN_log.N_varl_params]=self.opt_log.NG.dlog_psi
+		self.opt_log.NG.dlog_psi=None
+
+		print("finished preallocation of dlog_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+
 		dphase_kets=np.zeros_like(dlog_kets)
+		dphase_kets[:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.dlog_psi
+		self.opt_phase.NG.dlog_psi=None
+
+		print("finished preallocation of dphase_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
 
 		ddlog_kets  =np.zeros( (self.N_batch,N_params,N_params) , dtype=np.float64)
-		ddphase_kets=np.zeros_like(ddlog_kets)
-
-		
-
-		dlog_kets[:,:self.DNN_log.N_varl_params]=self.opt_log.NG.dlog_psi
 		ddlog_kets[:,:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]=self.opt_log.NG.ddlog_psi
-		
-		dphase_kets[:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.dlog_psi
+		self.opt_log.NG.ddlog_psi=None
+
+		print("finished preallocation of ddlog_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+
+		ddphase_kets=np.zeros_like(ddlog_kets)
 		ddphase_kets[:,self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.ddlog_psi
+		self.opt_phase.NG.ddlog_psi=None
+
+		print("finished preallocation of ddphase_kets\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+
+
+
+		print("finished preallocation of all variables\n")
+		if self.logfile is not None:
+			self.logfile.flush()
+		
 
 
 

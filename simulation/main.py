@@ -20,7 +20,7 @@ import yaml
 # sacct -j "" --format="JobID,MaxRSS,AveRSS,MaxRSSNode"
 
 # request interactive node
-## salloc -N 32 -t 120 -C haswell -q interactive
+# salloc -N 32 -t 120 -C haswell -q interactive
 
 # salloc -N 1 -t 60 -C haswell -q interactive
 
