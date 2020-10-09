@@ -1536,36 +1536,11 @@ class VMC(object):
 		if self.logfile is not None:
 			self.logfile.flush()
 
-		ddlog_kets  =np.zeros( (self.N_batch,N_params,N_params) , dtype=np.float64)
-		ddlog_kets[:,:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]=self.opt_log.NG.ddlog_psi
-		self.opt_log.NG.ddlog_psi=None
-
-		print("finished preallocation of ddlog_kets\n")
-		if self.logfile is not None:
-			self.logfile.flush()
-
-		ddphase_kets=np.zeros( (self.N_batch,N_params,N_params) , dtype=np.float64)
-		ddphase_kets[:,self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.ddlog_psi
-		self.opt_phase.NG.ddlog_psi=None
-
-
-		self.opt_phase.NG=None
-		self.opt_log.NG=None
-
-
-		print("finished preallocation of ddphase_kets\n")
-		if self.logfile is not None:
-			self.logfile.flush()
-
-
 
 		print("finished preallocation of all variables\n")
 		if self.logfile is not None:
 			self.logfile.flush()
-		
 
-
-		
 
 
 		##### compute Hessian
@@ -1578,18 +1553,23 @@ class VMC(object):
 		Hessian=np.zeros(self.H_shape, dtype=np.float64)
 
 
-		def _compute_dOElocdiff(abs_psi_2, dO, E_diff, ):
+		def _compute_dOElocdiff(abs_psi_2, dO, E_diff, shape,):
 
 			# d_m O_n dEloc
-			H = np.zeros(self.H_shape,dtype=np.float64)
+			H = np.zeros((shape,shape),dtype=np.float64)
 			self.comm.Allreduce( np.einsum('s,smn,s->mn', abs_psi_2, dO, E_diff) , H[...], op=MPI.SUM)
 			return 2.0*(H+H.T)
 
 
-		Hessian+=_compute_dOElocdiff(abs_psi_2, ddlog_kets,   E_diff_real )
-		Hessian+=_compute_dOElocdiff(abs_psi_2, ddphase_kets, E_diff_imag )
-		ddlog_kets=None
-		ddphase_kets=None
+		Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=_compute_dOElocdiff(abs_psi_2, self.opt_log.NG.ddlog_psi,   E_diff_real, self.DNN_log.N_varl_params   )
+		Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=_compute_dOElocdiff(abs_psi_2, self.opt_phase.NG.ddlog_psi, E_diff_imag, self.DNN_phase.N_varl_params )
+
+
+
+		self.opt_phase.NG=None
+		self.opt_log.NG=None
+
+		
 
 
 		def _compute_OHO(abs_psi_2, O, HO):
