@@ -1443,6 +1443,8 @@ class VMC(object):
 		self.opt_phase.NG._compute_grads(self.DNN_phase.params,self.batch,)
 
 		self.batch=None
+		self.opt_log.NG.dlog_psi_aux=None
+		self.opt_log.NG.ddlog_psi_aux=None
 		
 
 		# self.MC_tool.dlog_psi_g = np.zeros((self.N_MC_points,self.DNN_log.N_varl_params),  dtype=self.opt_log.NG.dlog_psi.dtype  )
