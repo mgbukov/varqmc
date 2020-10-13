@@ -178,7 +178,7 @@ class VMC(object):
 				self.N_minibatches=4
 			elif self.L==6:
 				self.N_MC_points=15804956
-				self.N_minibatches=2000
+				self.N_minibatches=4000
 			else:
 				raise ValueError('cannot do a full-basis simulation for L>6.')
 
@@ -1429,7 +1429,7 @@ class VMC(object):
 
 		if self.logfile is not None:
 			self.logfile.flush()
-		print("LOCAL ENERGY:")
+		
 
 
 
@@ -1442,9 +1442,9 @@ class VMC(object):
 		self.opt_log.NG._compute_grads(self.DNN_log.params,self.batch,)
 		self.opt_phase.NG._compute_grads(self.DNN_phase.params,self.batch,)
 
-		self.batch=None
-		self.opt_log.NG.dlog_psi_aux=None
-		self.opt_log.NG.ddlog_psi_aux=None
+		#self.batch=None
+		# self.opt_log.NG.dlog_psi_aux=None
+		# self.opt_log.NG.ddlog_psi_aux=None
 		
 
 		# self.MC_tool.dlog_psi_g = np.zeros((self.N_MC_points,self.DNN_log.N_varl_params),  dtype=self.opt_log.NG.dlog_psi.dtype  )
@@ -1478,6 +1478,7 @@ class VMC(object):
 		ti=time.time()		
 		Eloc, HO[:,:self.DNN_log.N_varl_params], HO[:,self.DNN_log.N_varl_params:] = self.E_estimator.ED_compute_local_energy_hessian(self.DNN_log.params, self.DNN_phase.params, self.MC_tool.ints_ket,self.MC_tool.log_mod_kets,self.MC_tool.phase_kets,self.MC_tool.log_psi_shift,self.opt_log.NG.dlog_psi, self.opt_phase.NG.dlog_psi)
 		
+		print("LOCAL ENERGY:")
 
 		Eloc_str="\nlocal energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
 		#self.logfile.write(Eloc_str)
@@ -1553,19 +1554,23 @@ class VMC(object):
 		Hessian=np.zeros(self.H_shape, dtype=np.float64)
 
 
-		def _compute_dOElocdiff(abs_psi_2, dO, E_diff, shape,):
+		# def _compute_dOElocdiff(abs_psi_2, dO, E_diff, shape,):
 
-			# d_m O_n dEloc
-			H = np.zeros((shape,shape),dtype=np.float64)
-			self.comm.Allreduce( np.einsum('s,smn,s->mn', abs_psi_2, dO, E_diff) , H[...], op=MPI.SUM)
-			return 2.0*(H+H.T)
-
-
-		Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=_compute_dOElocdiff(abs_psi_2, self.opt_log.NG.ddlog_psi,   E_diff_real, self.DNN_log.N_varl_params   )
-		Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=_compute_dOElocdiff(abs_psi_2, self.opt_phase.NG.ddlog_psi, E_diff_imag, self.DNN_phase.N_varl_params )
+		# 	# d_m O_n dEloc
+		# 	H = np.zeros((shape,shape),dtype=np.float64)
+		# 	self.comm.Allreduce( np.einsum('s,smn,s->mn', abs_psi_2, dO, E_diff) , H[...], op=MPI.SUM)
+		# 	return 2.0*(H+H.T)
 
 
+		# Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=_compute_dOElocdiff(abs_psi_2, self.opt_log.NG.ddlog_psi,   E_diff_real, self.DNN_log.N_varl_params   )
+		# Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=_compute_dOElocdiff(abs_psi_2, self.opt_phase.NG.ddlog_psi, E_diff_imag, self.DNN_phase.N_varl_params )
 
+
+		Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real)
+		Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag)
+
+
+		self.batch=None
 		self.opt_phase.NG=None
 		self.opt_log.NG=None
 

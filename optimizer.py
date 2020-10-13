@@ -189,6 +189,41 @@ class optimizer(object):
 					return jnp.concatenate(ddlog, axis=1)
 
 
+				#@jit
+				def loss_hessian(NN_params,batch,weights):
+
+
+					#batch=batch.reshape(27*8,1,4,4)
+
+					prediction = NN_evaluate(NN_params,batch,)	
+
+					return jnp.sum(weights*prediction)
+
+				def hessian2(NN_params,batch,weights,):
+
+					#Hess = vmap( jacfwd( grad(loss_hessian) ), in_axes=(None, 0)) (NN_params, batch, weights)
+
+					d=grad(loss_hessian)(NN_params, batch, weights)
+
+					#print(d)
+
+					#exit()
+
+					Hess = jacfwd( grad(loss_hessian) ) (NN_params, batch, weights)
+
+					#print(Hess)
+					#exit()
+
+
+					ddlog=[]
+					for m, dlog_W in enumerate(self.NN_Tree.flatten(Hess)): # loop over m Hessian axis
+						dlog=[]
+						for n, dlog_W2 in enumerate(self.NN_Tree.flatten(dlog_W)): # loop over n Hessian axis
+							dlog.append( dlog_W2.reshape(-1,self.NN_Tree.sizes[m], self.NN_Tree.sizes[n]) )
+						ddlog.append(jnp.concatenate(dlog, axis=2))
+
+					return jnp.concatenate(ddlog, axis=1)
+
 
 
 
@@ -236,7 +271,7 @@ class optimizer(object):
 
 					return jnp.concatenate(dlog, axis=1)
 
-			self.NG=natural_gradient(self.comm, grad_log, self.NN_dtype, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff, hessian=hessian )
+			self.NG=natural_gradient(self.comm, grad_log, self.NN_dtype, self.NN_Tree, TDVP_opt, mode=self.mode, RK=self.RK, adaptive_SR_cutoff=self.adaptive_SR_cutoff, hessian=hessian, hessian2=hessian2 )
 			self.NG.init_global_variables(self.N_MC_points,self.N_batch,self.N_varl_params,self.n_iter,self.N_minibatches,)
 			
 			self.compute_grad=self.NG.compute

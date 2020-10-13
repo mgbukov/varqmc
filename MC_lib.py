@@ -288,7 +288,7 @@ class MC_sampler():
 					array_idx=np.arange(j*self.minibatch_size//self.N_symm, (j+1)*self.minibatch_size//self.N_symm)
 					
 					batch=self.spinstates_ket[batch_idx]
-					
+
 					self.phase_kets_aux[array_idx] = DNN_phase.evaluate(DNN_phase.params,batch.reshape(DNN_phase.input_shape),  )
 			
 				self.phase_kets[:]=self.phase_kets_aux[:self.N_batch]

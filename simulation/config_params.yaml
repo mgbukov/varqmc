@@ -8,8 +8,8 @@ N_iterations: 10000
 NN_dtype: real #
 NN_type: CNN # DNN # 
 
-NN_shape_str: (6x6-2--1x1-1,6x6-2--1x1-1)
-#NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8) # (857,884)
+#NN_shape_str: (6x6-2--1x1-1,6x6-2--1x1-1)
+NN_shape_str: (6x6-8--3x3-6--2x2-4--1x1-4--1x1-2,6x6-16--1x1-12--1x1-8) # (857,884)
 #NN_shape_str: (4x4-8--3x3-6--2x2-4--1x1-4--1x1-2,4x4-16--1x1-12--1x1-8)  
 
 N_MC_chains: 1
