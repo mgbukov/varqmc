@@ -499,7 +499,7 @@ class natural_gradient():
 			#self.ddlog_psi[:]=self.ddlog_psi_aux[:self.N_batch]
 
 
-	def _compute_hessian(self,NN_params,batch,weights):
+	def _compute_hessian(self,NN_params,batch,weights, logfile):
 
 		if self.mode=='MC':
 		
@@ -519,11 +519,17 @@ class natural_gradient():
 
 			for j in range(self.N_minibatches):
 
+				ti=time.time()
 				
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
 			
 				ddlog_psi[...]+=self.hessian2(NN_params,batch[batch_idx].reshape(new_batch_shape),weights[batch_idx]).squeeze()
 
+				tf=time.time()
+
+				print('finished iteration {0:d}/{1:d} in {2:0.6f} secs.'.format(j,self.N_minibatches, tf-ti))
+				if logfile is not None:
+					logfile.flush()
 
 			H = np.zeros(ddlog_psi.shape,dtype=np.float64)
 			self.comm.Allreduce( ddlog_psi , H[...], op=MPI.SUM )

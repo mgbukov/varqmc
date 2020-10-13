@@ -1445,6 +1445,10 @@ class VMC(object):
 		#self.batch=None
 		# self.opt_log.NG.dlog_psi_aux=None
 		# self.opt_log.NG.ddlog_psi_aux=None
+
+		print("finished computing gradients\n")
+		if self.logfile is not None:
+			self.logfile.flush()
 		
 
 		# self.MC_tool.dlog_psi_g = np.zeros((self.N_MC_points,self.DNN_log.N_varl_params),  dtype=self.opt_log.NG.dlog_psi.dtype  )
@@ -1566,13 +1570,13 @@ class VMC(object):
 		# Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=_compute_dOElocdiff(abs_psi_2, self.opt_phase.NG.ddlog_psi, E_diff_imag, self.DNN_phase.N_varl_params )
 
 
-		Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real)
+		Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real, self.logfile)
 		
 		print('added log-net hessian contrib\n')
 		if self.logfile is not None:
 			self.logfile.flush()
 
-		Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag)
+		Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag, self.logfile)
 
 		print('added phase-net hessian contrib\n')
 		if self.logfile is not None:
