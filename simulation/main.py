@@ -26,6 +26,10 @@ import yaml
 
 # qrsh -now n -l h_rt=12:00:00 -pe mpi_28_tasks_per_node 280
 
+"""
+[36sec, 2000], [14sec, 4000], [5sec, 8000], [5sec, 10000]
+"""
+
 
 if len(sys.argv)>1:
 

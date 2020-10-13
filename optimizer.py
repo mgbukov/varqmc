@@ -189,31 +189,15 @@ class optimizer(object):
 					return jnp.concatenate(ddlog, axis=1)
 
 
-				#@jit
+				@jit
 				def loss_hessian(NN_params,batch,weights):
-
-
-					#batch=batch.reshape(27*8,1,4,4)
-
 					prediction = NN_evaluate(NN_params,batch,)	
-
 					return jnp.sum(weights*prediction)
 
+				@jit
 				def hessian2(NN_params,batch,weights,):
 
-					#Hess = vmap( jacfwd( grad(loss_hessian) ), in_axes=(None, 0)) (NN_params, batch, weights)
-
-					d=grad(loss_hessian)(NN_params, batch, weights)
-
-					#print(d)
-
-					#exit()
-
 					Hess = jacfwd( grad(loss_hessian) ) (NN_params, batch, weights)
-
-					#print(Hess)
-					#exit()
-
 
 					ddlog=[]
 					for m, dlog_W in enumerate(self.NN_Tree.flatten(Hess)): # loop over m Hessian axis
