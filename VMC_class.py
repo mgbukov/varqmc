@@ -178,7 +178,7 @@ class VMC(object):
 				self.N_minibatches=4
 			elif self.L==6:
 				self.N_MC_points=15804956
-				self.N_minibatches=4000
+				self.N_minibatches=2000
 			else:
 				raise ValueError('cannot do a full-basis simulation for L>6.')
 
@@ -1567,8 +1567,16 @@ class VMC(object):
 
 
 		Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real)
+		
+		print('added log-net hessian contrib\n')
+		if self.logfile is not None:
+			self.logfile.flush()
+
 		Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag)
 
+		print('added phase-net hessian contrib\n')
+		if self.logfile is not None:
+			self.logfile.flush()
 
 		self.batch=None
 		self.opt_phase.NG=None
