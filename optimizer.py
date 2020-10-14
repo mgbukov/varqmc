@@ -175,7 +175,7 @@ class optimizer(object):
 
 
 				@jit
-				def hessian(NN_params,batch,):
+				def hessian(NN_params,batch,weights):
 
 					Hess = vmap( jacfwd( grad(loss_log) ), in_axes=(None, 0)) (NN_params, batch)
 
@@ -183,21 +183,37 @@ class optimizer(object):
 					for m, dlog_W in enumerate(self.NN_Tree.flatten(Hess)): # loop over m Hessian axis
 						dlog=[]
 						for n, dlog_W2 in enumerate(self.NN_Tree.flatten(dlog_W)): # loop over n Hessian axis
+					
 							dlog.append( dlog_W2.reshape(-1,self.NN_Tree.sizes[m], self.NN_Tree.sizes[n]) )
+							#dlog.append( jnp.einsum('s,smn->mn',weights,dlog_W2.reshape(-1,self.NN_Tree.sizes[m], self.NN_Tree.sizes[n]) ) )
+
 						ddlog.append(jnp.concatenate(dlog, axis=2))
+						#ddlog.append( jnp.concatenate(dlog, axis=1) )
 
-					return jnp.concatenate(ddlog, axis=1)
+					return jnp.einsum('s,smn->mn',weights, jnp.concatenate(ddlog, axis=1) )
+					#return jnp.concatenate(ddlog, axis=0)
 
+					#return jnp.concatenate(ddlog, axis=1)
+					
 
 				@jit
 				def loss_hessian(NN_params,batch,weights):
 					prediction = NN_evaluate(NN_params,batch,)	
-					return jnp.sum(weights*prediction)
+					#return jnp.sum(weights*prediction)
+					return jnp.dot(weights,prediction)
 
 				@jit
 				def hessian2(NN_params,batch,weights,):
 
-					Hess = jacfwd( grad(loss_hessian) ) (NN_params, batch, weights)
+					#ti=time.time()
+
+					Hess = jacfwd( grad(loss_hessian) ) (NN_params, batch, weights) # (12.31, 5.51, 27)
+					#Hess = jacfwd( jacrev(loss_hessian) ) (NN_params, batch, weights) # (13.92, 5.67, 27)
+					#Hess = jacrev( jacfwd(loss_hessian) ) (NN_params, batch, weights) # TOO SLOW
+
+					#tf=time.time()
+					#print('hessian took {0:0.3f}'.format(tf-ti) )
+
 
 					ddlog=[]
 					for m, dlog_W in enumerate(self.NN_Tree.flatten(Hess)): # loop over m Hessian axis

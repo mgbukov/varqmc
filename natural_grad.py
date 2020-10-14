@@ -519,15 +519,23 @@ class natural_gradient():
 
 			for j in range(self.N_minibatches):
 
-				ti=time.time()
-				
 				batch_idx=np.arange(j*self.minibatch_size, (j+1)*self.minibatch_size)
 			
+				ti=time.time()	
 				ddlog_psi[...]+=self.hessian2(NN_params,batch[batch_idx].reshape(new_batch_shape),weights[batch_idx]).squeeze()
-
+				#self.hessian2(NN_params,batch[batch_idx].reshape(new_batch_shape),weights[batch_idx]).squeeze().block_until_ready()
 				tf=time.time()
 
-				print('finished iteration {0:d}/{1:d} in {2:0.6f} secs.'.format(j,self.N_minibatches, tf-ti))
+				# ti2=time.time()	
+				# #ddlog_psi[...]+=self.hessian(NN_params,batch[batch_idx],weights[batch_idx])
+				# self.hessian(NN_params,batch[batch_idx],weights[batch_idx]).block_until_ready()
+				# #jnp.einsum('s,smn->mn',weights[batch_idx], self.hessian(NN_params,batch[batch_idx],weights[batch_idx]) ).block_until_ready()
+				# tf2=time.time()
+
+
+				# print(tf-ti, tf2-ti2)
+
+				print('finished iteration {0:d}/{1:d} in {2:0.6f} secs on {3:d} states.'.format(j,self.N_minibatches, tf-ti,len(batch_idx)))
 				if logfile is not None:
 					logfile.flush()
 
