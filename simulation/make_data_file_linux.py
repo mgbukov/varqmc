@@ -30,6 +30,9 @@ def create_params_file(params):
 		sys_data="{0:d}_{1:02d}_{2:02d}-{3:02d}_{4:02d}_{5:02d}--".format(sys_time.year, sys_time.month, sys_time.day, sys_time.hour, sys_time.minute, sys_time.second)
 
 
+	# broadcast sys_data
+	sys_data = comm.bcast(sys_data, root=0)
+
 	sys_time=sys_data + params['NN_type']+ params['NN_dtype'] + read_str(params['opt'])+ '-' + read_str(params['cost']) + '-L_{0:d}-{1:s}'.format(params['L'],params['mode'])
 
 
