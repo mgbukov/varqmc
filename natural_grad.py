@@ -542,7 +542,10 @@ class natural_gradient():
 			H = np.zeros(ddlog_psi.shape,dtype=np.float64)
 			self.comm.Allreduce( ddlog_psi , H[...], op=MPI.SUM )
 
-		return 2.0*(H + H.T)
+			print('hermiticity check:', np.linalg.norm(H-H.conj().T))
+
+
+		return 2.0*H
 
 
 

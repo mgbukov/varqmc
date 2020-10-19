@@ -216,7 +216,6 @@ class VMC(object):
 		self._create_MC_sampler()
 		self._create_optimizer()
 
-		
 	
 		# load exact data
 		ED_data_file  ="data-GS_J1-J2_Lx={0:d}_Ly={1:d}_J1=1.0000_J2={2:0.4f}.txt".format(self.L,self.L,self.J2)
@@ -229,6 +228,7 @@ class VMC(object):
 		# create log file and directory
 
 
+
 		# auxiliary variable
 		self.prev_it_data=np.zeros(5) 
 
@@ -239,9 +239,8 @@ class VMC(object):
 			self._copy_code()
 			self._create_logs()
 
-
 			if self.load_data:
-				self._load_data(self.start_iter, truncate_files=True)
+				self._load_data(self.start_iter, truncate_files=False)
 
 
 		# add variables to yaml file
@@ -693,7 +692,7 @@ class VMC(object):
 		def customwarn(message, category, filename, lineno, file=None, line=None):
 			s='\n'+warnings.formatwarning(message, category, filename, lineno)+'\n'
 			self.logfile.write(s)
-		
+
 
 		# logfile name
 		#logfile_name= 'LOGFILE--MPIprss_{0:d}--'.format(self.comm.Get_rank()) + self.file_name + '.txt'
@@ -1105,7 +1104,43 @@ class VMC(object):
 			if self.logfile is not None:
 				self.logfile.flush()
 
-			self.get_Hessian(iteration,)
+			Hessian, dE = self.get_Hessian(iteration,)
+
+
+			# ### check finite differences
+			# E, V = np.linalg.eigh(Hessian)
+			# v=V[:,0]
+			# v_log=v[:self.DNN_log.N_varl_params]
+			# v_phase=v[self.DNN_log.N_varl_params:]
+			# eps=1E-4
+
+			# def _shift_params(DNN,v,eps):
+			# 	NN_params_shifted=DNN.NN_Tree.unravel( DNN.NN_Tree.ravel(DNN.params,) + eps*v )
+			# 	return NN_params_shifted
+
+			# self.DNN_log.params   = _shift_params(self.DNN_log,v_log,eps)
+			# self.DNN_phase.params = _shift_params(self.DNN_phase,v_phase,eps)
+			
+
+			# Hessian_shifted, dE_shifted = self.get_Hessian(iteration, compute_hessian=False)
+
+			
+			# grad_diff = (dE_shifted-dE)/eps
+	
+
+			# print(grad_diff.shape)
+
+			# E_1=np.einsum('i,ij,j->',v.conj(),Hessian,v)
+			# E_2=v.conj().dot(grad_diff)		
+
+
+			
+			# print(E_1, E_2)
+			# exit()
+
+
+
+			exit()
 			
 
 			self.get_training_data(iteration,)
@@ -1403,7 +1438,7 @@ class VMC(object):
 		return params_dict, batch
 	
 
-	def get_Hessian(self,iteration,):
+	def get_Hessian(self,iteration, compute_hessian=True):
 
 		##### get spin configs #####
 		ti=time.time()
@@ -1414,7 +1449,6 @@ class VMC(object):
 			self.MC_tool.exact(self.DNN, None, )
 
 		E_str="network evaluation took {0:.4f} secs.\n".format(time.time()-ti)
-		#self.logfile.write(MC_str)
 		if self.comm.Get_rank()==0:
 			print(E_str)
 			
@@ -1423,7 +1457,6 @@ class VMC(object):
 		# get log_psi statistics
 		data_tuple=np.min(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets), np.mean(self.MC_tool.log_mod_kets), np.std(self.MC_tool.log_mod_kets), np.max(self.MC_tool.log_mod_kets)-np.min(self.MC_tool.log_mod_kets)
 		psi_str="log_|psi|_kets: min={0:0.8f}, max={1:0.8f}, mean={2:0.8f}; std={3:0.8f}, diff={4:0.8f}.".format(*data_tuple )
-		#self.logfile.write(psi_str)
 		print(psi_str)
 
 
@@ -1442,36 +1475,17 @@ class VMC(object):
 		self.opt_log.NG._compute_grads(self.DNN_log.params,self.batch,)
 		self.opt_phase.NG._compute_grads(self.DNN_phase.params,self.batch,)
 
-		#self.batch=None
-		# self.opt_log.NG.dlog_psi_aux=None
-		# self.opt_log.NG.ddlog_psi_aux=None
+
+
+		self.opt_log.NG.dlog_psi_aux=None
+		self.opt_log.NG.ddlog_psi_aux=None
 
 		print("finished computing gradients\n")
 		if self.logfile is not None:
 			self.logfile.flush()
 		
 
-		# self.MC_tool.dlog_psi_g = np.zeros((self.N_MC_points,self.DNN_log.N_varl_params),  dtype=self.opt_log.NG.dlog_psi.dtype  )
-		# self.MC_tool.dphase_psi_g=np.zeros((self.N_MC_points,self.DNN_phase.N_varl_params),dtype=self.opt_phase.NG.dlog_psi.dtype)
-
-		
-
-		# sendcounts_log = np.zeros(self.comm.Get_size(),dtype=int)		
-		# self.comm.Allgather([np.prod(self.opt_log.NG.dlog_psi.shape),MPI.INT],[sendcounts_log, MPI.INT])
-		
-		# sendcounts_phase = np.zeros(self.comm.Get_size(),dtype=int)		
-		# self.comm.Allgather([np.prod(self.opt_phase.NG.dlog_psi.shape),MPI.INT],[sendcounts_phase, MPI.INT])
-		
-				
-		# n_batch = self.comm.bcast(self.MC_tool.N_batch, root=0)
-		# displacements_log=np.array([j*n_batch*self.DNN_log.N_varl_params for j in range(self.comm.Get_size())])
-		# displacements_phase=np.array([j*n_batch*self.DNN_phase.N_varl_params for j in range(self.comm.Get_size())])
-
-		
-		# self.comm.Allgatherv([self.opt_log.NG.dlog_psi,	  MPI.DOUBLE], [self.MC_tool.dlog_psi_g,   sendcounts_log,   displacements_log,  MPI.DOUBLE], )
-		# self.comm.Allgatherv([self.opt_phase.NG.dlog_psi, MPI.DOUBLE], [self.MC_tool.dphase_psi_g, sendcounts_phase, displacements_phase,  MPI.DOUBLE], )
-		
-		
+			
 
 
 		##### compute local energies #####
@@ -1485,7 +1499,6 @@ class VMC(object):
 		print("LOCAL ENERGY:")
 
 		Eloc_str="\nlocal energy calculation took {0:.4f} secs.\n".format(time.time()-ti)
-		#self.logfile.write(Eloc_str)
 		if self.comm.Get_rank()==0:
 			print(Eloc_str)
 
@@ -1516,6 +1529,12 @@ class VMC(object):
 		Eloc_std_g=np.sqrt(Eloc_var_g)
 		E_MC_std_g=Eloc_std_g/np.sqrt(self.N_MC_points)
 
+		E_str=self.mode + ": E={0:0.14f}, E_var={1:0.14f}, E_std={2:0.14f}, E_imag={3:0.14f}.".format(Eloc_mean_g.real,Eloc_var_g, 0.0, Eloc_mean_g.imag, )
+		if self.comm.Get_rank()==0:
+			print(E_str)
+		if self.logfile is not None:
+			self.logfile.flush()
+
 
 		self.E_estimator=None
 		self.E_estimator_log=None
@@ -1523,11 +1542,18 @@ class VMC(object):
 		self.MC_tool_log=None
 
 
+		olap_str="overlap^2 = {0:.4f} secs.\n".format(overlap2)
+		if self.comm.Get_rank()==0:
+			print(olap_str)
+		if self.logfile is not None:
+			self.logfile.flush()
+
+
 		#########
 		
 		dlog_kets  =np.zeros( (self.N_batch,N_params) , dtype=np.float64)
 		dlog_kets[:,:self.DNN_log.N_varl_params]=self.opt_log.NG.dlog_psi
-		self.opt_log.NG.dlog_psi=None
+
 
 		print("finished preallocation of dlog_kets\n")
 		if self.logfile is not None:
@@ -1535,8 +1561,7 @@ class VMC(object):
 
 		dphase_kets=np.zeros( (self.N_batch,N_params) , dtype=np.float64)
 		dphase_kets[:,self.DNN_log.N_varl_params:]=self.opt_phase.NG.dlog_psi
-		self.opt_phase.NG.dlog_psi=None
-
+		
 		print("finished preallocation of dphase_kets\n")
 		if self.logfile is not None:
 			self.logfile.flush()
@@ -1545,6 +1570,36 @@ class VMC(object):
 		print("finished preallocation of all variables\n")
 		if self.logfile is not None:
 			self.logfile.flush()
+
+
+
+
+		###################################################
+
+		##### compute energy gradients
+
+		print('start energy gradients computation\n')
+		if self.logfile is not None:
+			self.logfile.flush()
+
+
+		def _compute_dE(abs_psi_2, O, E_diff, shape):
+			dE = np.zeros(shape,dtype=np.float64)
+			self.comm.Allreduce( np.einsum('s,sn,s->n', abs_psi_2, O, E_diff) , dE[...], op=MPI.SUM)
+			return 2.0*dE
+
+		dE_log=_compute_dE(abs_psi_2, self.opt_log.NG.dlog_psi, E_diff_real, self.DNN_log.N_varl_params)
+		dE_phase=_compute_dE(abs_psi_2, self.opt_phase.NG.dlog_psi, E_diff_imag, self.DNN_phase.N_varl_params)
+		dE=np.concatenate((dE_log,dE_phase))
+
+		print('max gradients: log={0:0.6f} and phase={1:0.6f}.\n\n'.format(np.max(np.abs(dE_log)), np.max(np.abs(dE_phase)) ) )
+		if self.logfile is not None:
+			self.logfile.flush()
+		
+
+		self.opt_phase.NG.dlog_psi=None
+		self.opt_log.NG.dlog_psi=None
+
 
 
 
@@ -1557,136 +1612,115 @@ class VMC(object):
 		self.H_shape=(N_params,N_params)
 		Hessian=np.zeros(self.H_shape, dtype=np.float64)
 
+		if compute_hessian:
 
-		# def _compute_dOElocdiff(abs_psi_2, dO, E_diff, shape,):
+			Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real, self.logfile)
+			
+			print('added log-net hessian contrib\n')
+			if self.logfile is not None:
+				self.logfile.flush()
 
-		# 	# d_m O_n dEloc
-		# 	H = np.zeros((shape,shape),dtype=np.float64)
-		# 	self.comm.Allreduce( np.einsum('s,smn,s->mn', abs_psi_2, dO, E_diff) , H[...], op=MPI.SUM)
-		# 	return 2.0*(H+H.T)
+			Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag, self.logfile)
 
+			print('added phase-net hessian contrib\n')
+			if self.logfile is not None:
+				self.logfile.flush()
 
-		# Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=_compute_dOElocdiff(abs_psi_2, self.opt_log.NG.ddlog_psi,   E_diff_real, self.DNN_log.N_varl_params   )
-		# Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=_compute_dOElocdiff(abs_psi_2, self.opt_phase.NG.ddlog_psi, E_diff_imag, self.DNN_phase.N_varl_params )
-
-
-		Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real, self.logfile)
-		
-		print('added log-net hessian contrib\n')
-		if self.logfile is not None:
-			self.logfile.flush()
-
-		Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag, self.logfile)
-
-		print('added phase-net hessian contrib\n')
-		if self.logfile is not None:
-			self.logfile.flush()
-
-		self.batch=None
-		self.opt_phase.NG=None
-		self.opt_log.NG=None
-
-		
-		print('computed ddpsi\n')
-		if self.logfile is not None:
-			self.logfile.flush()
+			self.batch=None
+			self.opt_phase.NG=None
+			self.opt_log.NG=None
 
 
-		def _compute_OHO(abs_psi_2, O, HO):
-			H = np.zeros(self.H_shape,dtype=np.float64)
-			self.comm.Allreduce( np.einsum('s,sn,sm->nm', abs_psi_2, O, HO) , H[...], op=MPI.SUM)
-			return 2.0*H
 
 
-		Hessian+=_compute_OHO(abs_psi_2, dlog_kets, HO.real)
-		Hessian+=_compute_OHO(abs_psi_2, dphase_kets, HO.imag)
-		HO=None
 
-		print('computed HO\n')
-		if self.logfile is not None:
-			self.logfile.flush()
-
-		def _compute_OOEdiff(abs_psi_2, O1, O2, E_diff, symmetrize=False):
-			H = np.zeros(self.H_shape,dtype=np.float64)
-			self.comm.Allreduce( np.einsum('s,sm,sn,s->mn', abs_psi_2, O1, O2, E_diff) , H[...], op=MPI.SUM)
-			if symmetrize:
-				return 2.0*(H+H.T)
-			else:
+			def _compute_OHO(abs_psi_2, O, HO):
+				H = np.zeros(self.H_shape,dtype=np.float64)
+				self.comm.Allreduce( np.einsum('s,sn,sm->nm', abs_psi_2, O, HO) , H[...], op=MPI.SUM)
 				return 2.0*H
 
-		# # compute auxiliary variables
-		# def _couple_OO(O1, O2):
-		# 	return np.einsum('sm,sn->smn', O1, O2)
 
+			Hessian+=_compute_OHO(abs_psi_2, dlog_kets, HO.real)
+			Hessian+=_compute_OHO(abs_psi_2, dphase_kets, HO.imag)
+			HO=None
 
-		# Olog_Olog    =_couple_OO(dlog_kets, dlog_kets)
-		# Ophase_Ophase=_couple_OO(dphase_kets, dphase_kets)
-		# Olog_Ophase  =_couple_OO(dlog_kets, dphase_kets)
+			print('computed HO\n')
+			if self.logfile is not None:
+				self.logfile.flush()
 
-		# print('computed OO\n')
-		# if self.logfile is not None:
-		# 	self.logfile.flush()
-
-
-		Hessian+=_compute_OOEdiff(abs_psi_2, dlog_kets, dlog_kets, E_diff_real)
-		Hessian-=_compute_OOEdiff(abs_psi_2, dphase_kets, dphase_kets, E_diff_real)
-		Hessian+=_compute_OOEdiff(abs_psi_2, dlog_kets, dphase_kets, E_diff_imag, symmetrize=True )
-
-
-		print('computed ddpsi\n')
-		if self.logfile is not None:
-			self.logfile.flush()
-
-
-		def _compute_OO(abs_psi_2, O1, O2,):
-			H = np.zeros(self.H_shape,dtype=np.float64)
-			self.comm.Allreduce( np.einsum('s,sm,sn->mn', abs_psi_2, O1, O2) , H[...], op=MPI.SUM)
-			return 2.0*(H+H.T)
-
-		Hessian+=_compute_OO(abs_psi_2, dlog_kets, dphase_kets)*Eloc_mean_g.real
-
-
-		# compute last bit
-		def _compute_O_OEdiff(abs_psi_2, O1, O2, E_diff, ):
-			# d_m O_n dEloc
-			O_expt = np.zeros(self.H_shape[0],dtype=np.float64)
-			O_Ediff_Expt = np.zeros(self.H_shape[0],dtype=np.float64)
-
-			self.comm.Allreduce( np.einsum('s,sm->m', abs_psi_2, O1) , O_expt[...], op=MPI.SUM)
-			self.comm.Allreduce( np.einsum('s,sn,s->n', abs_psi_2, O2, E_diff) , O_Ediff_Expt[...], op=MPI.SUM)
-
-			H=np.outer(O_expt,O_Ediff_Expt)
-
-			return 4.0*(H+H.T)
-
-		Hessian-=_compute_O_OEdiff(abs_psi_2, dlog_kets, dlog_kets, E_diff_real, )
-		Hessian-=_compute_O_OEdiff(abs_psi_2, dlog_kets, dphase_kets, E_diff_imag, )
+			def _compute_OOEdiff(abs_psi_2, O1, O2, E_diff, symmetrize=False):
+				H = np.zeros(self.H_shape,dtype=np.float64)
+				self.comm.Allreduce( np.einsum('s,sm,sn,s->mn', abs_psi_2, O1, O2, E_diff) , H[...], op=MPI.SUM)
+				if symmetrize:
+					return 2.0*(H+H.T)
+				else:
+					return 2.0*H
 
 
 
-		#######
+
+			Hessian+=_compute_OOEdiff(abs_psi_2, dlog_kets, dlog_kets, E_diff_real, symmetrize=False)
+			Hessian-=_compute_OOEdiff(abs_psi_2, dphase_kets, dphase_kets, E_diff_real, symmetrize=False)
+			Hessian+=_compute_OOEdiff(abs_psi_2, dlog_kets, dphase_kets, E_diff_imag, symmetrize=True )
 
 
-		check_herm=np.linalg.norm(Hessian - Hessian.T)
-		print('hermiticity check value: {0:.18f}'.format(check_herm))
-
-		E = np.linalg.eigvalsh(Hessian)
-
+			print('computed dO*dO\n')
+			if self.logfile is not None:
+				self.logfile.flush()
 
 
-		file_hessian = self.savefile_dir + 'hessian_evalues_iter={0:d}'.format(iteration)
+			def _compute_OO(abs_psi_2, O1, O2,):
+				H = np.zeros(self.H_shape,dtype=np.float64)
+				self.comm.Allreduce( np.einsum('s,sm,sn->mn', abs_psi_2, O1, O2) , H[...], op=MPI.SUM)
+				return 2.0*H
 
+			Hessian-=_compute_OO(abs_psi_2, dlog_kets, dlog_kets)*Eloc_mean_g.real
+			Hessian-=_compute_OO(abs_psi_2, dphase_kets, dphase_kets)*Eloc_mean_g.real
+
+
+
+			# compute last bit
+			def _compute_O_OEdiff(abs_psi_2, O1, O2, E_diff, ):
+				# d_m O_n dEloc
+				O_expt = np.zeros(self.H_shape[0],dtype=np.float64)
+				O_Ediff_Expt = np.zeros(self.H_shape[0],dtype=np.float64)
+
+				self.comm.Allreduce( np.einsum('s,sm->m', abs_psi_2, O1) , O_expt[...], op=MPI.SUM)
+				self.comm.Allreduce( np.einsum('s,sn,s->n', abs_psi_2, O2, E_diff) , O_Ediff_Expt[...], op=MPI.SUM)
+
+				H=np.outer(O_expt,O_Ediff_Expt)
+
+				return 4.0*(H+H.T)
+
+			Hessian-=_compute_O_OEdiff(abs_psi_2, dlog_kets, dlog_kets, E_diff_real, )
+			Hessian-=_compute_O_OEdiff(abs_psi_2, dlog_kets, dphase_kets, E_diff_imag, )
+
+			
+			#######
+
+
+			check_herm=np.linalg.norm(Hessian - Hessian.T)
+			print('hermiticity check value: {0:.18f}'.format(check_herm))
+
+			E = np.linalg.eigvalsh(Hessian)
+			
+
+
+			
+
+
+
+			print("min/max Hessian e'values are: {0:4f}/{1:0.4f}.\n".format(E[0], E[-1]) )
 		
+
+
+		file_hessian = self.savefile_dir + 'hessian_evalues_iter={0:d}'.format(iteration)		
 		if self.comm.Get_rank()==0:
 			store_hessian_evalues(iteration,file_hessian, E)
 
-
-			# with open(file_hessian+'.pkl', 'rb') as handle:
-			# 	E2 = pickle.load(handle)
-
-		print(E[-1])
-
 		exit()
+
+		return Hessian, dE
 
 
 	

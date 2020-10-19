@@ -72,7 +72,7 @@ def load_opt_data(opt,file_name,start_iter):
 		for i in range(start_iter):
 			opt_data_str = file.readline().rstrip().split(' : ')
 
-	print(start_iter, opt_data_str)	
+	#print(start_iter, opt_data_str)	
 
 	opt.iteration=int(opt_data_str[0])+1
 	opt.time=np.float64(opt_data_str[7])

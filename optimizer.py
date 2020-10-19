@@ -207,7 +207,7 @@ class optimizer(object):
 
 					#ti=time.time()
 
-					Hess = jacfwd( grad(loss_hessian) ) (NN_params, batch, weights) # (12.31, 5.51, 27)
+					Hess = jacfwd( grad(loss_hessian) ) (NN_params, batch, weights)    # (12.31, 5.51, 27)
 					#Hess = jacfwd( jacrev(loss_hessian) ) (NN_params, batch, weights) # (13.92, 5.67, 27)
 					#Hess = jacrev( jacfwd(loss_hessian) ) (NN_params, batch, weights) # TOO SLOW
 
