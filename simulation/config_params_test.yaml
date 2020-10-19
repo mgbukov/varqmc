@@ -48,7 +48,7 @@ mode: ED #
 batchnorm: false
 adaptive_SR_cutoff: false
 
-semi_exact: (1,0) # (log, phase)
+semi_exact: (0,0) # (log, phase)
 grad_update_mode: phase # normal # log_mod # alternating # 
 alt_iter: 20 # of iterations to keep each alternating update for  
 
