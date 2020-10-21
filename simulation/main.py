@@ -24,7 +24,7 @@ import yaml
 
 # salloc -N 1 -t 60 -C haswell -q interactive
 
-# qrsh -now n -l h_rt=2:00:00 -pe mpi_28_tasks_per_node 280
+# qrsh -now n -l h_rt=2:00:00 -pe mpi_28_tasks_per_node 448
 
 """
 [36sec, 2000], [14sec, 4000], [5sec, 8000], [5sec, 10000]
