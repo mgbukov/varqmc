@@ -139,5 +139,9 @@ def store_hessian_evalues(iteration, file_hessian, evalues):
 
 
 
+def store_hessian_matrix(iteration, file_hessian, hessian):
+
+	np.savetxt(file_hessian+'.txt', hessian,fmt='%.18f',)
+
 
 

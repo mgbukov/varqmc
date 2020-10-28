@@ -1612,19 +1612,37 @@ class VMC(object):
 		self.H_shape=(N_params,N_params)
 		Hessian=np.zeros(self.H_shape, dtype=np.float64)
 
+		# file_hessian = self.savefile_dir + 'hessian_matrix_log_iter={0:d}'.format(iteration)		
+		# H = np.loadtxt(file_hessian+'.txt')
+
+
 		if compute_hessian:
 
 			Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real, self.logfile)
 			
+			file_hessian_matrix_log = self.savefile_dir + 'hessian_matrix_log_iter={0:d}'.format(iteration)		
+			if self.comm.Get_rank()==0:
+				store_hessian_matrix(iteration, file_hessian_matrix_log, Hessian)
+
 			print('added log-net hessian contrib\n')
 			if self.logfile is not None:
 				self.logfile.flush()
 
+
+
 			Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag, self.logfile)
+
+			file_hessian_matrix_ph = self.savefile_dir + 'hessian_matrix_ph_iter={0:d}'.format(iteration)		
+			if self.comm.Get_rank()==0:
+				store_hessian_matrix(iteration, file_hessian_matrix_ph, Hessian)
 
 			print('added phase-net hessian contrib\n')
 			if self.logfile is not None:
 				self.logfile.flush()
+
+
+			exit()
+
 
 			self.batch=None
 			self.opt_phase.NG=None
