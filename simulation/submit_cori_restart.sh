@@ -36,7 +36,7 @@ echo "#SBATCH --job-name=job_VMC" >> submission.sh
 #echo "source activate jax-noGPU" >> submission.sh
 
 
-data_dir="data/2020_03_15-19_12_08--NG-L_6-MC_restart"
+data_dir="exact_data/2020_07_24-18_57_48--CNNreal-RK_RK-SR_SR-L_6-ED/"
 
 
 ### CPU
