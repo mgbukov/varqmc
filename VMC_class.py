@@ -1737,8 +1737,12 @@ class VMC(object):
 			E = np.linalg.eigvalsh(Hessian)
 			
 
+			file_hessian_matrix_full=self.savefile_dir + 'hessian_matrix_iter={0:d}'.format(iteration)		
+			self.comm.Barrier()
+			if self.comm.Get_rank()==0:
+				store_hessian_matrix(iteration, file_hessian_matrix_full, Hessian)
 
-			
+
 
 
 
