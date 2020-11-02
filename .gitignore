@@ -5,6 +5,7 @@ __pycache__/
 
 *simulation/submission.sh
 
+*simulation/exact_data/*
 *simulation/data/*
 *analysis/data/*
 *evaluation/data/*
