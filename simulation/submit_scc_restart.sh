@@ -1,5 +1,5 @@
 #!bin/bash
-let "N_mpi=280" # 130
+let "N_mpi=448" # 130
 let "N_omp=1"
 #let "N_tot=280" # 140
 

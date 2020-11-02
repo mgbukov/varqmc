@@ -1438,7 +1438,7 @@ class VMC(object):
 		return params_dict, batch
 	
 
-	def get_Hessian(self,iteration, compute_hessian=True):
+	def get_Hessian(self,iteration, compute_hessian=True, compute_derivative=False):
 
 		##### get spin configs #####
 		ti=time.time()
@@ -1615,33 +1615,47 @@ class VMC(object):
 		# file_hessian = self.savefile_dir + 'hessian_matrix_log_iter={0:d}'.format(iteration)		
 		# H = np.loadtxt(file_hessian+'.txt')
 
+		#compute_derivative=True
 
 		if compute_hessian:
 
-			Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real, self.logfile)
-			
 			file_hessian_matrix_log = self.savefile_dir + 'hessian_matrix_log_iter={0:d}'.format(iteration)		
-			if self.comm.Get_rank()==0:
-				store_hessian_matrix(iteration, file_hessian_matrix_log, Hessian)
-
-			print('added log-net hessian contrib\n')
-			if self.logfile is not None:
-				self.logfile.flush()
-
-
-
-			Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag, self.logfile)
-
 			file_hessian_matrix_ph = self.savefile_dir + 'hessian_matrix_ph_iter={0:d}'.format(iteration)		
-			if self.comm.Get_rank()==0:
-				store_hessian_matrix(iteration, file_hessian_matrix_ph, Hessian)
+			
 
-			print('added phase-net hessian contrib\n')
-			if self.logfile is not None:
-				self.logfile.flush()
+			if compute_derivative:
+
+				Hessian[:self.DNN_log.N_varl_params,:self.DNN_log.N_varl_params]+=self.opt_log.NG._compute_hessian(self.DNN_log.params,self.batch,abs_psi_2*E_diff_real, self.logfile)
+				
+				# self.comm.Barrier()
+				# if self.comm.Get_rank()==0:
+				# 	store_hessian_matrix(iteration, file_hessian_matrix_log, Hessian)
+
+				print('added log-net hessian contrib\n')
+				if self.logfile is not None:
+					self.logfile.flush()
+
+				#exit()
+
+				Hessian[self.DNN_log.N_varl_params:,self.DNN_log.N_varl_params:]+=self.opt_phase.NG._compute_hessian(self.DNN_phase.params,self.batch,abs_psi_2*E_diff_imag, self.logfile)
+
+				# self.comm.Barrier()
+				# if self.comm.Get_rank()==0:
+				# 	store_hessian_matrix(iteration, file_hessian_matrix_ph, Hessian)
+
+				print('added phase-net hessian contrib\n')
+				if self.logfile is not None:
+					self.logfile.flush()
+
+				#exit()
+
+			else:
+
+				Hessian+=np.loadtxt(file_hessian_matrix_log+'.txt')
+				Hessian+=np.loadtxt(file_hessian_matrix_ph+'.txt')
 
 
-			exit()
+			#exit()
 
 
 			self.batch=None
